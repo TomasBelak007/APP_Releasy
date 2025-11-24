@@ -1,0 +1,696 @@
+                <!-- Left Navigation Menu -->
+                <div class="help-nav">
+                    <nav>
+                        <div class="help-nav-section">
+                            <div class="help-nav-title"><i class="fa-solid fa-rocket"></i> Getting Started</div>
+                            <a href="#help-pat" class="help-nav-link active" onclick="showHelpSection('help-pat'); return false;">
+                                <i class="fa-solid fa-key"></i> Personal Access Token
+                            </a>
+                            <a href="#help-permissions" class="help-nav-link" onclick="showHelpSection('help-permissions'); return false;">
+                                <i class="fa-solid fa-shield-halved"></i> Permissions
+                            </a>
+                        </div>
+
+                        <div class="help-nav-section">
+                            <div class="help-nav-title"><i class="fa-solid fa-eye"></i> Read-Only Features</div>
+                            <a href="#help-reload" class="help-nav-link" onclick="showHelpSection('help-reload'); return false;">
+                                <i class="fa-solid fa-rotate"></i> Reload Data
+                            </a>
+                            <a href="#help-display" class="help-nav-link" onclick="showHelpSection('help-display'); return false;">
+                                <i class="fa-solid fa-filter-circle-xmark"></i> What's Displayed
+                            </a>
+                            <a href="#help-workitem-detail" class="help-nav-link" onclick="showHelpSection('help-workitem-detail'); return false;">
+                                <i class="fa-solid fa-circle-info"></i> Work Item Detail
+                            </a>
+                            <a href="#help-hierarchy" class="help-nav-link" onclick="showHelpSection('help-hierarchy'); return false;">
+                                <i class="fa-solid fa-sitemap"></i> Hierarchy
+                            </a>
+                            <a href="#help-hide" class="help-nav-link" onclick="showHelpSection('help-hide'); return false;">
+                                <i class="fa-solid fa-eye-slash"></i> Hide/Unhide Versions
+                            </a>
+                            <a href="#help-expand" class="help-nav-link" onclick="showHelpSection('help-expand'); return false;">
+                                <i class="fa-solid fa-angles-down"></i> Expand/Collapse
+                            </a>
+                            <a href="#help-filter" class="help-nav-link" onclick="showHelpSection('help-filter'); return false;">
+                                <i class="fa-solid fa-filter"></i> Filter Work Items
+                            </a>
+                            <a href="#help-pdf" class="help-nav-link" onclick="showHelpSection('help-pdf'); return false;">
+                                <i class="fa-solid fa-file-pdf"></i> Export to PDF
+                            </a>
+                        </div>
+
+                        <div class="help-nav-section">
+                            <div class="help-nav-title"><i class="fa-solid fa-pen-to-square"></i> Read-Write Features</div>
+                            <a href="#help-task-mode" class="help-nav-link" onclick="showHelpSection('help-task-mode'); return false;">
+                                <i class="fa-solid fa-clipboard-list"></i> Task Mode
+                            </a>
+                            <a href="#help-create-wi" class="help-nav-link" onclick="showHelpSection('help-create-wi'); return false;">
+                                <i class="fa-solid fa-plus-circle"></i> Create Work Items
+                            </a>
+                            <a href="#help-create-task" class="help-nav-link" onclick="showHelpSection('help-create-task'); return false;">
+                                <i class="fa-solid fa-plus"></i> Create Child Tasks
+                            </a>
+                            <a href="#help-change-status" class="help-nav-link" onclick="showHelpSection('help-change-status'); return false;">
+                                <i class="fa-solid fa-pen"></i> Change Work Item Status
+                            </a>
+                            <a href="#help-change-priority" class="help-nav-link" onclick="showHelpSection('help-change-priority'); return false;">
+                                <i class="fa-solid fa-flag"></i> Change Priority
+                            </a>
+                            <a href="#help-change-severity" class="help-nav-link" onclick="showHelpSection('help-change-severity'); return false;">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Change Severity
+                            </a>
+                            <a href="#help-change-assigned-to" class="help-nav-link" onclick="showHelpSection('help-change-assigned-to'); return false;">
+                                <i class="fa-solid fa-user"></i> Change Assigned To
+                            </a>
+                            <a href="#help-change-patch-version" class="help-nav-link" onclick="showHelpSection('help-change-patch-version'); return false;">
+                                <i class="fa-solid fa-layer-group"></i> Change Patch Version
+                            </a>
+                        </div>
+
+                        <div class="help-nav-section">
+                            <div class="help-nav-title"><i class="fa-solid fa-info-circle"></i> Reference</div>
+                            <a href="#help-visual" class="help-nav-link" onclick="showHelpSection('help-visual'); return false;">
+                                <i class="fa-solid fa-palette"></i> Visual Indicators
+                            </a>
+                            <a href="#help-priority" class="help-nav-link" onclick="showHelpSection('help-priority'); return false;">
+                                <i class="fa-solid fa-flag"></i> Priority & Severity
+                            </a>
+                            <a href="#help-tips" class="help-nav-link" onclick="showHelpSection('help-tips'); return false;">
+                                <i class="fa-solid fa-lightbulb"></i> Tips & Shortcuts
+                            </a>
+                        </div>
+                    </nav>
+                </div>
+
+                <!-- Right Content Area -->
+                <div class="help-content">
+                    <!-- PAT Section -->
+                    <div id="help-pat" class="help-section active">
+                        <h4><i class="fa-solid fa-key"></i> Personal Access Token (PAT) Management</h4>
+                        <p>When you first open the application, a modal will appear asking you to enter your Azure DevOps Personal Access Token.</p>
+                        <div class="note">
+                            <strong>How to get your PAT:</strong>
+                            <ol style="margin: 10px 0 0 0;">
+                                <li>Go to Azure DevOps → User Settings → Personal Access Tokens</li>
+                                <li>Click "New Token"</li>
+                                <li>Select scope: <code>Work Items: Read</code> (for read-only) or <code>Work Items: Read & Write</code> (for creating work items)</li>
+                                <li>Copy the generated token</li>
+                                <li>Paste it in the PAT modal and select the matching permission level</li>
+                            </ol>
+                        </div>
+                        <p><strong>Changing your PAT:</strong> Click the <i class="fa-solid fa-key"></i> key icon next to the permission badge to open the PAT modal and enter a new token.</p>
+                        <p>Your PAT is stored securely in your browser's local storage and is never sent to any server except Azure DevOps API.</p>
+                    </div>
+
+                    <!-- Permissions Section -->
+                    <div id="help-permissions" class="help-section">
+                        <h4><i class="fa-solid fa-shield-halved"></i> Read-Only vs Read-Write Mode</h4>
+                        <p>The application supports two permission modes, indicated by a badge next to the Last reload info:</p>
+                        <ul>
+                            <li><i class="fa-solid fa-eye"></i> <strong>Read-Only</strong> - View work items, export PDFs, but cannot create new work items or view child tasks</li>
+                            <li><i class="fa-solid fa-pen-to-square"></i> <strong>Read-Write</strong> - All read-only features plus:
+                                <ul>
+                                    <li>Ability to create new work items using the <i class="fa-solid fa-plus"></i> button</li>
+                                    <li>Access to <strong>Task Mode</strong> <i class="fa-solid fa-clipboard-list" style="color: #8B4513;"></i> for viewing and creating child tasks</li>
+                                </ul>
+                            </li>
+                        </ul>
+                        <div class="note" style="background-color: rgba(255, 193, 7, 0.1); border-left-color: #ffc107;">
+                            <strong><i class="fa-solid fa-triangle-exclamation" style="color: #ffc107;"></i> Important:</strong>
+                            <p style="margin: 8px 0 0 0;">When entering your PAT in the modal, you must select the permission level that <strong>exactly matches</strong> your token's scope in Azure DevOps:</p>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>If your token has <code>Work Items: Read</code> scope → select <strong>Read-Only</strong></li>
+                                <li>If your token has <code>Work Items: Read & Write</code> scope → select <strong>Read-Write</strong></li>
+                            </ul>
+                            <p style="margin: 8px 0 0 0;"><strong>Warning:</strong> If you select Read-Write but your token only has Read permissions, the <i class="fa-solid fa-plus"></i> create work item buttons will be visible, but creating work items will fail with permission errors.</p>
+                        </div>
+                    </div>
+
+                    <!-- Reload Section -->
+                    <div id="help-reload" class="help-section">
+                        <h4><i class="fa-solid fa-rotate"></i> Reload Data</h4>
+                        <p>Click the <strong>Reload</strong> button to:</p>
+                        <ul>
+                            <li>Fetch the latest work items from Azure DevOps</li>
+                            <li>Update progress bars with current completion status</li>
+                            <li>Refresh all release, major, and patch versions</li>
+                        </ul>
+                        <p>The application displays <strong>Last reload</strong> time below the buttons (e.g., "Last reload: 2 hours, 15 minutes ago"). This time updates automatically every minute.</p>
+                        <p>Use reload when you want to see the most up-to-date information.</p>
+                    </div>
+
+                    <!-- What's Displayed Section -->
+                    <div id="help-display" class="help-section">
+                        <h4><i class="fa-solid fa-filter-circle-xmark"></i> Which Work Items are Displayed</h4>
+                        <p>The application displays only work items that meet the following criteria:</p>
+                        <ul>
+                            <li><strong>Type:</strong> Only <code>Feature</code> and <code>Bug</code> work item types</li>
+                            <li><strong>Platform Release:</strong> Work items must have the <code>Custom.PlatformRelease</code> field populated with the corresponding release (e.g., "Labe-07.006")</li>
+                            <li><strong>Status:</strong>
+                                <ul>
+                                    <li>All statuses <strong>except</strong> <code>Removed</code></li>
+                                    <li>Work items with <code>Closed</code> status are only shown if they were closed within the last <strong>180 days</strong></li>
+                                </ul>
+                            </li>
+                        </ul>
+                        <div class="note" style="background-color: rgba(13, 110, 253, 0.1); border-left-color: #0d6efd;">
+                            <strong><i class="fa-solid fa-info-circle"></i> Note:</strong>
+                            <p style="margin: 8px 0 0 0;">Older closed work items (>180 days) are not displayed to keep the overview clean and focused on recent work. All work items can be found in Azure DevOps.</p>
+                            <p style="margin: 8px 0 0 0;">Clicking a work item title now opens the <strong>Work Item Detail</strong> modal instead of navigating directly to Azure DevOps. You can still open the item in DevOps using the <strong>Open in DevOps</strong> button inside the detail modal.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Work Item Detail -->
+                    <div id="help-workitem-detail" class="help-section">
+                        <h4><i class="fa-solid fa-circle-info"></i> Work Item Detail</h4>
+                        <p>Click any work item title (Feature, Bug, or Task) to open a detail modal with the most important information.</p>
+                        <ul>
+                            <li><strong>Lazy-loaded Description:</strong> The description is loaded when the modal opens to improve performance. HTML content (including images) is rendered as-is from Azure DevOps.</li>
+                            <li><strong>Meta badges:</strong> Status, Priority, Severity, Version and Assigned To are shown with the same colors and styles as in the main view.</li>
+                            <li><strong>Copy Title:</strong> Use the copy icon next to the work item title to copy the title to clipboard in formatted form (e.g., "Feat(123): Feature name" or "Bug(456): Bug name").</li>
+                            <li><strong>Edit Title and Description (Read-Write Mode only):</strong> In read-write mode, you can edit the work item title and description directly in the modal. The description editor includes a rich text toolbar for formatting (bold, italic, lists, links, etc.). You can paste screenshots directly into the description (Ctrl+V / Cmd+V), and they will be automatically uploaded as attachments to Azure DevOps when you save.</li>
+                            <li><strong>Update Button:</strong> After editing title or description, click the "Update" button to save your changes to Azure DevOps.</li>
+                            <li><strong>Open in DevOps:</strong> Use the button in the modal footer to open the item directly in Azure DevOps in a new tab.</li>
+                        </ul>
+                        <div class="note" style="background-color: rgba(40, 167, 69, 0.1); border-left-color: #28a745;">
+                            <strong><i class="fa-solid fa-check-circle" style="color: #28a745;"></i> Tip:</strong>
+                            <p style="margin: 8px 0 0 0;">The title on the main screen no longer navigates to DevOps. This avoids accidental navigation and keeps your context within Releasy.</p>
+                        </div>
+                        <div class="note" style="background-color: rgba(13, 110, 253, 0.1); border-left-color: #0d6efd; margin-top: 12px;">
+                            <strong><i class="fa-solid fa-info-circle" style="color: #0d6efd;"></i> Note:</strong>
+                            <p style="margin: 8px 0 0 0;">Editing is only available when using a read-write token. In read-only mode, the title and description fields are not editable.</p>
+                        </div>
+                    </div>
+
+                    <!-- Hierarchy Section -->
+                    <div id="help-hierarchy" class="help-section">
+                        <h4><i class="fa-solid fa-sitemap"></i> Understanding the Hierarchy</h4>
+                        <p>The application displays releases in a 4-level hierarchy:</p>
+                        <ul>
+                            <li><strong>Level 1 (Product - Release):</strong> e.g., "Xeelo - Labe"</li>
+                            <li><strong>Level 2 (Major Version):</strong> e.g., "Labe-07"</li>
+                            <li><strong>Level 3 (Patch Version):</strong> e.g., "Labe-07.005"</li>
+                            <li><strong>Level 4 (Work Items):</strong> Features <i class="fa-solid fa-puzzle-piece" style="color: #0d6efd;"></i> and Bugs <i class="fa-solid fa-bug" style="color: #dc3545;"></i></li>
+                        </ul>
+                        <p>Click on any level header to expand/collapse it. Your expansion state is saved automatically.</p>
+
+                        <h5><i class="fa-solid fa-chart-bar"></i> Progress Bars</h5>
+                        <p>Color-coded progress bars show work item status distribution:</p>
+                        <ul>
+                            <li><span class="badge" style="background-color: #28a745;">Closed</span> - Completed work</li>
+                            <li><span class="badge" style="background-color: #0d6efd;">Resolved</span> - Ready for verification</li>
+                            <li><span class="badge" style="background-color: #17a2b8;">Active</span> - Currently in progress</li>
+                            <li><span class="badge" style="background-color: #6c757d;">New</span> - Not started yet</li>
+                            <li><span class="badge" style="background-color: #dc3545;">Evaluation</span> - Needs attention</li>
+                        </ul>
+                    </div>
+
+                    <!-- Hide/Unhide Versions Section -->
+                    <div id="help-hide" class="help-section">
+                        <h4><i class="fa-solid fa-eye-slash"></i> Hide/Unhide Versions</h4>
+                        <h5>Hiding Versions</h5>
+                        <p>You can hide major or patch versions to focus on what matters:</p>
+                        <ul>
+                            <li>Hover over any major/patch version header to see the <i class="fa-solid fa-eye-slash" style="font-size: 0.8em; color: #6c757d;"></i> icon</li>
+                            <li>Click the icon to hide that version (no reload needed)</li>
+                            <li>Hidden versions are excluded from progress bar calculations</li>
+                        </ul>
+
+                        <h5>Unhiding Versions</h5>
+                        <p>The <strong>Unhide (X)</strong> button displays the number of hidden versions.</p>
+                        <ul>
+                            <li>Click to open a dialog with all hidden versions</li>
+                            <li>Select which versions you want to unhide using checkboxes</li>
+                            <li>Use <strong>Select All</strong> / <strong>Deselect All</strong> for bulk selection</li>
+                            <li>Click <strong>Show Selected</strong> to unhide chosen versions</li>
+                        </ul>
+                    </div>
+
+                    <!-- Expand/Collapse Section -->
+                    <div id="help-expand" class="help-section">
+                        <h4><i class="fa-solid fa-angles-down"></i> Expand All / Collapse All</h4>
+                        <ul>
+                            <li><strong>Expand All:</strong> Expands all releases and major versions (patches stay collapsed)</li>
+                            <li><strong>Collapse All:</strong> Collapses everything to the top level</li>
+                        </ul>
+                    </div>
+
+                    <!-- Filter Section -->
+                    <div id="help-filter" class="help-section">
+                        <h4><i class="fa-solid fa-filter"></i> Filter Work Items</h4>
+                        <p>Use the <strong>Filter</strong> button <i class="fa-solid fa-filter"></i> to narrow down displayed work items based on assignee and status:</p>
+                        <ol>
+                            <li><strong>Open Filter Modal:</strong> Click the filter button in the control panel</li>
+                            <li><strong>Select Assignees:</strong> Check/uncheck assignees to show only their work items
+                                <ul>
+                                    <li>Use the green <i class="fa-solid fa-check-double" style="color: #28a745;"></i> button to select all</li>
+                                    <li>Use the red <i class="fa-solid fa-xmark" style="color: #dc3545;"></i> button to deselect all</li>
+                                </ul>
+                            </li>
+                            <li><strong>Select Statuses:</strong> Check/uncheck statuses to filter work items by their current state</li>
+                            <li><strong>Apply Filters:</strong> Click the <strong>Apply</strong> button to activate your filters</li>
+                            <li><strong>Remove Filters:</strong> Click <strong>Remove Filter</strong> to clear all active filters</li>
+                        </ol>
+                        <div class="note">
+                            <strong><i class="fa-solid fa-info-circle"></i> Important:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>The filter modal shows only assignees and statuses from <strong>currently visible</strong> work items (excludes hidden patch/major versions)</li>
+                                <li>Active filters are indicated by an orange dot on the filter button</li>
+                                <li>Your filter settings are automatically saved and restored when you reload the page</li>
+                                <li>Filters work with the hierarchical structure - empty sections are automatically hidden</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- PDF Export Section -->
+                    <div id="help-pdf" class="help-section">
+                        <h4><i class="fa-solid fa-file-pdf"></i> Export to PDF</h4>
+                        <p>Export patch version details to a professional PDF document:</p>
+                        <ul>
+                            <li>Hover over any patch version header to see the <i class="fa-solid fa-file-pdf" style="font-size: 0.8em; color: #6c757d;"></i> icon</li>
+                            <li>Click the icon to export that specific patch version to PDF</li>
+                            <li>PDF includes: version info, statistics, and complete work items table</li>
+                            <li>Perfect for stakeholder presentations and release documentation</li>
+                        </ul>
+                    </div>
+
+                    <!-- Task Mode Section -->
+                    <div id="help-task-mode" class="help-section">
+                        <h4><i class="fa-solid fa-clipboard-list"></i> Task Mode - Viewing Child Tasks</h4>
+                        <p>In <strong>Read-Write</strong> mode, the <i class="fa-solid fa-clipboard-list" style="color: #8B4513;"></i> <strong>Task Mode</strong> button allows you to show or hide child tasks for all visible Bugs and Features:</p>
+                        
+                        <ol>
+                            <li><strong>Activate Task Mode:</strong> Click the <i class="fa-solid fa-clipboard-list" style="color: #8B4513;"></i> button in the control panel
+                                <ul>
+                                    <li>Available only in <strong>Read-Write</strong> mode</li>
+                                    <li>Active state is indicated by a brown button background</li>
+                                    <li>Your preference is automatically saved</li>
+                                </ul>
+                            </li>
+                            <li><strong>Display Child Tasks:</strong> When activated, child tasks appear under each Bug or Feature
+                                <ul>
+                                    <li>Tasks are loaded efficiently from Azure DevOps</li>
+                                    <li>A spinner shows on the button during loading</li>
+                                </ul>
+                            </li>
+                            <li><strong>Visual Design:</strong> Child tasks are visually distinct:
+                                <ul>
+                                    <li>Indented with a brown left border</li>
+                                    <li>Smaller, italic text with a light brown background</li>
+                                    <li>Brown <i class="fa-solid fa-clipboard-list" style="color: #8B4513;"></i> icon</li>
+                                    <li>Show: icon, title, assigned person, and status</li>
+                                    <li>Not collapsible (displayed as a flat list)</li>
+                                </ul>
+                            </li>
+                            <li><strong>Sorting:</strong> Child tasks are automatically sorted:
+                                <ul>
+                                    <li><strong>First by status:</strong> Evaluation → New → Active → On Hold → Closed</li>
+                                    <li><strong>Then alphabetically:</strong> By title within the same status</li>
+                                </ul>
+                            </li>
+                            <li><strong>Filtering:</strong> When Task Mode is active, filters use OR logic - a work item is shown if either the parent OR any child task matches the filter criteria</li>
+                            <li><strong>Deactivate:</strong> Click the <i class="fa-solid fa-clipboard-list" style="color: #8B4513;"></i> button again to hide all child tasks</li>
+                        </ol>
+                        
+                        <div class="note" style="background-color: rgba(139, 69, 19, 0.1); border-left-color: #8B4513;">
+                            <strong><i class="fa-solid fa-info-circle" style="color: #8B4513;"></i> Important:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>Task Mode works only for <strong>visible</strong> work items (respects filters and hidden versions)</li>
+                                <li>Child tasks are reloaded when filters change or after data reload</li>
+                                <li>Task Mode state persists across page refreshes</li>
+                                <li>Tasks with "Removed" status are not displayed</li>
+                                <li>Loading may take a few seconds for large datasets</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Create Work Items Section -->
+                    <div id="help-create-wi" class="help-section">
+                        <h4><i class="fa-solid fa-plus-circle"></i> Creating Work Items</h4>
+                <p>When in <strong>Read-Write mode</strong>, you can create new work items directly from the application:</p>
+                
+                <div class="note" style="background-color: rgba(13, 110, 253, 0.1); border-left-color: #0d6efd;">
+                    <strong><i class="fa-solid fa-info-circle" style="color: #0d6efd;"></i> Prerequisites:</strong>
+                    <ul style="margin: 8px 0 0 0;">
+                        <li>Your PAT must have <code>Work Items: Read & Write</code> scope</li>
+                        <li>You must select <strong>Read-Write</strong> permission when entering your PAT</li>
+                        <li>The <i class="fa-solid fa-plus"></i> button will appear next to PDF export on patch versions</li>
+                    </ul>
+                </div>
+
+                <p><strong>How to create a work item:</strong></p>
+                <ol>
+                    <li><strong>Open the modal:</strong> Hover over any patch version header and click the <i class="fa-solid fa-plus" style="font-size: 0.8em; color: #28a745;"></i> icon</li>
+                    <li><strong>Select Work Item Type:</strong> Choose between <i class="fa-solid fa-screwdriver-wrench" style="color: #0d6efd;"></i> <strong>Feature</strong> or <i class="fa-solid fa-bug" style="color: #dc3545;"></i> <strong>Bug</strong></li>
+                    <li><strong>Fill in Title:</strong>
+                        <ul>
+                            <li>Select a prefix from the dropdown (e.g., "Xeelo", "Xeelo mobile", "Xeelo admin", "Integray", "Repository")</li>
+                            <li>The prefix is automatically added based on the product context</li>
+                            <li>Enter the main title in the text field (e.g., "calendar week start day")</li>
+                            <li>Final title will be: <code>Prefix - Your Title</code> (e.g., "Xeelo mobile - calendar week start day")</li>
+                        </ul>
+                    </li>
+                    <li><strong>Description (optional):</strong> Add detailed information about the work item</li>
+                    <li><strong>Assigned To:</strong> Select an assignee or leave as "Unassigned" (default)</li>
+                    <li><strong>Priority:</strong> Set priority from 1 (Critical) to 4 (Low) - default is 3 (Medium)</li>
+                    <li><strong>Severity (Bugs only):</strong> For bugs, set severity from 1 (Critical) to 4 (Low) - default is 3 (Medium)</li>
+                    <li><strong>Review & Submit:</strong> Check the patch version info at the bottom and click <strong>+ Create Work Item</strong></li>
+                </ol>
+
+                <p><strong>After creation:</strong></p>
+                <ul>
+                    <li>A success modal will display with the Work Item ID and details</li>
+                    <li>Click <strong>Open in DevOps</strong> to view the work item in Azure DevOps</li>
+                    <li>The work item is automatically linked to the appropriate Epic based on the release</li>
+                    <li>The platform release (e.g., "Labe-07.006") is stored in the custom field <code>Custom.PlatformRelease</code></li>
+                    <li>The product (e.g., "Xeelo") is added as a tag</li>
+                    <li>The page will automatically reload to show the newly created work item</li>
+                </ul>
+
+                <div class="note" style="background-color: rgba(255, 193, 7, 0.1); border-left-color: #ffc107;">
+                    <strong><i class="fa-solid fa-lightbulb" style="color: #ffc107;"></i> Tips:</strong>
+                    <ul style="margin: 8px 0 0 0;">
+                        <li>Choose the correct prefix to categorize your work item (e.g., "Xeelo mobile" for mobile-specific features)</li>
+                        <li>Be specific in the title - it helps with searching and filtering in Azure DevOps</li>
+                        <li>For bugs, always set an appropriate severity level</li>
+                        <li>Use the description field for detailed reproduction steps or acceptance criteria</li>
+                    </ul>
+                    </div>
+                    </div>
+
+                    <!-- Create Child Tasks Section -->
+                    <div id="help-create-task" class="help-section">
+                        <h4><i class="fa-solid fa-plus"></i> Creating Child Tasks</h4>
+                        <p>When in <strong>Read-Write mode</strong>, you can create child tasks directly from the application:</p>
+                        
+                        <div class="note" style="background-color: rgba(13, 110, 253, 0.1); border-left-color: #0d6efd;">
+                            <strong><i class="fa-solid fa-info-circle" style="color: #0d6efd;"></i> Prerequisites:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>Your PAT must have <code>Work Items: Read & Write</code> scope</li>
+                                <li>You must select <strong>Read-Write</strong> permission when entering your PAT</li>
+                                <li>The <i class="fa-solid fa-plus" style="color: #8B4513;"></i><i class="fa-solid fa-clipboard-list" style="color: #8B4513;"></i> button appears next to Feature or Bug titles</li>
+                            </ul>
+                        </div>
+
+                        <p><strong>How to create a child task:</strong></p>
+                        <ol>
+                            <li><strong>Open the modal:</strong> Click the <i class="fa-solid fa-plus" style="color: #8B4513;"></i><i class="fa-solid fa-clipboard-list" style="color: #8B4513;"></i> button next to any Feature or Bug title</li>
+                            <li><strong>Fill in Title:</strong> Enter a descriptive task title (required)</li>
+                            <li><strong>Description (optional):</strong> Add detailed information about the task</li>
+                            <li><strong>Assigned To:</strong> Select an assignee or leave as "Unassigned" (default)</li>
+                            <li><strong>Review & Submit:</strong> Check the parent work item info at the top and click <strong>+ Create</strong></li>
+                        </ol>
+
+                        <p><strong>After creation:</strong></p>
+                        <ul>
+                            <li>A success modal displays with the Task ID and a link to Azure DevOps</li>
+                            <li>Click <strong>Open in DevOps</strong> to view the task in Azure DevOps</li>
+                            <li>The task is automatically linked as a child to the parent Feature or Bug</li>
+                            <li>The page automatically reloads to show the newly created task</li>
+                            <li>The new task appears in the correct position based on sorting rules (status, then alphabetically)</li>
+                        </ul>
+                    </div>
+
+                    <!-- Change Status Section -->
+                    <div id="help-change-status" class="help-section">
+                        <h4><i class="fa-solid fa-pen"></i> Changing Work Item Status</h4>
+                        <p>When in <strong>Read-Write mode</strong>, you can quickly change the status of any work item directly from the application:</p>
+                        
+                        <div class="note" style="background-color: rgba(13, 110, 253, 0.1); border-left-color: #0d6efd;">
+                            <strong><i class="fa-solid fa-info-circle" style="color: #0d6efd;"></i> Prerequisites:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>Your PAT must have <code>Work Items: Read & Write</code> scope</li>
+                                <li>You must select <strong>Read-Write</strong> permission when entering your PAT</li>
+                                <li>A small <i class="fa-solid fa-pen" style="color: #888;"></i> icon appears on status badges when you hover over them</li>
+                            </ul>
+                        </div>
+
+                        <p><strong>How to change status:</strong></p>
+                        <ol>
+                            <li><strong>Hover over status:</strong> Move your cursor over any status badge (e.g., <span class="badge bg-secondary state-badge" data-state="Active" style="background-color: #007bff !important;">Active</span>)</li>
+                            <li><strong>Click the badge:</strong> The entire badge is clickable - a small <i class="fa-solid fa-pen"></i> icon appears to indicate editability</li>
+                            <li><strong>Select new status:</strong> A modal appears with available status options for that work item type</li>
+                            <li><strong>Confirm change:</strong> Click on the desired status to apply the change immediately</li>
+                        </ol>
+
+                        <p><strong>Available statuses by work item type:</strong></p>
+                        <ul>
+                            <li><strong>Bug & Feature:</strong> Evaluation, New, Active, On Hold, Closed</li>
+                            <li><strong>Task:</strong> New, Active, On Hold, Closed</li>
+                        </ul>
+
+                        <div class="note" style="background-color: rgba(40, 167, 69, 0.1); border-left-color: #28a745;">
+                            <strong><i class="fa-solid fa-check-circle" style="color: #28a745;"></i> Immediate Update:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>The status is updated immediately in Azure DevOps</li>
+                                <li>The badge updates in real-time without page reload</li>
+                                <li>A success notification confirms the change</li>
+                                <li>The current status is highlighted in green when you reopen the modal</li>
+                            </ul>
+                        </div>
+
+                        <p><strong>Important notes:</strong></p>
+                        <ul>
+                            <li>You can only change statuses that are valid transitions in Azure DevOps</li>
+                            <li>The feature works for all work items: Bugs, Features, and Tasks (including child tasks)</li>
+                            <li>Changes are logged in Azure DevOps history with your user account</li>
+                            <li>If an error occurs, you'll see an error notification with details</li>
+                        </ul>
+                    </div>
+
+                    <!-- Change Priority Section -->
+                    <div id="help-change-priority" class="help-section">
+                        <h4><i class="fa-solid fa-flag"></i> Changing Work Item Priority</h4>
+                        <p>When in <strong>Read-Write mode</strong>, you can quickly change the priority of any work item (Feature, Bug, or Task) directly from the application:</p>
+                        
+                        <div class="note" style="background-color: rgba(13, 110, 253, 0.1); border-left-color: #0d6efd;">
+                            <strong><i class="fa-solid fa-info-circle" style="color: #0d6efd;"></i> Prerequisites:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>Your PAT must have <code>Work Items: Read & Write</code> scope</li>
+                                <li>You must select <strong>Read-Write</strong> permission when entering your PAT</li>
+                                <li>A small <i class="fa-solid fa-pen" style="color: #888;"></i> icon appears in the top-right corner of priority badges when you hover over them</li>
+                            </ul>
+                        </div>
+
+                        <p><strong>How to change priority:</strong></p>
+                        <ol>
+                            <li><strong>Hover over priority badge:</strong> Move your cursor over any priority badge (e.g., <span class="priority-badge priority-2">2</span>)</li>
+                            <li><strong>Click the badge:</strong> The entire badge is clickable - a small <i class="fa-solid fa-pen"></i> icon appears in the top-right corner</li>
+                            <li><strong>Select new priority:</strong> A modal appears with available priority options (1-4)</li>
+                            <li><strong>Confirm change:</strong> Click on the desired priority to apply the change immediately</li>
+                        </ol>
+
+                        <p><strong>Available priority levels:</strong></p>
+                        <ul>
+                            <li><span class="priority-badge priority-1">1</span> <strong>Critical</strong> - Highest priority, requires immediate attention</li>
+                            <li><span class="priority-badge priority-2">2</span> <strong>High</strong> - Important, should be addressed soon</li>
+                            <li><span class="priority-badge priority-3">3</span> <strong>Medium</strong> - Normal priority (default)</li>
+                            <li><span class="priority-badge priority-4">4</span> <strong>Low</strong> - Can be addressed later</li>
+                        </ul>
+
+                        <div class="note" style="background-color: rgba(40, 167, 69, 0.1); border-left-color: #28a745;">
+                            <strong><i class="fa-solid fa-check-circle" style="color: #28a745;"></i> Immediate Update:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>The priority is updated immediately in Azure DevOps</li>
+                                <li>The badge updates in real-time without page reload</li>
+                                <li>A success notification confirms the change</li>
+                                <li>The current priority is highlighted in green when you reopen the modal</li>
+                            </ul>
+                        </div>
+
+                        <p><strong>Applies to:</strong> Features, Bugs, and Tasks (including child tasks)</p>
+                    </div>
+
+                    <!-- Change Severity Section -->
+                    <div id="help-change-severity" class="help-section">
+                        <h4><i class="fa-solid fa-triangle-exclamation"></i> Changing Bug Severity</h4>
+                        <p>When in <strong>Read-Write mode</strong>, you can quickly change the severity of any <strong>Bug</strong> directly from the application:</p>
+                        
+                        <div class="note" style="background-color: rgba(13, 110, 253, 0.1); border-left-color: #0d6efd;">
+                            <strong><i class="fa-solid fa-info-circle" style="color: #0d6efd;"></i> Prerequisites:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>Your PAT must have <code>Work Items: Read & Write</code> scope</li>
+                                <li>You must select <strong>Read-Write</strong> permission when entering your PAT</li>
+                                <li>Severity is <strong>only available for Bugs</strong>, not Features or Tasks</li>
+                                <li>A small <i class="fa-solid fa-pen" style="color: #888;"></i> icon appears in the top-right corner of severity badges when you hover over them</li>
+                            </ul>
+                        </div>
+
+                        <p><strong>How to change severity:</strong></p>
+                        <ol>
+                            <li><strong>Hover over severity badge:</strong> Move your cursor over the severity badge (second badge for bugs, e.g., <span class="severity-badge severity-3">3</span>)</li>
+                            <li><strong>Click the badge:</strong> The entire badge is clickable - a small <i class="fa-solid fa-pen"></i> icon appears in the top-right corner</li>
+                            <li><strong>Select new severity:</strong> A modal appears with available severity options (1-4)</li>
+                            <li><strong>Confirm change:</strong> Click on the desired severity to apply the change immediately</li>
+                        </ol>
+
+                        <p><strong>Available severity levels:</strong></p>
+                        <ul>
+                            <li><span class="severity-badge severity-1">1</span> <strong>Critical</strong> - System unusable, blocks critical functionality</li>
+                            <li><span class="severity-badge severity-2">2</span> <strong>High</strong> - Major feature affected, workaround exists</li>
+                            <li><span class="severity-badge severity-3">3</span> <strong>Medium</strong> - Minor feature affected (default)</li>
+                            <li><span class="severity-badge severity-4">4</span> <strong>Low</strong> - Cosmetic issue, minimal impact</li>
+                        </ul>
+
+                        <div class="note" style="background-color: rgba(40, 167, 69, 0.1); border-left-color: #28a745;">
+                            <strong><i class="fa-solid fa-check-circle" style="color: #28a745;"></i> Immediate Update:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>The severity is updated immediately in Azure DevOps</li>
+                                <li>The badge updates in real-time without page reload</li>
+                                <li>A success notification confirms the change</li>
+                                <li>The current severity is highlighted in green when you reopen the modal</li>
+                            </ul>
+                        </div>
+
+                        <p><strong>Understanding Priority vs Severity:</strong></p>
+                        <ul>
+                            <li><strong>Priority</strong> - How soon the bug should be fixed (business urgency)</li>
+                            <li><strong>Severity</strong> - How serious the bug's impact is (technical impact)</li>
+                            <li>Example: A typo on the homepage could be low severity but high priority (for marketing reasons)</li>
+                            <li>Example: A rare crash in an admin tool could be high severity but low priority (affects few users)</li>
+                        </ul>
+
+                        <p><strong>Applies to:</strong> Bugs only (Features and Tasks do not have severity)</p>
+                    </div>
+
+                    <!-- Change Assigned To Section -->
+                    <div id="help-change-assigned-to" class="help-section">
+                        <h4><i class="fa-solid fa-user"></i> Changing Work Item Assigned To</h4>
+                        <p>When in <strong>Read-Write mode</strong>, you can quickly change the assignee of any work item (Feature, Bug, or Task) directly from the application:</p>
+                        
+                        <div class="note" style="background-color: rgba(13, 110, 253, 0.1); border-left-color: #0d6efd;">
+                            <strong><i class="fa-solid fa-info-circle" style="color: #0d6efd;"></i> Prerequisites:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>Your PAT must have <code>Work Items: Read & Write</code> scope</li>
+                                <li>You must select <strong>Read-Write</strong> permission when entering your PAT</li>
+                                <li>A small <i class="fa-solid fa-pen" style="color: #888;"></i> icon appears in the top-right corner of assigned-to badges when you hover over them</li>
+                            </ul>
+                        </div>
+
+                        <p><strong>How to change assigned to:</strong></p>
+                        <ol>
+                            <li><strong>Hover over assigned-to badge:</strong> Move your cursor over any assigned-to badge (e.g., <span class="assigned-to-badge">Tomas Belak</span>)</li>
+                            <li><strong>Click the badge:</strong> The entire badge is clickable - a small <i class="fa-solid fa-pen"></i> icon appears in the top-right corner</li>
+                            <li><strong>Select new assignee:</strong> A modal appears with available assignee options (names only, for better readability)</li>
+                            <li><strong>Confirm change:</strong> Click on the desired assignee to apply the change immediately</li>
+                        </ol>
+
+                        <div class="note" style="background-color: rgba(40, 167, 69, 0.1); border-left-color: #28a745;">
+                            <strong><i class="fa-solid fa-check-circle" style="color: #28a745;"></i> Immediate Update:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>The assignee is updated immediately in Azure DevOps</li>
+                                <li>The badge updates in real-time without page reload</li>
+                                <li>A success notification confirms the change</li>
+                                <li>The current assignee is highlighted in green when you reopen the modal</li>
+                            </ul>
+                        </div>
+
+                        <p><strong>Available options:</strong></p>
+                        <ul>
+                            <li><strong>Unassigned</strong> - Remove assignment from the work item</li>
+                            <li><strong>Team members</strong> - All team members loaded from your Azure DevOps project</li>
+                            <li>Only names are displayed in the modal (not emails) for better readability</li>
+                        </ul>
+
+                        <p><strong>Important notes:</strong></p>
+                        <ul>
+                            <li>You can assign work items to any team member in your Azure DevOps project</li>
+                            <li>The feature works for all work items: Bugs, Features, and Tasks (including child tasks)</li>
+                            <li>Changes are logged in Azure DevOps history with your user account</li>
+                            <li>If an error occurs, you'll see an error notification with details</li>
+                            <li>You can also set "Unassigned" to remove the assignment</li>
+                        </ul>
+
+                        <p><strong>Applies to:</strong> Features, Bugs, and Tasks (including child tasks)</p>
+                    </div>
+
+                    <!-- Change Patch Version Section -->
+                    <div id="help-change-patch-version" class="help-section">
+                        <h4><i class="fa-solid fa-layer-group"></i> Changing Work Item Patch Version</h4>
+                        <p>When in <strong>Read-Write mode</strong>, you can quickly change the patch version of any work item (Feature, Bug, or Task) directly from the application:</p>
+                        
+                        <div class="note" style="background-color: rgba(13, 110, 253, 0.1); border-left-color: #0d6efd;">
+                            <strong><i class="fa-solid fa-info-circle" style="color: #0d6efd;"></i> Prerequisites:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>Your PAT must have <code>Work Items: Read & Write</code> scope</li>
+                                <li>You must select <strong>Read-Write</strong> permission when entering your PAT</li>
+                                <li>A small <i class="fa-solid fa-layer-group" style="color: #6f42c1;"></i> icon appears next to the title when you hover over it (faded, becomes visible on hover)</li>
+                            </ul>
+                        </div>
+
+                        <p><strong>How to change patch version:</strong></p>
+                        <ol>
+                            <li><strong>Hover over work item title:</strong> Move your cursor over any Feature or Bug title</li>
+                            <li><strong>Click the icon:</strong> A small <i class="fa-solid fa-layer-group" style="color: #6f42c1;"></i> icon appears next to the "Add Child Task" button - click it</li>
+                            <li><strong>Select new patch version:</strong> A modal appears with all available patch versions for that product</li>
+                            <li><strong>Confirm change:</strong> Click on the desired patch version to apply the change immediately</li>
+                        </ol>
+
+                        <div class="note" style="background-color: rgba(40, 167, 69, 0.1); border-left-color: #28a745;">
+                            <strong><i class="fa-solid fa-check-circle" style="color: #28a745;"></i> Immediate Update:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>The patch version is updated immediately in Azure DevOps</li>
+                                <li>The page automatically reloads to show the updated patch version</li>
+                                <li>A success notification confirms the change</li>
+                                <li>The current patch version is highlighted in green when you reopen the modal</li>
+                                <li>Patch versions ending with "999" are displayed in <span style="background-color: #fd7e14; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.85em;">orange</span> color for easy identification</li>
+                            </ul>
+                        </div>
+
+                        <p><strong>Available options:</strong></p>
+                        <ul>
+                            <li>All patch versions configured for the product (e.g., Xeelo, Integray, Repository, Connectors)</li>
+                            <li>You can change between different major versions (e.g., from Labe-07.006 to Labe-09.001)</li>
+                            <li>Patch versions ending with "999" are special versions and are highlighted in orange</li>
+                        </ul>
+
+                        <p><strong>Important notes:</strong></p>
+                        <ul>
+                            <li>You can change patch version to any available version for the same product</li>
+                            <li>The feature works for Features and Bugs (not for Tasks)</li>
+                            <li>Changes are logged in Azure DevOps history with your user account</li>
+                            <li>If an error occurs, you'll see an error notification with details</li>
+                            <li>The patch version is stored in the <code>Custom.PlatformRelease</code> field</li>
+                        </ul>
+
+                        <p><strong>Applies to:</strong> Features and Bugs only</p>
+                    </div>
+
+                    <!-- Visual Indicators Section -->
+                    <div id="help-visual" class="help-section">
+                        <h4><i class="fa-solid fa-palette"></i> Visual Indicators</h4>
+                        <ul>
+                            <li><i class="fa-solid fa-rocket" style="color: #fd7e14;"></i> <strong>Release Features</strong> - Orange background (features starting with "Release")</li>
+                            <li><i class="fa-solid fa-puzzle-piece" style="color: #0d6efd;"></i> <strong>Features</strong> - Blue puzzle piece icon</li>
+                            <li><i class="fa-solid fa-bug" style="color: #dc3545;"></i> <strong>Bugs</strong> - Red bug icon</li>
+                            <li><i class="fa-solid fa-clipboard-list" style="color: #8B4513;"></i> <strong>Child Tasks</strong> - Brown clipboard icon, indented with brown left border</li>
+                        </ul>
+                    </div>
+
+                    <!-- Priority & Severity Section -->
+                    <div id="help-priority" class="help-section">
+                        <h4><i class="fa-solid fa-flag"></i> Priority & Severity</h4>
+                        <p>Each work item displays priority/severity as color-coded numeric badges:</p>
+                        <ul>
+                            <li><span class="priority-badge priority-1">1</span> = Critical (Red)</li>
+                            <li><span class="priority-badge priority-2">2</span> = High (Orange)</li>
+                            <li><span class="priority-badge priority-3">3</span> = Medium (Yellow)</li>
+                            <li><span class="priority-badge priority-4">4</span> = Low (Cyan)</li>
+                        </ul>
+                        <p><strong>Features:</strong> One badge showing Priority only → <span class="priority-badge priority-1" title="Priority: 1">1</span></p>
+                        <p><strong>Bugs:</strong> Two badges showing Priority and Severity → <span class="priority-badge priority-2" title="Priority: 2 / Severity: 3">2</span><span class="severity-badge severity-3" title="Priority: 2 / Severity: 3">3</span></p>
+                        <p><strong>Tip:</strong> Hover over any badge to see the full description (e.g., "Priority: 2 / Severity: 3")</p>
+                    </div>
+
+                    <!-- Tips & Shortcuts Section -->
+                    <div id="help-tips" class="help-section">
+                        <h4><i class="fa-solid fa-lightbulb"></i> Tips & Shortcuts</h4>
+                        <ul>
+                            <li>Your view preferences (expanded sections, hidden versions) are saved and persist across sessions</li>
+                            <li>Press <code>ESC</code> to close any modal dialog</li>
+                            <li>Click outside a modal to close it</li>
+                            <li>Work items are sorted by status priority: Evaluation → New → Active → Resolved → Closed</li>
+                            <li>Click on any work item title to open it in Azure DevOps</li>
+                        </ul>
+                    </div>
+
