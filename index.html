@@ -2338,6 +2338,43 @@
             NO_EPIC_ID: (release) => `Error: EpicID not found for release ${release}!`
         };
 
+        // ===== Logging Utility =====
+        // Production mode: disable debug and info logs
+        const IS_PRODUCTION = window.location.hostname !== '127.0.0.1' && window.location.hostname !== 'localhost';
+        const LOG_LEVELS = {
+            DEBUG: 0,
+            INFO: 1,
+            WARN: 2,
+            ERROR: 3
+        };
+        
+        const Logger = {
+            level: IS_PRODUCTION ? LOG_LEVELS.WARN : LOG_LEVELS.DEBUG,
+            
+            debug(...args) {
+                if (this.level <= LOG_LEVELS.DEBUG) {
+                    console.debug('[DEBUG]', ...args);
+                }
+            },
+            
+            info(...args) {
+                if (this.level <= LOG_LEVELS.INFO) {
+                    console.info('[INFO]', ...args);
+                }
+            },
+            
+            warn(...args) {
+                if (this.level <= LOG_LEVELS.WARN) {
+                    console.warn('[WARN]', ...args);
+                }
+            },
+            
+            error(...args) {
+                // Errors are always logged
+                console.error('[ERROR]', ...args);
+            }
+        };
+
         const releaseNames = [
             { product: 'Xeelo', release: 'Labe', epicID: '6056' },
             { product: 'Integray', release: 'Schneeberg', epicID: '153'},
@@ -2521,7 +2558,7 @@
                 
                 return await response.text();
             } catch (error) {
-                console.error(`[DevOps API] ${method} ${endpoint}:`, error);
+                Logger.error(`[DevOps API] ${method} ${endpoint}:`, error);
                 throw error;
             }
         }
@@ -2543,19 +2580,128 @@
             return devOpsApiRequest(endpoint, 'DELETE', null, options);
         }
 
+        // ===== PAT Encryption/Decryption =====
+        
+        /**
+         * Get encryption key for PAT (derived from a fixed key)
+         * In production, consider using a key derived from user-specific data
+         * @returns {Promise<CryptoKey>}
+         */
+        async function getEncryptionKey() {
+            // Fixed key for encryption (in production, consider deriving from user data)
+            const keyMaterial = 'Releasy-PAT-Encryption-Key-2024';
+            const encoder = new TextEncoder();
+            const keyData = encoder.encode(keyMaterial);
+            
+            // Import key for AES-GCM
+            return await crypto.subtle.importKey(
+                'raw',
+                keyData,
+                { name: 'PBKDF2' },
+                false,
+                ['deriveBits', 'deriveKey']
+            ).then(keyMaterial =>
+                crypto.subtle.deriveKey(
+                    {
+                        name: 'PBKDF2',
+                        salt: encoder.encode('releasy-salt'),
+                        iterations: 100000,
+                        hash: 'SHA-256'
+                    },
+                    keyMaterial,
+                    { name: 'AES-GCM', length: 256 },
+                    false,
+                    ['encrypt', 'decrypt']
+                )
+            );
+        }
+        
+        /**
+         * Encrypt PAT token before storing
+         * @param {string} pat - Plain text PAT
+         * @returns {Promise<string>} Encrypted PAT (base64 encoded)
+         */
+        async function encryptPAT(pat) {
+            try {
+                const key = await getEncryptionKey();
+                const encoder = new TextEncoder();
+                const data = encoder.encode(pat);
+                
+                // Generate random IV
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                
+                // Encrypt
+                const encrypted = await crypto.subtle.encrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    key,
+                    data
+                );
+                
+                // Combine IV and encrypted data, then encode as base64
+                const combined = new Uint8Array(iv.length + encrypted.byteLength);
+                combined.set(iv, 0);
+                combined.set(new Uint8Array(encrypted), iv.length);
+                
+                return btoa(String.fromCharCode(...combined));
+            } catch (error) {
+                Logger.error('Error encrypting PAT:', error);
+                // Fallback: return original if encryption fails
+                return pat;
+            }
+        }
+        
+        /**
+         * Decrypt PAT token after retrieving from storage
+         * @param {string} encryptedPat - Encrypted PAT (base64 encoded)
+         * @returns {Promise<string>} Decrypted PAT
+         */
+        async function decryptPAT(encryptedPat) {
+            try {
+                // Check if it's already plaintext (backward compatibility)
+                if (!encryptedPat.includes('=') || encryptedPat.length < 20) {
+                    // Likely not encrypted, return as-is for backward compatibility
+                    return encryptedPat;
+                }
+                
+                const key = await getEncryptionKey();
+                
+                // Decode base64
+                const combined = Uint8Array.from(atob(encryptedPat), c => c.charCodeAt(0));
+                
+                // Extract IV (first 12 bytes) and encrypted data
+                const iv = combined.slice(0, 12);
+                const encrypted = combined.slice(12);
+                
+                // Decrypt
+                const decrypted = await crypto.subtle.decrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    key,
+                    encrypted
+                );
+                
+                const decoder = new TextDecoder();
+                return decoder.decode(decrypted);
+            } catch (error) {
+                Logger.error('Error decrypting PAT:', error);
+                // Fallback: return original if decryption fails (might be old unencrypted format)
+                return encryptedPat;
+            }
+        }
+        
         // ===== Helper Functions =====
         
         /**
          * Require PAT token or throw error
-         * @returns {string} PAT token
+         * @returns {Promise<string>} PAT token
          * @throws {Error} If PAT not found
          */
-        function requirePAT() {
-            const pat = localStorage.getItem('devops_pat');
-            if (!pat) {
+        async function requirePAT() {
+            const encryptedPat = localStorage.getItem('devops_pat');
+            if (!encryptedPat) {
                 alert(ERROR_MESSAGES.NO_PAT);
                 throw new Error('PAT_REQUIRED');
             }
+            const pat = await decryptPAT(encryptedPat);
             return pat;
         }
 
@@ -2567,7 +2713,7 @@
         function validateForm(formId) {
             const form = document.getElementById(formId);
             if (!form) {
-                console.error(`Form with ID "${formId}" not found`);
+                Logger.error(`Form with ID "${formId}" not found`);
                 return false;
             }
             if (!form.checkValidity()) {
@@ -3062,7 +3208,7 @@
                 // Zobrazit child tasky
                 displayChildTasks(childTasksData);
             } catch (error) {
-                console.error('Error loading child tasks:', error);
+                Logger.error('Error loading child tasks:', error);
             } finally {
                 // Restore button state
                 const taskBtn = document.getElementById('taskModeBtn');
@@ -3096,7 +3242,7 @@
                         );
                         
                         if (!response.ok) {
-                            console.warn(`Batch fetch failed with status: ${response.status}`);
+                            Logger.warn(`Batch fetch failed with status: ${response.status}`);
                             return { value: [] };
                         }
                         
@@ -3157,7 +3303,7 @@
                         );
                         
                         if (!response.ok) {
-                            console.warn(`Child tasks batch fetch failed with status: ${response.status}`);
+                            Logger.warn(`Child tasks batch fetch failed with status: ${response.status}`);
                             return { value: [] };
                         }
                         
@@ -3181,7 +3327,7 @@
                 
                 return result;
             } catch (error) {
-                console.error('Error fetching child tasks:', error);
+                Logger.error('Error fetching child tasks:', error);
                 return {};
             }
         }
@@ -3207,7 +3353,7 @@
                 const workItem = document.querySelector(`.work-item[data-work-item-id="${parentId}"]`);
                 
                 if (!workItem) {
-                    console.warn(`Parent work item ${parentId} not found`);
+                    Logger.warn(`Parent work item ${parentId} not found`);
                     return;
                 }
                 
@@ -3740,13 +3886,15 @@
         // ===== PAT Modal Management =====
         let patModalResolve = null;
         
-        window.openPATModal = function() {
+        window.openPATModal = async function() {
             // Pre-fill existing PAT if available
-            const existingPAT = localStorage.getItem('devops_pat');
+            const existingEncryptedPAT = localStorage.getItem('devops_pat');
             const existingCapability = localStorage.getItem('tokenHasWriteCapability') === 'true';
             
-            if (existingPAT) {
-                document.getElementById('patInput').value = existingPAT;
+            if (existingEncryptedPAT) {
+                // Decrypt PAT for display in input (user can see their own token)
+                const decryptedPAT = await decryptPAT(existingEncryptedPAT);
+                document.getElementById('patInput').value = decryptedPAT;
             }
             
             // Set radio button based on existing capability
@@ -3790,8 +3938,9 @@
             const capability = document.querySelector('input[name="tokenCapability"]:checked').value;
             const hasWritePermission = capability === 'write';
             
-            // Save PAT and capability to localStorage
-            localStorage.setItem('devops_pat', pat);
+            // Encrypt and save PAT to localStorage
+            const encryptedPat = await encryptPAT(pat);
+            localStorage.setItem('devops_pat', encryptedPat);
             localStorage.setItem('tokenHasWriteCapability', hasWritePermission ? 'true' : 'false');
             
             // Update permission badge
@@ -3815,25 +3964,28 @@
 
         // ===== Azure DevOps API Integration =====
         async function getPAT(forcePrompt = false) {
-            let pat = !forcePrompt ? localStorage.getItem('devops_pat') : null;
-            if (!pat || forcePrompt) {
+            let encryptedPat = !forcePrompt ? localStorage.getItem('devops_pat') : null;
+            if (!encryptedPat || forcePrompt) {
                 // Open modal and wait for user input
                 return new Promise((resolve) => {
                     patModalResolve = resolve;
                     openPATModal();
                 });
             }
+            // Decrypt PAT before returning
+            const pat = await decryptPAT(encryptedPat);
             return pat;
         }
 
         // ===== Token Permissions Check =====
         // Globální funkce pro manuální kontrolu práv z konzole
         window.checkMyTokenPermissions = async function() {
-            const pat = localStorage.getItem('devops_pat');
-            if (!pat) {
-                console.error('❌ PAT token nenalezen! Nejprve se přihlaste.');
+            const encryptedPat = localStorage.getItem('devops_pat');
+            if (!encryptedPat) {
+                Logger.error('PAT token nenalezen! Nejprve se přihlaste.');
                 return;
             }
+            const pat = await decryptPAT(encryptedPat);
             await checkTokenPermissions(pat);
         };
         
@@ -3851,7 +4003,7 @@
                 );
                 
                 if (!connectionResponse.ok) {
-                    console.error('❌ Invalid token or no access to Azure DevOps');
+                    Logger.error('Invalid token or no access to Azure DevOps');
                     return;
                 }
                 
@@ -3874,9 +4026,9 @@
                     
                     if (userEmail) {
                         localStorage.setItem('current_user_email', userEmail);
-                        console.log('✅ Current user email stored:', userEmail);
+                        Logger.debug('Current user email stored:', userEmail);
                     } else {
-                        console.warn('⚠️ Could not extract user email from connection data');
+                        Logger.warn('Could not extract user email from connection data');
                     }
                 }
                 
@@ -3885,7 +4037,7 @@
                 updatePermissionBadge(tokenHasWriteCapability);
                 
             } catch (error) {
-                console.error('❌ Error validating token:', error);
+                Logger.error('Error validating token:', error);
             }
         }
 
@@ -4158,7 +4310,7 @@
                 // Update assigned to edit visibility
                 updateAssignedToEditVisibility(hasWritePermission);
             } catch (error) {
-                console.error('Error loading data:', error);
+                Logger.error('Error loading data:', error);
             } finally {
                 loading.style.display = 'none';
             }
@@ -4255,7 +4407,7 @@
                         html = await response.text();
                     } catch (primaryError) {
                         if (isLocalHost) {
-                            console.log('Local guide.html failed, trying external URL...');
+                            Logger.debug('Local guide.html failed, trying external URL...');
                             response = await fetch(guideUrl);
                             if (!response.ok) {
                                 throw new Error('Failed to load guide.html from external URL');
@@ -4278,7 +4430,7 @@
                     // Initialize first section after content is loaded
                     showHelpSection('help-pat');
                 } catch (error) {
-                    console.error('Error loading guide:', error);
+                    Logger.error('Error loading guide:', error);
                     // Hide loading overlay
                     if (loadingOverlay) {
                         loadingOverlay.classList.remove('show');
@@ -4390,7 +4542,7 @@
             try {
                 initializeHtmlEditor('workItemMdToolbar', 'workItemDescription');
             } catch (e) {
-                console.warn('Failed to initialize HTML toolbar (work item):', e);
+                Logger.warn('Failed to initialize HTML toolbar (work item):', e);
             }
             
             // After reset, repopulate prefix select and set default assignee to Unassigned
@@ -4691,7 +4843,7 @@
             try {
                 initializeHtmlEditor('taskMdToolbar', 'taskDescription');
             } catch (e) {
-                console.warn('Failed to initialize HTML toolbar:', e);
+                Logger.warn('Failed to initialize HTML toolbar:', e);
             }
         };
         
@@ -4712,7 +4864,7 @@
             }
             
             if (!createTaskContext) {
-                console.error('❌ No task context!');
+                Logger.error('No task context!');
                 return;
             }
             
@@ -4726,7 +4878,7 @@
             
             try {
                 // Get PAT
-                const pat = requirePAT();
+                const pat = await requirePAT();
                 
                 // Build JSON Patch document for task creation
                 const operations = [
@@ -4781,7 +4933,7 @@
                 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    console.error('❌ API Error:', response.status, errorText);
+                    Logger.error('API Error:', response.status, errorText);
                     
                     let errorMessage = `Failed to create task (${response.status})`;
                     try {
@@ -4815,7 +4967,7 @@
                 openWorkItemCreatedModal(workItemForModal, taskUrl);
                 
             } catch (error) {
-                console.error('❌ Error creating task:', error);
+                Logger.error('Error creating task:', error);
                 alert(`Error creating task: ${error.message}`);
             }
         };
@@ -4889,7 +5041,7 @@
             const epicID = releaseConfig ? releaseConfig.epicID : null;
             
             if (!epicID) {
-                console.error('❌ EpicID not found for release:', createWorkItemContext.releaseName);
+                    Logger.error('EpicID not found for release:', createWorkItemContext.releaseName);
                 alert(ERROR_MESSAGES.NO_EPIC_ID(createWorkItemContext.releaseName));
                 return;
             }
@@ -4910,7 +5062,7 @@
             
             try {
                 // Get PAT
-                const pat = requirePAT();
+                const pat = await requirePAT();
                 
                 // Build JSON Patch document for work item creation
                 const operations = [
@@ -5000,7 +5152,7 @@
                 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    console.error('❌ API Error:', response.status, errorText);
+                    Logger.error('API Error:', response.status, errorText);
                     
                     let errorMessage = `Failed to create work item (${response.status})`;
                     try {
@@ -5039,7 +5191,7 @@
                 }, workItemUrl);
                 
             } catch (error) {
-                console.error('❌ Error creating work item:', error);
+                Logger.error('Error creating work item:', error);
                 alert(`❌ Error creating work item:\n\n${error.message}\n\nCheck console (F12) for details.`);
             }
         };
@@ -5371,7 +5523,7 @@
                 doc.output('dataurlnewwindow', { filename: filename });
                 
             } catch (error) {
-                console.error('Error exporting PDF:', error);
+                Logger.error('Error exporting PDF:', error);
                 alert('Failed to export PDF. Please try again.');
             }
         };
@@ -5623,7 +5775,7 @@
                     onSuccess();
                 }
             } catch (error) {
-                console.error('Error updating work item:', error);
+                Logger.error('Error updating work item:', error);
                 if (errorMessage) {
                     showNotification(errorMessage, 'error');
                 }
@@ -5781,7 +5933,7 @@
                 
                 closeAssignedToChangeModal();
             } catch (error) {
-                console.error('Error changing assigned to:', error);
+                Logger.error('Error changing assigned to:', error);
                 showNotification(`Error changing assigned to: ${error.message}`, 'error');
             } finally {
                 // Hide loading overlay
@@ -6121,7 +6273,7 @@
                     document.getElementById('changePatchModal').classList.add('show');
                     lockBodyScroll();
                 } catch (error) {
-                    console.error('Error opening patch version modal:', error);
+                    Logger.error('Error opening patch version modal:', error);
                     showNotification(`Error: ${error.message}`, 'error');
                 }
             });
@@ -6170,7 +6322,7 @@
                 
                 closeChangePatchModal();
             } catch (error) {
-                console.error('Error changing patch version:', error);
+                Logger.error('Error changing patch version:', error);
                 showNotification(`Error changing patch version: ${error.message}`, 'error');
             } finally {
                 // Hide loading overlay
@@ -6287,7 +6439,7 @@
                 try {
                     await replaceImagesWithAuthenticatedBlobs(descEl);
                 } catch (e) {
-                    console.warn('Image resolution warning:', e);
+                    Logger.warn('Image resolution warning:', e);
                 }
                 
                 // Initialize HTML editor for description only in read-write mode
@@ -6295,14 +6447,14 @@
                     try {
                         initializeHtmlEditor('workItemDetailMdToolbar', 'workItemDetailDescription');
                     } catch (e) {
-                        console.warn('Failed to initialize HTML toolbar:', e);
+                        Logger.warn('Failed to initialize HTML toolbar:', e);
                     }
                 }
                 
                 // Store work item type for update function
                 descEl.dataset.workItemType = type;
             } catch (err) {
-                console.error(err);
+                Logger.error(err);
                 showNotification(err.message || 'Failed to load work item', 'error');
             } finally {
                 loading.classList.remove('show');
@@ -6400,7 +6552,7 @@
                 
                 showNotification('Work item updated successfully', 'success');
             } catch (error) {
-                console.error('Error updating work item:', error);
+                Logger.error('Error updating work item:', error);
                 showNotification(`Error updating work item: ${error.message}`, 'error');
             } finally {
                 loading.classList.remove('show');
@@ -6449,7 +6601,7 @@
             navigator.clipboard.writeText(formattedTitle).then(() => {
                 showNotification('Work item title copied to clipboard', 'success');
             }).catch(err => {
-                console.error('Failed to copy:', err);
+                Logger.error('Failed to copy:', err);
                 showNotification('Failed to copy to clipboard', 'error');
             });
         };
@@ -6480,7 +6632,7 @@
                 // Case 2: Image is a blob URL (from previously loaded DevOps image) - try to find original URL
                 if (src.startsWith('blob:')) {
                     // If we can't find original URL, skip it (shouldn't happen if replaceImagesWithAuthenticatedBlobs worked correctly)
-                    console.warn('Blob URL found without data-devops-url attribute, skipping');
+                    Logger.warn('Blob URL found without data-devops-url attribute, skipping');
                     continue;
                 }
                 
@@ -6529,7 +6681,7 @@
                     });
                     
                     if (!uploadResponse.ok) {
-                        console.warn('Failed to upload image attachment:', uploadResponse.statusText);
+                        Logger.warn('Failed to upload image attachment:', uploadResponse.statusText);
                         continue;
                     }
                     
@@ -6539,7 +6691,7 @@
                     // Replace data: URL with DevOps attachment URL
                     img.setAttribute('src', attachmentUrl);
                 } catch (error) {
-                    console.warn('Error processing image:', error);
+                    Logger.warn('Error processing image:', error);
                     // Continue with other images even if one fails
                 }
             }
@@ -6584,7 +6736,7 @@
                         headers: { 'Authorization': 'Basic ' + btoa(':' + pat) }
                     });
                     if (!resp.ok) {
-                        console.warn('Failed to fetch image', originalUrl, resp.status);
+                        Logger.warn('Failed to fetch image', originalUrl, resp.status);
                         return;
                     }
                     const blob = await resp.blob();
@@ -6592,7 +6744,7 @@
                     img.src = objectUrl;
                     img.referrerPolicy = 'no-referrer';
                 } catch (err) {
-                    console.warn('Failed to replace image', err);
+                    Logger.warn('Failed to replace image', err);
                 }
             }));
         }
@@ -6669,7 +6821,7 @@
                     return JSON.parse(saved);
                 }
             } catch (e) {
-                console.error('Error loading saved filters:', e);
+                Logger.error('Error loading saved filters:', e);
             }
             return { hiddenAssignees: [], hiddenStatuses: [] };
         }
@@ -6681,7 +6833,7 @@
                     hiddenStatuses: hiddenStatuses
                 }));
             } catch (e) {
-                console.error('Error saving filters:', e);
+                Logger.error('Error saving filters:', e);
             }
         }
         
