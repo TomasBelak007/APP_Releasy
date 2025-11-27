@@ -75,6 +75,9 @@
                             <a href="#help-priority" class="help-nav-link" onclick="showHelpSection('help-priority'); return false;">
                                 <i class="fa-solid fa-flag"></i> Priority & Severity
                             </a>
+                            <a href="#help-conventional-commits" class="help-nav-link" onclick="showHelpSection('help-conventional-commits'); return false;">
+                                <i class="fa-solid fa-code-branch"></i> Conventional Commits
+                            </a>
                             <a href="#help-tips" class="help-nav-link" onclick="showHelpSection('help-tips'); return false;">
                                 <i class="fa-solid fa-lightbulb"></i> Tips & Shortcuts
                             </a>
@@ -681,6 +684,60 @@
                         <p><strong>Features:</strong> One badge showing Priority only → <span class="priority-badge priority-1" title="Priority: 1">1</span></p>
                         <p><strong>Bugs:</strong> Two badges showing Priority and Severity → <span class="priority-badge priority-2" title="Priority: 2 / Severity: 3">2</span><span class="severity-badge severity-3" title="Priority: 2 / Severity: 3">3</span></p>
                         <p><strong>Tip:</strong> Hover over any badge to see the full description (e.g., "Priority: 2 / Severity: 3")</p>
+                    </div>
+
+                    <!-- Conventional Commits Section -->
+                    <div id="help-conventional-commits" class="help-section">
+                        <h4><i class="fa-solid fa-code-branch"></i> Conventional Commits Format</h4>
+                        <p>When you copy a work item title to clipboard, it is automatically formatted according to the <a href="https://www.conventionalcommits.org/en/v1.0.0/" target="_blank" rel="noopener noreferrer">Conventional Commits</a> specification.</p>
+                        
+                        <h5><i class="fa-solid fa-list"></i> Format Structure</h5>
+                        <p>The copied format follows this structure:</p>
+                        <pre style="background-color: var(--bg-secondary); padding: 12px; border-radius: 4px; border: 1px solid var(--border-color); margin: 10px 0;"><code>&lt;type&gt;(&lt;scope&gt;): &lt;work_item_id&gt; &lt;description&gt;</code></pre>
+                        
+                        <h5><i class="fa-solid fa-tag"></i> Type</h5>
+                        <ul>
+                            <li><strong><code>feat</code></strong> - Used for Features (new functionality)</li>
+                            <li><strong><code>fix</code></strong> - Used for Bugs (bug fixes)</li>
+                            <li>Other work item types use their lowercase name as the type</li>
+                        </ul>
+                        
+                        <h5><i class="fa-solid fa-brackets-curly"></i> Scope</h5>
+                        <p>The scope is currently empty (shown as <code>()</code>) and can be filled manually or defined by logic later. Scope provides additional contextual information about the commit.</p>
+                        
+                        <h5><i class="fa-solid fa-hashtag"></i> Work Item ID</h5>
+                        <p>The work item ID from Azure DevOps is included in the description, followed by the work item title.</p>
+                        
+                        <h5><i class="fa-solid fa-font"></i> Description Processing</h5>
+                        <p>The work item title is processed before copying:</p>
+                        <ul>
+                            <li>Any prefix before <code>" - "</code> (space, dash, space) is automatically removed</li>
+                            <li>Example: <code>"Xeelo - calendar week start day"</code> → <code>"calendar week start day"</code></li>
+                            <li>The remaining title is converted to lowercase</li>
+                            <li>Spaces are preserved (not replaced with underscores)</li>
+                        </ul>
+                        
+                        <h5><i class="fa-solid fa-clipboard"></i> Examples</h5>
+                        <div class="note" style="background-color: rgba(13, 110, 253, 0.1); border-left-color: #0d6efd; margin-top: 12px;">
+                            <strong><i class="fa-solid fa-info-circle" style="color: #0d6efd;"></i> Example outputs:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li><strong>Feature:</strong> Original title <code>"Xeelo - Calendar Week Start Day"</code> → Copied: <code>feat(): 123 calendar week start day</code></li>
+                                <li><strong>Bug:</strong> Original title <code>"Xeelo mobile - Login Button Not Working"</code> → Copied: <code>fix(): 456 login button not working</code></li>
+                                <li><strong>Feature (no prefix):</strong> Original title <code>"Calendar Week Start Day"</code> → Copied: <code>feat(): 123 calendar week start day</code></li>
+                            </ul>
+                        </div>
+                        
+                        <div class="note" style="background-color: rgba(40, 167, 69, 0.1); border-left-color: #28a745; margin-top: 12px;">
+                            <strong><i class="fa-solid fa-check-circle" style="color: #28a745;"></i> Benefits:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>Automatically generates commit messages in a standardized format</li>
+                                <li>Compatible with tools that parse Conventional Commits (e.g., for CHANGELOG generation)</li>
+                                <li>Makes it easier to track which commits relate to which work items</li>
+                                <li>Follows industry-standard commit message conventions</li>
+                            </ul>
+                        </div>
+                        
+                        <p><strong>Reference:</strong> Learn more about Conventional Commits at <a href="https://www.conventionalcommits.org/en/v1.0.0/" target="_blank" rel="noopener noreferrer">conventionalcommits.org</a></p>
                     </div>
 
                     <!-- Tips & Shortcuts Section -->
