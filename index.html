@@ -3242,34 +3242,34 @@
                 
                 const pat = await getPAT();
                 
-                // Získat všechny viditelné work items (Bug a Feature)
-                const workItems = document.querySelectorAll('.work-item');
-                const visibleWorkItemIds = [];
+                // Získat všechny work items (Bug a Feature) ze všech tabů
+                // Použijeme Set pro unikátní ID (stejný work item může být v různých tabech)
+                const workItemIdsSet = new Set();
+                const workItems = document.querySelectorAll('.work-item:not(.child-task)');
                 
                 workItems.forEach(item => {
-                    // Získat id z data atribútu (už nepoužívame <a> link)
+                    // Získat id z data atribútu
                     const workItemId = parseInt(item.getAttribute('data-work-item-id'));
                     
-                    // Zkontrolovat viditelnost (není hidden atd.)
+                    // Zkontrolovat, zda není skrytý kvůli version-hidden (ale ignorovat display: none z neaktivních tabů)
                     let currentElement = item;
-                    let isVisible = true;
+                    let isHidden = false;
                     while (currentElement && currentElement !== document.body) {
                         if (currentElement.classList && currentElement.classList.contains('version-hidden')) {
-                            isVisible = false;
-                            break;
-                        }
-                        const style = window.getComputedStyle(currentElement);
-                        if (style.display === 'none') {
-                            isVisible = false;
+                            isHidden = true;
                             break;
                         }
                         currentElement = currentElement.parentElement;
                     }
                     
-                    if (isVisible && workItemId) {
-                        visibleWorkItemIds.push(workItemId);
+                    // Přidat ID, pokud není skrytý kvůli version-hidden
+                    // Ignorujeme display: none z neaktivních tabů - child tasks se zobrazí ve všech tabech
+                    if (!isHidden && workItemId) {
+                        workItemIdsSet.add(workItemId);
                     }
                 });
+                
+                const visibleWorkItemIds = Array.from(workItemIdsSet);
                 
                 if (visibleWorkItemIds.length === 0) {
                     return;
@@ -3421,19 +3421,18 @@
             };
             
             // Procházet všechny parent work items a vkládat child tasky za ně
+            // Musíme najít všechny výskyty parent work itemu (může být v různých tabech)
             Object.keys(childTasksData).forEach(parentId => {
                 const childTasks = childTasksData[parentId];
-                const workItem = document.querySelector(`.work-item[data-work-item-id="${parentId}"]`);
+                // Najít všechny výskyty tohoto work itemu (ve všech tabech)
+                const workItems = document.querySelectorAll(`.work-item:not(.child-task)[data-work-item-id="${parentId}"]`);
                 
-                if (!workItem) {
+                if (workItems.length === 0) {
                     Logger.warn(`Parent work item ${parentId} not found`);
                     return;
                 }
                 
-                const workItemsContainer = workItem.parentElement;
-                if (!workItemsContainer) return;
-                
-                // Vyfiltrovat child tasky - nezobrazovat Removed
+                // Vyfiltrovat child tasky - nezobrazovat Removed (jednou pro všechny výskyty)
                 const filteredChildTasks = childTasks.filter(task => {
                     const state = task.fields['System.State'];
                     return state !== 'Removed';
@@ -3462,60 +3461,82 @@
                     return titleA.localeCompare(titleB, 'cs', { sensitivity: 'base' });
                 });
                 
-                // Vytvořit child tasky v reverse order (vkládáme vždy za parent)
-                for (let i = sortedChildTasks.length - 1; i >= 0; i--) {
-                    const task = sortedChildTasks[i];
-                    const taskDiv = document.createElement('div');
-                    taskDiv.className = 'work-item child-task';
-                    taskDiv.setAttribute('data-parent-id', parentId);
-                    taskDiv.setAttribute('data-work-item-id', task.id);
-                    
-                    const title = task.fields['System.Title'];
-                    const type = task.fields['System.WorkItemType'];
-                    const assignedTo = task.fields['System.AssignedTo']?.displayName || 'Unassigned';
-                    const state = task.fields['System.State'];
-                    
-                    // Ikona podle typu - Task použije ikonku clipboard-list s hnědou barvou
-                    let icon = '';
-                    if (type === 'Task' || !type) {
-                        icon = '<span class="work-item-icon task-icon" title="Task"><i class="fa-solid fa-clipboard-list"></i></span>';
-                    } else if (type === 'Bug') {
-                        icon = '<span class="work-item-icon" title="Bug"><i class="fa-solid fa-bug"></i></span>';
-                    } else if (type === 'Feature') {
-                        icon = '<span class="work-item-icon fa-feature" title="Feature"><i class="fa-solid fa-puzzle-piece"></i></span>';
-                    } else {
-                        // Default pro ostatní typy
-                        icon = '<span class="work-item-icon task-icon" title="Task"><i class="fa-solid fa-clipboard-list"></i></span>';
+                // Pro každý výskyt parent work itemu přidat child tasks
+                workItems.forEach(workItem => {
+                    // Zkontrolovat, zda není skrytý kvůli version-hidden
+                    let currentElement = workItem;
+                    let isHidden = false;
+                    while (currentElement && currentElement !== document.body) {
+                        if (currentElement.classList && currentElement.classList.contains('version-hidden')) {
+                            isHidden = true;
+                            break;
+                        }
+                        currentElement = currentElement.parentElement;
                     }
                     
-                    taskDiv.innerHTML = `
-                        <div class="work-item-header">
-                            ${icon}
-                            <span class="work-item-title">
-                                <span class="work-item-title-text" onclick="openWorkItemDetailModal(${task.id});" title="${title.replace(/"/g, '&quot;')}">
-                                    ${title}
-                                </span>
-                                
-                            </span>
-                            <span class="priority-severity"></span>
-                            <span class="assigned-to">
-                                <span class="assigned-to-badge-wrapper" data-work-item-id="${task.id}" data-work-item-type="${type}" data-assigned-to="${assignedTo}" data-work-item-title="${title.replace(/'/g, '&apos;').replace(/"/g, '&quot;')}">
-                                    <span class="assigned-to-badge">${assignedTo}</span>
-                                    <i class="fa-solid fa-pen assigned-to-edit-icon"></i>
-                                </span>
-                            </span>
-                            <span class="state-badge-container">
-                                <span class="state-badge-wrapper" data-work-item-id="${task.id}" data-work-item-type="${type}" data-work-item-state="${state}" data-work-item-title="${title.replace(/'/g, '&apos;').replace(/"/g, '&quot;')}">
-                                    <span class="badge bg-secondary state-badge" data-state="${state}">${state}</span>
-                                    <i class="fa-solid fa-pen state-edit-icon"></i>
-                                </span>
-                            </span>
-                        </div>
-                    `;
+                    // Přeskočit, pokud je skrytý kvůli version-hidden
+                    if (isHidden) {
+                        return;
+                    }
                     
-                    // Vložit child task hned za parent work item
-                    workItem.parentNode.insertBefore(taskDiv, workItem.nextSibling);
-                }
+                    const workItemsContainer = workItem.parentElement;
+                    if (!workItemsContainer) return;
+                
+                    // Vytvořit child tasky v reverse order (vkládáme vždy za parent)
+                    for (let i = sortedChildTasks.length - 1; i >= 0; i--) {
+                        const task = sortedChildTasks[i];
+                        const taskDiv = document.createElement('div');
+                        taskDiv.className = 'work-item child-task';
+                        taskDiv.setAttribute('data-parent-id', parentId);
+                        taskDiv.setAttribute('data-work-item-id', task.id);
+                        
+                        const title = task.fields['System.Title'];
+                        const type = task.fields['System.WorkItemType'];
+                        const assignedTo = task.fields['System.AssignedTo']?.displayName || 'Unassigned';
+                        const state = task.fields['System.State'];
+                        
+                        // Ikona podle typu - Task použije ikonku clipboard-list s hnědou barvou
+                        let icon = '';
+                        if (type === 'Task' || !type) {
+                            icon = '<span class="work-item-icon task-icon" title="Task"><i class="fa-solid fa-clipboard-list"></i></span>';
+                        } else if (type === 'Bug') {
+                            icon = '<span class="work-item-icon" title="Bug"><i class="fa-solid fa-bug"></i></span>';
+                        } else if (type === 'Feature') {
+                            icon = '<span class="work-item-icon fa-feature" title="Feature"><i class="fa-solid fa-puzzle-piece"></i></span>';
+                        } else {
+                            // Default pro ostatní typy
+                            icon = '<span class="work-item-icon task-icon" title="Task"><i class="fa-solid fa-clipboard-list"></i></span>';
+                        }
+                        
+                        taskDiv.innerHTML = `
+                            <div class="work-item-header">
+                                ${icon}
+                                <span class="work-item-title">
+                                    <span class="work-item-title-text" onclick="openWorkItemDetailModal(${task.id});" title="${title.replace(/"/g, '&quot;')}">
+                                        ${title}
+                                    </span>
+                                    
+                                </span>
+                                <span class="priority-severity"></span>
+                                <span class="assigned-to">
+                                    <span class="assigned-to-badge-wrapper" data-work-item-id="${task.id}" data-work-item-type="${type}" data-assigned-to="${assignedTo}" data-work-item-title="${title.replace(/'/g, '&apos;').replace(/"/g, '&quot;')}">
+                                        <span class="assigned-to-badge">${assignedTo}</span>
+                                        <i class="fa-solid fa-pen assigned-to-edit-icon"></i>
+                                    </span>
+                                </span>
+                                <span class="state-badge-container">
+                                    <span class="state-badge-wrapper" data-work-item-id="${task.id}" data-work-item-type="${type}" data-work-item-state="${state}" data-work-item-title="${title.replace(/'/g, '&apos;').replace(/"/g, '&quot;')}">
+                                        <span class="badge bg-secondary state-badge" data-state="${state}">${state}</span>
+                                        <i class="fa-solid fa-pen state-edit-icon"></i>
+                                    </span>
+                                </span>
+                            </div>
+                        `;
+                        
+                        // Vložit child task hned za parent work item
+                        workItem.parentNode.insertBefore(taskDiv, workItem.nextSibling);
+                    }
+                });
             });
             
             // Initialize status edit handlers for newly added child tasks
