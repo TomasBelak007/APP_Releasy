@@ -198,6 +198,14 @@
             padding: 0 !important;
             transition: max-height 0.3s ease-out, opacity 0.3s ease-out !important;
         }
+        .release-container.version-hidden {
+            margin: 0 !important;
+            margin-bottom: 0 !important;
+            padding: 0 !important;
+            display: none !important;
+            height: 0 !important;
+            min-height: 0 !important;
+        }
         .btn.disabled {
             opacity: 0.4;
             cursor: not-allowed;
@@ -1662,7 +1670,7 @@
                     © 2025 Tomas Belak
                 </div>
                 <div class="version">
-                    Version: 1.0.14
+                    Version: 1.0.15
                 </div>
                 <div class="powered-by">
                     <span>Powered by</span>
@@ -3491,6 +3499,7 @@
             let result;
             if (stored) {
                 result = JSON.parse(stored);
+                if (!result.products) result.products = [];
                 if (!result.majors) result.majors = [];
                 if (!result.patches) result.patches = [];
                 
@@ -3503,6 +3512,7 @@
                 }
             } else {
                 result = {
+                    products: [],
                     majors: [],
                     patches: []
                 };
@@ -3515,8 +3525,10 @@
         }
 
         function getVersionKey(type) {
-            // 'major' -> 'majors', 'patch' -> 'patches'
-            return type === 'patch' ? 'patches' : type + 's';
+            // 'product' -> 'products', 'major' -> 'majors', 'patch' -> 'patches'
+            if (type === 'patch') return 'patches';
+            if (type === 'product') return 'products';
+            return type + 's';
         }
 
         function toggleVersionHidden(type, id) {
@@ -3768,9 +3780,10 @@
         // Funkce pro aktualizaci tlačítka Unhide
         function updateHiddenVersionsButton() {
             const hidden = getHiddenVersions();
+            const products = hidden.products || [];
             const majors = hidden.majors || [];
             const patches = hidden.patches || [];
-            const totalHidden = majors.length + patches.length;
+            const totalHidden = products.length + majors.length + patches.length;
             
             const btn = document.getElementById('showHiddenBtn');
             if (btn) {
@@ -3789,28 +3802,73 @@
         // Globální funkce pro skrytí/zobrazení verzí
         window.toggleAndHide = function(type, id, element) {
             // Uložit do localStorage
-            toggleVersionHidden(type, id);
+            const isNowHidden = toggleVersionHidden(type, id);
             
-            // Najít element k skrytí
+            // Najít element k skrytí/zobrazení
             let targetElement;
-            if (type === 'major') {
+            if (type === 'product') {
+                // Pro product skrýt celý release-container (level1Div a majorContainer)
+                targetElement = element.closest('.release-header.level-1');
+                if (targetElement) {
+                    const releaseContainer = targetElement.closest('.release-container');
+                    const majorContainer = releaseContainer ? releaseContainer.querySelector('.major-container') : null;
+                    
+                    if (isNowHidden) {
+                        // Skrýt - přidat třídu i na release-container, aby se skryl i margin
+                        targetElement.classList.add('version-hidden');
+                        if (releaseContainer) {
+                            releaseContainer.classList.add('version-hidden');
+                        }
+                        if (majorContainer) {
+                            majorContainer.classList.add('version-hidden');
+                        }
+                    } else {
+                        // Zobrazit
+                        targetElement.classList.remove('version-hidden');
+                        if (releaseContainer) {
+                            releaseContainer.classList.remove('version-hidden');
+                        }
+                        if (majorContainer) {
+                            majorContainer.classList.remove('version-hidden');
+                        }
+                    }
+                }
+            } else if (type === 'major') {
                 // Pro major skrýt celý major-container a level2Div
                 targetElement = element.closest('.release-header');
                 const nextSibling = targetElement.nextElementSibling;
                 if (nextSibling && nextSibling.classList.contains('patch-container')) {
-                    nextSibling.classList.add('version-hidden');
+                    if (isNowHidden) {
+                        nextSibling.classList.add('version-hidden');
+                    } else {
+                        nextSibling.classList.remove('version-hidden');
+                    }
+                }
+                if (targetElement) {
+                    if (isNowHidden) {
+                        targetElement.classList.add('version-hidden');
+                    } else {
+                        targetElement.classList.remove('version-hidden');
+                    }
                 }
             } else if (type === 'patch') {
                 // Pro patch skrýt level3Div a epicDiv
                 targetElement = element.closest('.release-header');
                 const nextSibling = targetElement.nextElementSibling;
                 if (nextSibling && nextSibling.classList.contains('epic-group')) {
-                    nextSibling.classList.add('version-hidden');
+                    if (isNowHidden) {
+                        nextSibling.classList.add('version-hidden');
+                    } else {
+                        nextSibling.classList.remove('version-hidden');
+                    }
                 }
-            }
-            
-            if (targetElement) {
-                targetElement.classList.add('version-hidden');
+                if (targetElement) {
+                    if (isNowHidden) {
+                        targetElement.classList.add('version-hidden');
+                    } else {
+                        targetElement.classList.remove('version-hidden');
+                    }
+                }
             }
             
             // Aktualizovat tlačítko
@@ -4080,35 +4138,40 @@
         // ===== Release Rendering =====
         function renderRelease(product, releaseName, releases, content) {
             if (!releases[releaseName]) return;
+            
+            // Level 1 - Release (Product)
+            const productId = `${product} - ${releaseName}`;
+            const isReleaseExpanded = isSectionExpanded('release', releaseName);
+            const isProductHidden = isVersionHidden('product', productId);
+            
             const releaseContainer = document.createElement('div');
-            releaseContainer.className = 'release-container mb-4';
+            releaseContainer.className = `release-container mb-4${isProductHidden ? ' version-hidden' : ''}`;
             
-            // Počítat jen neskryté verze pro progress bar
+            // Počítat jen neskryté verze pro progress bar (produkty se kontrolují)
             const allReleaseItems = [];
-            Object.entries(releases[releaseName]).forEach(([major, patches]) => {
-                const majorId = `${releaseName}-${major}`;
-                if (!isVersionHidden('major', majorId)) {
-                    Object.entries(patches).forEach(([patch, items]) => {
-                        const patchId = `${releaseName}-${major}.${patch}`;
-                        if (!isVersionHidden('patch', patchId)) {
-                            allReleaseItems.push(...items);
-                        }
-                    });
-                }
-            });
-            
-            // Level 1 - Release
-            const releaseId = releaseName;
-            const isReleaseExpanded = isSectionExpanded('release', releaseId);
+            if (!isProductHidden) {
+                Object.entries(releases[releaseName]).forEach(([major, patches]) => {
+                    const majorId = `${releaseName}-${major}`;
+                    if (!isVersionHidden('major', majorId)) {
+                        Object.entries(patches).forEach(([patch, items]) => {
+                            const patchId = `${releaseName}-${major}.${patch}`;
+                            if (!isVersionHidden('patch', patchId)) {
+                                allReleaseItems.push(...items);
+                            }
+                        });
+                    }
+                });
+            }
             const level1Div = document.createElement('div');
-            level1Div.className = 'release-header level-1';
+            level1Div.className = `release-header level-1${isProductHidden ? ' version-hidden' : ''}`;
             const caretIcon1 = isReleaseExpanded ? 'fa-caret-down' : 'fa-caret-right';
-            level1Div.innerHTML = `<div class="release-header-content"><h3 class="release-header-title"><i class="fa-solid ${caretIcon1} expand-icon"></i>${product} - ${releaseName}</h3>${createProgressBar(allReleaseItems)}</div>`;
+            const hideBtn = `<button class="hide-toggle-btn" onclick="event.stopPropagation(); toggleAndHide('product', '${productId}', this)" title="Hide product"><i class="fa-solid fa-eye-slash"></i></button>`;
+            level1Div.innerHTML = `<div class="release-header-content"><h3 class="release-header-title"><i class="fa-solid ${caretIcon1} expand-icon"></i>${product} - ${releaseName}${hideBtn}</h3>${createProgressBar(allReleaseItems)}</div>`;
             releaseContainer.appendChild(level1Div);
             
-            // Major verze
+            // Major verze (skrýt pokud je produkt skrytý)
             const majorContainer = document.createElement('div');
-            majorContainer.className = `major-container ms-4${isReleaseExpanded ? '' : ' collapsed'}`;
+            majorContainer.className = `major-container ms-4${isReleaseExpanded ? '' : ' collapsed'}${isProductHidden ? ' version-hidden' : ''}`;
             
             const sortedMajors = Object.entries(releases[releaseName]).sort(([a], [b]) => b.localeCompare(a));
             for (const [major, patches] of sortedMajors) {
@@ -4198,7 +4261,7 @@
             // Rozbalování detailu release
             level1Div.onclick = () => {
                 majorContainer.classList.toggle('collapsed');
-                toggleSectionExpanded('release', releaseId);
+                toggleSectionExpanded('release', releaseName);
                 // Update caret icon
                 const icon = level1Div.querySelector('.expand-icon');
                 if (icon) {
@@ -4320,15 +4383,30 @@
         // ===== Modal Functions =====
         window.openHiddenVersionsModal = function() {
             const hidden = getHiddenVersions();
+            const products = (hidden.products || []).sort();
             const majors = (hidden.majors || []).sort();
             const patches = (hidden.patches || []).sort();
             
-            if (majors.length === 0 && patches.length === 0) {
+            if (products.length === 0 && majors.length === 0 && patches.length === 0) {
                 return;
             }
             
             const modalBody = document.getElementById('modalBody');
             let html = '';
+            
+            if (products.length > 0) {
+                html += '<div class="version-group">';
+                html += '<h5><input type="checkbox" onchange="toggleGroupCheckboxes(this, \'product\')"> Products</h5>';
+                products.forEach(productId => {
+                    html += `
+                        <div class="version-checkbox">
+                            <input type="checkbox" class="product-checkbox" id="product_${productId.replace(/[^a-zA-Z0-9]/g, '_')}" value="${productId}" data-type="product">
+                            <label for="product_${productId.replace(/[^a-zA-Z0-9]/g, '_')}">${productId}</label>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
             
             if (majors.length > 0) {
                 html += '<div class="version-group">';
@@ -5245,7 +5323,7 @@
             checkboxes.forEach(checkbox => {
                 const type = checkbox.dataset.type;
                 const id = checkbox.value;
-                const key = type === 'patch' ? 'patches' : 'majors';
+                const key = getVersionKey(type);
                 
                 // Odstranit z hidden seznamu
                 const index = hidden[key].indexOf(id);
@@ -7258,6 +7336,25 @@
                 } else {
                     if (majorHeader && majorHeader.classList.contains('release-header')) {
                         majorHeader.style.display = '';
+                    }
+                    container.style.display = '';
+                }
+            });
+            
+            // Hide empty products (release containers)
+            document.querySelectorAll('.release-container').forEach(container => {
+                const visibleMajors = Array.from(container.querySelectorAll('.major-container'))
+                    .filter(major => major.style.display !== 'none');
+                
+                const productHeader = container.querySelector('.release-header.level-1');
+                if (visibleMajors.length === 0) {
+                    if (productHeader) {
+                        productHeader.style.display = 'none';
+                    }
+                    container.style.display = 'none';
+                } else {
+                    if (productHeader) {
+                        productHeader.style.display = '';
                     }
                     container.style.display = '';
                 }
