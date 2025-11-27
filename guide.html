@@ -25,6 +25,9 @@
                             <a href="#help-hierarchy" class="help-nav-link" onclick="showHelpSection('help-hierarchy'); return false;">
                                 <i class="fa-solid fa-sitemap"></i> Hierarchy
                             </a>
+                            <a href="#help-tabs" class="help-nav-link" onclick="showHelpSection('help-tabs'); return false;">
+                                <i class="fa-solid fa-folder"></i> Product Tabs
+                            </a>
                             <a href="#help-hide" class="help-nav-link" onclick="showHelpSection('help-hide'); return false;">
                                 <i class="fa-solid fa-eye-slash"></i> Hide/Unhide Versions
                             </a>
@@ -188,12 +191,13 @@
                     <!-- Hierarchy Section -->
                     <div id="help-hierarchy" class="help-section">
                         <h4><i class="fa-solid fa-sitemap"></i> Understanding the Hierarchy</h4>
-                        <p>The application displays releases in a 4-level hierarchy:</p>
+                        <p>The application displays releases in a hierarchical structure organized by product tabs:</p>
                         <ul>
-                            <li><strong>Level 1 (Product - Release):</strong> e.g., "Xeelo - Labe"</li>
-                            <li><strong>Level 2 (Major Version):</strong> e.g., "Labe-07"</li>
-                            <li><strong>Level 3 (Patch Version):</strong> e.g., "Labe-07.005"</li>
-                            <li><strong>Level 4 (Work Items):</strong> Features <i class="fa-solid fa-puzzle-piece" style="color: #0d6efd;"></i> and Bugs <i class="fa-solid fa-bug" style="color: #dc3545;"></i></li>
+                            <li><strong>Product Tabs:</strong> Top-level navigation (Xeelo, Integray, Repository, Connectors)</li>
+                            <li><strong>Level 0 (Release):</strong> e.g., "Labe", "Schneeberg" - displayed within each product tab</li>
+                            <li><strong>Level 1 (Major Version):</strong> e.g., "Labe-07"</li>
+                            <li><strong>Level 2 (Patch Version):</strong> e.g., "Labe-07.005"</li>
+                            <li><strong>Level 3 (Work Items):</strong> Features <i class="fa-solid fa-puzzle-piece" style="color: #0d6efd;"></i> and Bugs <i class="fa-solid fa-bug" style="color: #dc3545;"></i></li>
                         </ul>
                         <p>Click on any level header to expand/collapse it. Your expansion state is saved automatically.</p>
 
@@ -208,13 +212,43 @@
                         </ul>
                     </div>
 
+                    <!-- Product Tabs Section -->
+                    <div id="help-tabs" class="help-section">
+                        <h4><i class="fa-solid fa-folder"></i> Product Tabs</h4>
+                        <p>The application displays products (Xeelo, Integray, Repository, Connectors) as tabs at the top of the content area.</p>
+                        
+                        <h5><i class="fa-solid fa-mouse-pointer"></i> Using Tabs</h5>
+                        <ul>
+                            <li><strong>Switching Tabs:</strong> Click on any tab button to switch between products</li>
+                            <li><strong>Active Tab:</strong> The currently selected tab is highlighted with blue text and a blue underline</li>
+                            <li><strong>Inactive Tabs:</strong> Other tabs are displayed with grey text and a subtle border</li>
+                            <li><strong>Tab Persistence:</strong> The application remembers which tab you were viewing last and automatically restores it when you reload the page</li>
+                        </ul>
+
+                        <h5><i class="fa-solid fa-sitemap"></i> Tab Content</h5>
+                        <p>Each tab contains all releases for that product, displayed as level 0 headers:</p>
+                        <ul>
+                            <li>Releases (e.g., "Labe", "Schneeberg") are shown as the top-level headers within each tab</li>
+                            <li>Below each release, you'll find the hierarchical structure: Major versions → Patch versions → Work items</li>
+                            <li>All features (expand/collapse, hide/unhide, filters, etc.) work the same way within each tab</li>
+                        </ul>
+
+                        <div class="note" style="background-color: rgba(13, 110, 253, 0.1); border-left-color: #0d6efd;">
+                            <strong><i class="fa-solid fa-info-circle" style="color: #0d6efd;"></i> Note:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>Products are no longer hidden/unhidden - they are managed through tabs</li>
+                                <li>Your last active tab is saved in browser storage and restored on page load</li>
+                                <li>Each tab maintains its own expand/collapse and hide/unhide state independently</li>
+                            </ul>
+                        </div>
+                    </div>
+
                     <!-- Hide/Unhide Versions Section -->
                     <div id="help-hide" class="help-section">
                         <h4><i class="fa-solid fa-eye-slash"></i> Hide/Unhide Versions</h4>
                         <h5>Hiding Versions</h5>
-                        <p>You can hide products, major versions, or patch versions to focus on what matters:</p>
+                        <p>You can hide major versions or patch versions to focus on what matters:</p>
                         <ul>
-                            <li><strong>Products:</strong> Hover over any product header (e.g., "Xeelo - Labe") to see the <i class="fa-solid fa-eye-slash" style="font-size: 0.8em; color: #6c757d;"></i> icon. Click to hide the entire product and all its versions.</li>
                             <li><strong>Major Versions:</strong> Hover over any major version header (e.g., "Labe-07") to see the <i class="fa-solid fa-eye-slash" style="font-size: 0.8em; color: #6c757d;"></i> icon. Click to hide that major version and all its patches.</li>
                             <li><strong>Patch Versions:</strong> Hover over any patch version header (e.g., "Labe-07.006") to see the <i class="fa-solid fa-eye-slash" style="font-size: 0.8em; color: #6c757d;"></i> icon. Click to hide that patch version.</li>
                             <li>Click the icon to hide that element (no reload needed)</li>
@@ -222,7 +256,7 @@
                         </ul>
 
                         <h5>Unhiding Versions</h5>
-                        <p>The <strong>Unhide (X)</strong> button displays the number of hidden elements (products, major versions, and patch versions).</p>
+                        <p>The <strong>Unhide (X)</strong> button displays the number of hidden elements (major versions and patch versions).</p>
                         <ul>
                             <li>Click to open a dialog with all hidden elements organized by type</li>
                             <li>Select which elements you want to unhide using checkboxes</li>

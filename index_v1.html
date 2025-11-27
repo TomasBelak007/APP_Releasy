@@ -206,57 +206,6 @@
             height: 0 !important;
             min-height: 0 !important;
         }
-        
-        /* ===== Tabs ===== */
-        .tabs-container {
-            margin-bottom: 20px;
-        }
-        .tabs-nav {
-            display: flex;
-            border-bottom: 2px solid var(--border-color);
-            gap: 4px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-        .tab-button {
-            padding: 14px 32px;
-            background-color: var(--bg-panel);
-            border: 1px solid var(--border-color);
-            border-bottom: 3px solid transparent;
-            border-top-left-radius: 8px;
-            border-top-right-radius: 8px;
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-size: 1.2em;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            position: relative;
-            bottom: -2px;
-            min-width: 150px;
-            text-align: center;
-            box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.05);
-        }
-        .tab-button:hover {
-            background-color: var(--hover-bg);
-            color: var(--text-primary);
-            box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.1);
-        }
-        .tab-button.active {
-            color: #0d6efd;
-            border-bottom-color: #0d6efd;
-            background-color: var(--bg-panel);
-            border-bottom-width: 3px;
-            font-weight: 500;
-            box-shadow: 0 -2px 8px rgba(13, 110, 253, 0.2);
-            z-index: 1;
-        }
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-        }
-        
         .btn.disabled {
             opacity: 0.4;
             cursor: not-allowed;
@@ -955,20 +904,6 @@
             animation: pulse 1.5s ease-in-out infinite;
         }
         
-        .level-0 {
-            font-size: 1.3em;
-            padding: 15px 10px;
-            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--hover-bg) 100%);
-            border-left: 5px solid var(--color-resolved);
-        }
-        .level-0 .release-header-content {
-            align-items: flex-end;
-        }
-        .level-0 .progress {
-            margin-top: 8px;
-            margin-left: 10px;
-            margin-right: 0;
-        }
         .level-1 {
             background-color: var(--bg-secondary);
             border-left: 4px solid #0d6efd;
@@ -1735,7 +1670,7 @@
                     © 2025 Tomas Belak
                 </div>
                 <div class="version">
-                    Version: 1.0.16
+                    Version: 1.0.15
                 </div>
                 <div class="powered-by">
                     <span>Powered by</span>
@@ -2881,7 +2816,7 @@
 
         function createProgressBar(items) {
             if (!items || items.length === 0) {
-                return '<div class="progress" style="height: 20px; width: 200px;"><div class="progress-bar" style="width: 100%; background-color: var(--border-color);"></div></div>';
+                return '<div class="progress" style="float: right; height: 20px; width: 200px;"><div class="progress-bar" style="width: 100%; background-color: var(--border-color);"></div></div>';
             }
             
             const progress = calculateProgress(items);
@@ -2896,7 +2831,7 @@
             // Definice pořadí stavů v progress baru (zleva doprava)
             const stateOrder = ['Closed', 'Resolved', 'Active', 'New', 'Evaluation'];
 
-            let progressHtml = '<div class="progress" style="height: 20px; width: 200px;">';
+            let progressHtml = '<div class="progress" style="float: right; height: 20px; width: 200px;">';
             // Přidáme segmenty pro každý stav v definovaném pořadí
             stateOrder.forEach(state => {
                 const count = progress.states[state];
@@ -3842,12 +3777,13 @@
             }
         };
 
-        // Funkce pro aktualizaci tlačítka Unhide (bez produktů - produkty se neskrývají v tabs verzi)
+        // Funkce pro aktualizaci tlačítka Unhide
         function updateHiddenVersionsButton() {
             const hidden = getHiddenVersions();
+            const products = hidden.products || [];
             const majors = hidden.majors || [];
             const patches = hidden.patches || [];
-            const totalHidden = majors.length + patches.length;
+            const totalHidden = products.length + majors.length + patches.length;
             
             const btn = document.getElementById('showHiddenBtn');
             if (btn) {
@@ -4203,34 +4139,39 @@
         function renderRelease(product, releaseName, releases, content) {
             if (!releases[releaseName]) return;
             
-            // Level 0 - Release (Labe, Schneeberg, ...) - bez hide tlačítka
+            // Level 1 - Release (Product)
+            const productId = `${product} - ${releaseName}`;
             const isReleaseExpanded = isSectionExpanded('release', releaseName);
+            const isProductHidden = isVersionHidden('product', productId);
             
             const releaseContainer = document.createElement('div');
-            releaseContainer.className = 'release-container mb-4';
+            releaseContainer.className = `release-container mb-4${isProductHidden ? ' version-hidden' : ''}`;
             
-            // Počítat jen neskryté verze pro progress bar
+            // Počítat jen neskryté verze pro progress bar (produkty se kontrolují)
             const allReleaseItems = [];
-            Object.entries(releases[releaseName]).forEach(([major, patches]) => {
-                const majorId = `${releaseName}-${major}`;
-                if (!isVersionHidden('major', majorId)) {
-                    Object.entries(patches).forEach(([patch, items]) => {
-                        const patchId = `${releaseName}-${major}.${patch}`;
-                        if (!isVersionHidden('patch', patchId)) {
-                            allReleaseItems.push(...items);
-                        }
-                    });
-                }
-            });
-            const level0Div = document.createElement('div');
-            level0Div.className = 'release-header level-0';
-            const caretIcon0 = isReleaseExpanded ? 'fa-caret-down' : 'fa-caret-right';
-            level0Div.innerHTML = `<div class="release-header-content"><h3 class="release-header-title"><i class="fa-solid ${caretIcon0} expand-icon"></i>${releaseName}</h3>${createProgressBar(allReleaseItems)}</div>`;
-            releaseContainer.appendChild(level0Div);
+            if (!isProductHidden) {
+                Object.entries(releases[releaseName]).forEach(([major, patches]) => {
+                    const majorId = `${releaseName}-${major}`;
+                    if (!isVersionHidden('major', majorId)) {
+                        Object.entries(patches).forEach(([patch, items]) => {
+                            const patchId = `${releaseName}-${major}.${patch}`;
+                            if (!isVersionHidden('patch', patchId)) {
+                                allReleaseItems.push(...items);
+                            }
+                        });
+                    }
+                });
+            }
+            const level1Div = document.createElement('div');
+            level1Div.className = `release-header level-1${isProductHidden ? ' version-hidden' : ''}`;
+            const caretIcon1 = isReleaseExpanded ? 'fa-caret-down' : 'fa-caret-right';
+            const hideBtn = `<button class="hide-toggle-btn" onclick="event.stopPropagation(); toggleAndHide('product', '${productId}', this)" title="Hide product"><i class="fa-solid fa-eye-slash"></i></button>`;
+            level1Div.innerHTML = `<div class="release-header-content"><h3 class="release-header-title"><i class="fa-solid ${caretIcon1} expand-icon"></i>${product} - ${releaseName}${hideBtn}</h3>${createProgressBar(allReleaseItems)}</div>`;
+            releaseContainer.appendChild(level1Div);
             
-            // Major verze
+            // Major verze (skrýt pokud je produkt skrytý)
             const majorContainer = document.createElement('div');
-            majorContainer.className = `major-container ms-4${isReleaseExpanded ? '' : ' collapsed'}`;
+            majorContainer.className = `major-container ms-4${isReleaseExpanded ? '' : ' collapsed'}${isProductHidden ? ' version-hidden' : ''}`;
             
             const sortedMajors = Object.entries(releases[releaseName]).sort(([a], [b]) => b.localeCompare(a));
             for (const [major, patches] of sortedMajors) {
@@ -4245,15 +4186,15 @@
                     }
                 });
                 
-                // Level 1 - Major
+                // Level 2 - Major
                 const isMajorExpanded = isSectionExpanded('major', majorId);
-                const level1Div = document.createElement('div');
+                const level2Div = document.createElement('div');
                 const isMajorHidden = isVersionHidden('major', majorId);
-                level1Div.className = `release-header level-1${isMajorHidden ? ' version-hidden' : ''}`;
+                level2Div.className = `release-header level-2${isMajorHidden ? ' version-hidden' : ''}`;
                 const hideBtn = `<button class="hide-toggle-btn" onclick="event.stopPropagation(); toggleAndHide('major', '${majorId}', this)" title="Hide element"><i class="fa-solid fa-eye-slash"></i></button>`;
-                const caretIcon1 = isMajorExpanded ? 'fa-caret-down' : 'fa-caret-right';
-                level1Div.innerHTML = `<div class="release-header-content"><h4 class="release-header-title"><i class="fa-solid ${caretIcon1} expand-icon"></i>${releaseName}-${major}${hideBtn}</h4>${createProgressBar(allMajorItems)}</div>`;
-                majorContainer.appendChild(level1Div);
+                const caretIcon2 = isMajorExpanded ? 'fa-caret-down' : 'fa-caret-right';
+                level2Div.innerHTML = `<div class="release-header-content"><h4 class="release-header-title"><i class="fa-solid ${caretIcon2} expand-icon"></i>${releaseName}-${major}${hideBtn}</h4>${createProgressBar(allMajorItems)}</div>`;
+                majorContainer.appendChild(level2Div);
                 
                 // Patch verze
                 const patchContainer = document.createElement('div');
@@ -4263,11 +4204,11 @@
                 for (const [patch, items] of sortedPatches) {
                     const patchId = `${releaseName}-${major}.${patch}`;
                     
-                    // Level 2 - Patch
+                    // Level 3 - Patch
                     const isPatchExpanded = isSectionExpanded('patch', patchId);
-                    const level2Div = document.createElement('div');
+                    const level3Div = document.createElement('div');
                     const isPatchHidden = isVersionHidden('patch', patchId);
-                    level2Div.className = `release-header level-2${isPatchHidden ? ' version-hidden' : ''}`;
+                    level3Div.className = `release-header level-3${isPatchHidden ? ' version-hidden' : ''}`;
                     const hidePatchBtn = `<button class="hide-toggle-btn" onclick="event.stopPropagation(); toggleAndHide('patch', '${patchId}', this)" title="Hide element"><i class="fa-solid fa-eye-slash"></i></button>`;
                     const exportPdfBtn = `<button class="hide-toggle-btn" onclick="event.stopPropagation(); exportPatchToPDF('${product}', '${releaseName}', '${major}', '${patch}', '${patchId}')" title="Export to PDF" style="margin-left: 8px;"><i class="fa-solid fa-file-pdf"></i></button>`;
                     
@@ -4277,9 +4218,9 @@
                         ? `<button class="create-workitem-btn" onclick="event.stopPropagation(); openCreateWorkItemModal('${product}', '${releaseName}', '${major}', '${patch}')" title="Create new work item"><i class="fa-solid fa-plus"></i></button>` 
                         : '';
                     
-                    const caretIcon2 = isPatchExpanded ? 'fa-caret-down' : 'fa-caret-right';
-                    level2Div.innerHTML = `<div class="release-header-content"><h5 class="release-header-title"><i class="fa-solid ${caretIcon2} expand-icon"></i>${releaseName}-${major}.${patch}${hidePatchBtn}${exportPdfBtn}${createWorkItemBtn}</h5>${createProgressBar(items)}</div>`;
-                    patchContainer.appendChild(level2Div);
+                    const caretIcon3 = isPatchExpanded ? 'fa-caret-down' : 'fa-caret-right';
+                    level3Div.innerHTML = `<div class="release-header-content"><h5 class="release-header-title"><i class="fa-solid ${caretIcon3} expand-icon"></i>${releaseName}-${major}.${patch}${hidePatchBtn}${exportPdfBtn}${createWorkItemBtn}</h5>${createProgressBar(items)}</div>`;
+                    patchContainer.appendChild(level3Div);
                     
                     // Epic a work items
                     const epicDiv = document.createElement('div');
@@ -4290,11 +4231,11 @@
                     patchContainer.appendChild(epicDiv);
                     
                     // Rozbalování detailu patch
-                    level2Div.onclick = () => {
+                    level3Div.onclick = () => {
                         epicDiv.classList.toggle('collapsed');
                         toggleSectionExpanded('patch', patchId);
                         // Update caret icon
-                        const icon = level2Div.querySelector('.expand-icon');
+                        const icon = level3Div.querySelector('.expand-icon');
                         if (icon) {
                             icon.classList.toggle('fa-caret-right');
                             icon.classList.toggle('fa-caret-down');
@@ -4304,11 +4245,11 @@
                 majorContainer.appendChild(patchContainer);
                 
                 // Rozbalování detailu major
-                level1Div.onclick = () => {
+                level2Div.onclick = () => {
                     patchContainer.classList.toggle('collapsed');
                     toggleSectionExpanded('major', majorId);
                     // Update caret icon
-                    const icon = level1Div.querySelector('.expand-icon');
+                    const icon = level2Div.querySelector('.expand-icon');
                     if (icon) {
                         icon.classList.toggle('fa-caret-right');
                         icon.classList.toggle('fa-caret-down');
@@ -4318,11 +4259,11 @@
             releaseContainer.appendChild(majorContainer);
             
             // Rozbalování detailu release
-            level0Div.onclick = () => {
+            level1Div.onclick = () => {
                 majorContainer.classList.toggle('collapsed');
                 toggleSectionExpanded('release', releaseName);
                 // Update caret icon
-                const icon = level0Div.querySelector('.expand-icon');
+                const icon = level1Div.querySelector('.expand-icon');
                 if (icon) {
                     icon.classList.toggle('fa-caret-right');
                     icon.classList.toggle('fa-caret-down');
@@ -4330,93 +4271,6 @@
             };
             
             content.appendChild(releaseContainer);
-        }
-        
-        // ===== Tabs Rendering =====
-        function renderTabs(allReleaseResults, content) {
-            content.innerHTML = '';
-            
-            // Seskupit releases podle produktů
-            const productsMap = {};
-            allReleaseResults.forEach(({ product, release, releases }) => {
-                if (!productsMap[product]) {
-                    productsMap[product] = [];
-                }
-                productsMap[product].push({ release, releases });
-            });
-            
-            // Vytvořit tabs container
-            const tabsContainer = document.createElement('div');
-            tabsContainer.className = 'tabs-container';
-            
-            // Vytvořit tabs navigation
-            const tabsNav = document.createElement('div');
-            tabsNav.className = 'tabs-nav';
-            
-            // Vytvořit tabs content container
-            const tabsContent = document.createElement('div');
-            tabsContent.className = 'tabs-content-wrapper';
-            
-            // Načíst poslední aktivní tab z localStorage
-            const lastActiveTab = localStorage.getItem('lastActiveTab') || '';
-            
-            // Vytvořit tab pro každý produkt (pouze název produktu)
-            const products = Object.keys(productsMap);
-            products.forEach((product, index) => {
-                const tabId = `tab-${product.replace(/[^a-zA-Z0-9]/g, '-')}`;
-                // Aktivní tab: buď první, nebo ten, který byl naposledy aktivní
-                const isActive = (lastActiveTab && lastActiveTab === product) || (!lastActiveTab && index === 0);
-                
-                // Tab button - pouze název produktu
-                const tabButton = document.createElement('button');
-                tabButton.className = `tab-button ${isActive ? 'active' : ''}`;
-                tabButton.textContent = product;
-                tabButton.setAttribute('data-tab-id', tabId);
-                tabButton.setAttribute('data-product-id', product);
-                tabButton.onclick = () => switchTab(tabId, product);
-                tabsNav.appendChild(tabButton);
-                
-                // Tab content
-                const tabContent = document.createElement('div');
-                tabContent.id = tabId;
-                tabContent.className = `tab-content ${isActive ? 'active' : ''}`;
-                
-                // Renderovat všechny releases pro tento produkt
-                productsMap[product].forEach(({ release, releases }) => {
-                    if (releases[release]) {
-                        renderRelease(product, release, releases, tabContent);
-                    }
-                });
-                
-                tabsContent.appendChild(tabContent);
-            });
-            
-            tabsContainer.appendChild(tabsNav);
-            tabsContainer.appendChild(tabsContent);
-            content.appendChild(tabsContainer);
-        }
-        
-        // ===== Tab Switching =====
-        function switchTab(tabId, productId) {
-            // Deaktivovat všechny tabs
-            document.querySelectorAll('.tab-button').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.remove('active');
-            });
-            
-            // Aktivovat vybraný tab
-            const activeButton = document.querySelector(`[data-tab-id="${tabId}"]`);
-            const activeContent = document.getElementById(tabId);
-            
-            if (activeButton && activeContent) {
-                activeButton.classList.add('active');
-                activeContent.classList.add('active');
-                
-                // Uložit do localStorage
-                localStorage.setItem('lastActiveTab', productId);
-            }
         }
 
         async function loadData() {
@@ -4479,8 +4333,11 @@
                         });
                     }
                 }
-                // Renderuj jako tabs
-                renderTabs(allReleaseResults, content);
+                // Renderuj v pořadí podle releaseNames
+                content.innerHTML = '';
+                for (const { product, release, releases } of allReleaseResults) {
+                    renderRelease(product, release, releases, content);
+                }
                 // Aktualizovat tlačítko po načtení dat
                 updateHiddenVersionsButton();
                 
@@ -4526,16 +4383,30 @@
         // ===== Modal Functions =====
         window.openHiddenVersionsModal = function() {
             const hidden = getHiddenVersions();
-            // V tabs verzi se produkty neskrývají, takže je nezobrazujeme
+            const products = (hidden.products || []).sort();
             const majors = (hidden.majors || []).sort();
             const patches = (hidden.patches || []).sort();
             
-            if (majors.length === 0 && patches.length === 0) {
+            if (products.length === 0 && majors.length === 0 && patches.length === 0) {
                 return;
             }
             
             const modalBody = document.getElementById('modalBody');
             let html = '';
+            
+            if (products.length > 0) {
+                html += '<div class="version-group">';
+                html += '<h5><input type="checkbox" onchange="toggleGroupCheckboxes(this, \'product\')"> Products</h5>';
+                products.forEach(productId => {
+                    html += `
+                        <div class="version-checkbox">
+                            <input type="checkbox" class="product-checkbox" id="product_${productId.replace(/[^a-zA-Z0-9]/g, '_')}" value="${productId}" data-type="product">
+                            <label for="product_${productId.replace(/[^a-zA-Z0-9]/g, '_')}">${productId}</label>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
             
             if (majors.length > 0) {
                 html += '<div class="version-group">';
