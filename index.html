@@ -6423,15 +6423,20 @@
                 return;
             }
             
-            // Format: Feat(ID): {name} or Bug(ID): {name}
+            // Format according to Conventional Commits: feat(scope): description or fix(scope): description
+            // https://www.conventionalcommits.org/en/v1.0.0/
+            // Convert title to lowercase (keep spaces)
+            // Scope is empty for now, can be filled manually or defined by logic later
+            const titleLowercase = workItemTitle.toLowerCase();
             let formattedTitle = '';
             if (workItemType === 'Feature') {
-                formattedTitle = `Feat(${workItemId}): ${workItemTitle}`;
+                formattedTitle = `feat(): ${workItemId} ${titleLowercase}`;
             } else if (workItemType === 'Bug') {
-                formattedTitle = `Bug(${workItemId}): ${workItemTitle}`;
+                formattedTitle = `fix(): ${workItemId} ${titleLowercase}`;
             } else {
-                // For other types, use the type name
-                formattedTitle = `${workItemType}(${workItemId}): ${workItemTitle}`;
+                // For other types, convert to lowercase and use as type
+                const typeLower = workItemType.toLowerCase();
+                formattedTitle = `${typeLower}(): ${workItemId} ${titleLowercase}`;
             }
             
             // Copy to clipboard
