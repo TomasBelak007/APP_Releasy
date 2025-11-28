@@ -958,8 +958,9 @@
         .level-0 {
             font-size: 1.3em;
             padding: 15px 10px;
-            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--hover-bg) 100%);
-            border-left: 5px solid var(--color-resolved);
+            background-color: var(--bg-secondary);
+            border-left: 4px solid #0d6efd;
+            transition: background-color 0.3s ease;
         }
         .level-0 .release-header-content {
             align-items: flex-end;
@@ -971,7 +972,7 @@
         }
         .level-1 {
             background-color: var(--bg-secondary);
-            border-left: 4px solid #0d6efd;
+            border-left: 4px solid #198754;
             transition: background-color 0.3s ease;
         }
         .level-2 {
@@ -3891,34 +3892,7 @@
             
             // Najít element k skrytí/zobrazení
             let targetElement;
-            if (type === 'product') {
-                // Pro product skrýt celý release-container (level1Div a majorContainer)
-                targetElement = element.closest('.release-header.level-1');
-                if (targetElement) {
-                    const releaseContainer = targetElement.closest('.release-container');
-                    const majorContainer = releaseContainer ? releaseContainer.querySelector('.major-container') : null;
-                    
-                    if (isNowHidden) {
-                        // Skrýt - přidat třídu i na release-container, aby se skryl i margin
-                        targetElement.classList.add('version-hidden');
-                        if (releaseContainer) {
-                            releaseContainer.classList.add('version-hidden');
-                        }
-                        if (majorContainer) {
-                            majorContainer.classList.add('version-hidden');
-                        }
-                    } else {
-                        // Zobrazit
-                        targetElement.classList.remove('version-hidden');
-                        if (releaseContainer) {
-                            releaseContainer.classList.remove('version-hidden');
-                        }
-                        if (majorContainer) {
-                            majorContainer.classList.remove('version-hidden');
-                        }
-                    }
-                }
-            } else if (type === 'major') {
+            if (type === 'major') {
                 // Pro major skrýt celý major-container a level2Div
                 targetElement = element.closest('.release-header');
                 const nextSibling = targetElement.nextElementSibling;
@@ -4224,34 +4198,12 @@
         function renderRelease(product, releaseName, releases, content) {
             if (!releases[releaseName]) return;
             
-            // Level 0 - Release (Labe, Schneeberg, ...) - bez hide tlačítka
-            const isReleaseExpanded = isSectionExpanded('release', releaseName);
-            
             const releaseContainer = document.createElement('div');
             releaseContainer.className = 'release-container mb-4';
             
-            // Počítat jen neskryté verze pro progress bar
-            const allReleaseItems = [];
-            Object.entries(releases[releaseName]).forEach(([major, patches]) => {
-                const majorId = `${releaseName}-${major}`;
-                if (!isVersionHidden('major', majorId)) {
-                    Object.entries(patches).forEach(([patch, items]) => {
-                        const patchId = `${releaseName}-${major}.${patch}`;
-                        if (!isVersionHidden('patch', patchId)) {
-                            allReleaseItems.push(...items);
-                        }
-                    });
-                }
-            });
-            const level0Div = document.createElement('div');
-            level0Div.className = 'release-header level-0';
-            const caretIcon0 = isReleaseExpanded ? 'fa-caret-down' : 'fa-caret-right';
-            level0Div.innerHTML = `<div class="release-header-content"><h3 class="release-header-title"><i class="fa-solid ${caretIcon0} expand-icon"></i>${releaseName}</h3>${createProgressBar(allReleaseItems)}</div>`;
-            releaseContainer.appendChild(level0Div);
-            
-            // Major verze
+            // Major verze - začínáme přímo od major (bez level 0 pro Release)
             const majorContainer = document.createElement('div');
-            majorContainer.className = `major-container ms-4${isReleaseExpanded ? '' : ' collapsed'}`;
+            majorContainer.className = 'major-container';
             
             const sortedMajors = Object.entries(releases[releaseName]).sort(([a], [b]) => b.localeCompare(a));
             for (const [major, patches] of sortedMajors) {
@@ -4266,15 +4218,15 @@
                     }
                 });
                 
-                // Level 1 - Major
+                // Level 0 - Major (Labe-07, ...)
                 const isMajorExpanded = isSectionExpanded('major', majorId);
-                const level1Div = document.createElement('div');
+                const level0Div = document.createElement('div');
                 const isMajorHidden = isVersionHidden('major', majorId);
-                level1Div.className = `release-header level-1${isMajorHidden ? ' version-hidden' : ''}`;
+                level0Div.className = `release-header level-0${isMajorHidden ? ' version-hidden' : ''}`;
                 const hideBtn = `<button class="hide-toggle-btn" onclick="event.stopPropagation(); toggleAndHide('major', '${majorId}', this)" title="Hide element"><i class="fa-solid fa-eye-slash"></i></button>`;
-                const caretIcon1 = isMajorExpanded ? 'fa-caret-down' : 'fa-caret-right';
-                level1Div.innerHTML = `<div class="release-header-content"><h4 class="release-header-title"><i class="fa-solid ${caretIcon1} expand-icon"></i>${releaseName}-${major}${hideBtn}</h4>${createProgressBar(allMajorItems)}</div>`;
-                majorContainer.appendChild(level1Div);
+                const caretIcon0 = isMajorExpanded ? 'fa-caret-down' : 'fa-caret-right';
+                level0Div.innerHTML = `<div class="release-header-content"><h3 class="release-header-title"><i class="fa-solid ${caretIcon0} expand-icon"></i>${releaseName}-${major}${hideBtn}</h3>${createProgressBar(allMajorItems)}</div>`;
+                majorContainer.appendChild(level0Div);
                 
                 // Patch verze
                 const patchContainer = document.createElement('div');
@@ -4284,11 +4236,11 @@
                 for (const [patch, items] of sortedPatches) {
                     const patchId = `${releaseName}-${major}.${patch}`;
                     
-                    // Level 2 - Patch
+                    // Level 1 - Patch (Labe-07.01, ...)
                     const isPatchExpanded = isSectionExpanded('patch', patchId);
-                    const level2Div = document.createElement('div');
+                    const level1Div = document.createElement('div');
                     const isPatchHidden = isVersionHidden('patch', patchId);
-                    level2Div.className = `release-header level-2${isPatchHidden ? ' version-hidden' : ''}`;
+                    level1Div.className = `release-header level-1${isPatchHidden ? ' version-hidden' : ''}`;
                     const hidePatchBtn = `<button class="hide-toggle-btn" onclick="event.stopPropagation(); toggleAndHide('patch', '${patchId}', this)" title="Hide element"><i class="fa-solid fa-eye-slash"></i></button>`;
                     const exportPdfBtn = `<button class="hide-toggle-btn" onclick="event.stopPropagation(); exportPatchToPDF('${product}', '${releaseName}', '${major}', '${patch}', '${patchId}')" title="Export to PDF" style="margin-left: 8px;"><i class="fa-solid fa-file-pdf"></i></button>`;
                     
@@ -4298,9 +4250,9 @@
                         ? `<button class="create-workitem-btn" onclick="event.stopPropagation(); openCreateWorkItemModal('${product}', '${releaseName}', '${major}', '${patch}')" title="Create new work item"><i class="fa-solid fa-plus"></i></button>` 
                         : '';
                     
-                    const caretIcon2 = isPatchExpanded ? 'fa-caret-down' : 'fa-caret-right';
-                    level2Div.innerHTML = `<div class="release-header-content"><h5 class="release-header-title"><i class="fa-solid ${caretIcon2} expand-icon"></i>${releaseName}-${major}.${patch}${hidePatchBtn}${exportPdfBtn}${createWorkItemBtn}</h5>${createProgressBar(items)}</div>`;
-                    patchContainer.appendChild(level2Div);
+                    const caretIcon1 = isPatchExpanded ? 'fa-caret-down' : 'fa-caret-right';
+                    level1Div.innerHTML = `<div class="release-header-content"><h4 class="release-header-title"><i class="fa-solid ${caretIcon1} expand-icon"></i>${releaseName}-${major}.${patch}${hidePatchBtn}${exportPdfBtn}${createWorkItemBtn}</h4>${createProgressBar(items)}</div>`;
+                    patchContainer.appendChild(level1Div);
                     
                     // Epic a work items
                     const epicDiv = document.createElement('div');
@@ -4311,11 +4263,11 @@
                     patchContainer.appendChild(epicDiv);
                     
                     // Rozbalování detailu patch
-                    level2Div.onclick = () => {
+                    level1Div.onclick = () => {
                         epicDiv.classList.toggle('collapsed');
                         toggleSectionExpanded('patch', patchId);
                         // Update caret icon
-                        const icon = level2Div.querySelector('.expand-icon');
+                        const icon = level1Div.querySelector('.expand-icon');
                         if (icon) {
                             icon.classList.toggle('fa-caret-right');
                             icon.classList.toggle('fa-caret-down');
@@ -4325,11 +4277,11 @@
                 majorContainer.appendChild(patchContainer);
                 
                 // Rozbalování detailu major
-                level1Div.onclick = () => {
+                level0Div.onclick = () => {
                     patchContainer.classList.toggle('collapsed');
                     toggleSectionExpanded('major', majorId);
                     // Update caret icon
-                    const icon = level1Div.querySelector('.expand-icon');
+                    const icon = level0Div.querySelector('.expand-icon');
                     if (icon) {
                         icon.classList.toggle('fa-caret-right');
                         icon.classList.toggle('fa-caret-down');
@@ -4337,18 +4289,6 @@
                 };
             }
             releaseContainer.appendChild(majorContainer);
-            
-            // Rozbalování detailu release
-            level0Div.onclick = () => {
-                majorContainer.classList.toggle('collapsed');
-                toggleSectionExpanded('release', releaseName);
-                // Update caret icon
-                const icon = level0Div.querySelector('.expand-icon');
-                if (icon) {
-                    icon.classList.toggle('fa-caret-right');
-                    icon.classList.toggle('fa-caret-down');
-                }
-            };
             
             content.appendChild(releaseContainer);
         }
@@ -5782,17 +5722,8 @@
                 workItems: []
             };
             
-            // Získat všechny release ID
-            document.querySelectorAll('.release-header.level-1').forEach(header => {
-                const text = header.textContent.trim().split(' - ')[1];
-                if (text) {
-                    const releaseName = text.split('\n')[0].trim();
-                    sections.releases.push(releaseName);
-                }
-            });
-            
-            // Získat všechny major ID
-            document.querySelectorAll('.release-header.level-2').forEach(header => {
+            // Získat všechny major ID (level-0)
+            document.querySelectorAll('.release-header.level-0').forEach(header => {
                 const text = header.textContent.trim();
                 const majorId = text.split('\n')[0].trim();
                 if (majorId && !isVersionHidden('major', majorId)) {
@@ -7491,21 +7422,14 @@
                 }
             });
             
-            // Hide empty products (release containers)
+            // Hide empty release containers
             document.querySelectorAll('.release-container').forEach(container => {
-                const visibleMajors = Array.from(container.querySelectorAll('.major-container'))
-                    .filter(major => major.style.display !== 'none');
+                const visibleMajors = Array.from(container.querySelectorAll('.release-header.level-0'))
+                    .filter(major => !major.classList.contains('version-hidden') && major.style.display !== 'none');
                 
-                const productHeader = container.querySelector('.release-header.level-1');
                 if (visibleMajors.length === 0) {
-                    if (productHeader) {
-                        productHeader.style.display = 'none';
-                    }
                     container.style.display = 'none';
                 } else {
-                    if (productHeader) {
-                        productHeader.style.display = '';
-                    }
                     container.style.display = '';
                 }
             });
