@@ -1969,8 +1969,11 @@
                         <input type="text" class="form-control" id="workItemDetailTitle" required 
                                placeholder="Enter work item title" 
                                style="background-color: var(--bg-secondary); color: var(--text-primary); border-color: var(--border-color); flex: 1;">
-                        <button id="copyWorkItemTitleBtn" class="btn" style="height: 38px; padding: 6px 12px; border: 1px solid var(--border-color); background: var(--bg-secondary); flex-shrink: 0; display: flex; align-items: center; justify-content: center;" onclick="copyWorkItemTitle()" title="Copy work item title to clipboard">
+                        <button id="copyWorkItemTitleBtn" class="btn" style="height: 38px; width: 38px; padding: 0; border: 1px solid var(--border-color); background: var(--bg-secondary); flex-shrink: 0; display: flex; align-items: center; justify-content: center;" onclick="copyWorkItemTitle()" title="Copy work item title to clipboard">
                             <i class="fa-solid fa-copy"></i>
+                        </button>
+                        <button id="copyWorkItemLinkBtn" class="btn" style="height: 38px; width: 38px; padding: 0; border: 1px solid var(--border-color); background: var(--bg-secondary); flex-shrink: 0; display: flex; align-items: center; justify-content: center;" onclick="copyWorkItemLink()" title="Copy link to this work item">
+                            <i class="fa-solid fa-link"></i>
                         </button>
                     </div>
                 </div>
@@ -6550,6 +6553,10 @@
             metaEl.innerHTML = '';
             descEl.innerHTML = '';
             
+            // Update URL with workitem parameter
+            const newUrl = getWorkItemUrl(workItemId);
+            window.history.pushState({ workItemId: workItemId }, '', newUrl);
+            
             // Show modal + loading
             modal.classList.add('show');
             loading.classList.add('show');
@@ -6633,6 +6640,11 @@
             const modal = document.getElementById('workItemDetailModal');
             if (modal) modal.classList.remove('show');
             unlockBodyScroll();
+            
+            // Remove workitem parameter from URL when closing modal
+            const url = new URL(window.location);
+            url.searchParams.delete('workitem');
+            window.history.pushState({}, '', url);
         };
         
         window.updateWorkItemDescription = async function() {
@@ -6773,6 +6785,48 @@
                 showNotification('Failed to copy to clipboard', 'error');
             });
         };
+        
+        // ===== Work Item Link Functions =====
+        // Generate URL with workitem parameter
+        function getWorkItemUrl(workItemId) {
+            const currentUrl = window.location.href.split('?')[0]; // Remove existing query params
+            return `${currentUrl}?workitem=${workItemId}`;
+        }
+        
+        // Copy work item link to clipboard
+        window.copyWorkItemLink = function() {
+            const workItemId = window._lastDetailWorkItemId;
+            if (!workItemId) {
+                showNotification('Work item ID not available', 'error');
+                return;
+            }
+            
+            const url = getWorkItemUrl(workItemId);
+            
+            navigator.clipboard.writeText(url).then(() => {
+                showNotification('Link copied to clipboard!', 'success');
+            }).catch(err => {
+                Logger.error('Failed to copy link:', err);
+                showNotification('Failed to copy link to clipboard', 'error');
+            });
+        };
+        
+        // Parse URL parameter and open work item detail modal
+        function checkAndOpenWorkItemFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const workItemId = urlParams.get('workitem');
+            
+            if (workItemId) {
+                // Parse as integer to ensure it's a valid ID
+                const id = parseInt(workItemId);
+                if (!isNaN(id) && id > 0) {
+                    // Small delay to ensure page is fully loaded
+                    setTimeout(() => {
+                        openWorkItemDetailModal(id);
+                    }, 500);
+                }
+            }
+        }
         
         // Process images in HTML: convert data:image URLs to DevOps attachments
         // Preserves existing DevOps attachment URLs (from data-devops-url attribute or blob URLs)
@@ -6978,6 +7032,27 @@
             
             loadData();
             updateLastReloadDisplay(); // Zobrazit čas i při refresh stránky
+            
+            // Check URL for workitem parameter and open modal if present
+            checkAndOpenWorkItemFromUrl();
+        });
+        
+        // Handle browser back/forward buttons
+        window.addEventListener('popstate', function(event) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const workItemId = urlParams.get('workitem');
+            const modal = document.getElementById('workItemDetailModal');
+            
+            if (workItemId && modal) {
+                // URL has workitem parameter - open modal
+                const id = parseInt(workItemId);
+                if (!isNaN(id) && id > 0) {
+                    openWorkItemDetailModal(id);
+                }
+            } else if (modal && modal.classList.contains('show')) {
+                // URL doesn't have workitem parameter but modal is open - close it
+                closeWorkItemDetailModal();
+            }
         });
         
         // ===== Filter by Assignee and Status =====
