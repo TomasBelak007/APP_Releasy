@@ -1745,7 +1745,7 @@
                     © 2025 Tomas Belak
                 </div>
                 <div class="version">
-                    Version: 1.0.17
+                    Version: 1.0.18
                 </div>
                 <div class="powered-by">
                     <span>Powered by</span>
@@ -5426,6 +5426,11 @@
                 const type = checkbox.dataset.type;
                 const id = checkbox.value;
                 const key = getVersionKey(type);
+                
+                // Zajistíme, že pole existuje
+                if (!hidden[key]) {
+                    hidden[key] = [];
+                }
                 
                 // Odstranit z hidden seznamu
                 const index = hidden[key].indexOf(id);
