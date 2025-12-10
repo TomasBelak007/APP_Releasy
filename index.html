@@ -1507,12 +1507,20 @@
         
         /* Neutral meta badge (detail modal) */
         .meta-badge {
-            display: inline-block;
-            padding: 2px 6px;
+            display: inline-flex;
+            align-items: center;
+            line-height: 1;
+            vertical-align: middle;
+            padding: 4px 8px;
             border-radius: 4px;
-            font-size: 0.85em;
+            font-size: 0.9em;
+            font-weight: bold;
             background-color: #e9ecef;
-            color: #212529;
+            color: #495057;
+            white-space: nowrap;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         [data-theme="dark"] .meta-badge {
             background-color: #3a3f4b;
@@ -1745,7 +1753,7 @@
                     © 2025 Tomas Belak
                 </div>
                 <div class="version">
-                    Version: 1.0.18
+                    Version: 1.0.19
                 </div>
                 <div class="powered-by">
                     <span>Powered by</span>
@@ -6585,6 +6593,25 @@
                 const severityRaw = fields['Microsoft.VSTS.Common.Severity'] || '';
                 const severityNum = typeof severityRaw === 'string' ? (parseInt(severityRaw) || parseInt((severityRaw.match(/^(\d+)/)||[])[1])) : severityRaw;
                 const patchVersion = fields['Custom.PlatformRelease'] || '';
+                const createdDate = fields['System.CreatedDate'] || '';
+                const changedDate = fields['System.ChangedDate'] || '';
+                
+                // Format dates as relative time (min/hours/days)
+                const formatDate = (dateString) => {
+                    if (!dateString) return '';
+                    try {
+                        const date = new Date(dateString);
+                        const diffMs = Date.now() - date.getTime();
+                        const diffMin = Math.max(1, Math.floor(diffMs / 60000));
+                        if (diffMin < 60) return `${diffMin} min`;
+                        const diffHours = Math.floor(diffMin / 60);
+                        if (diffHours < 24) return `${diffHours} h`;
+                        const diffDays = Math.floor(diffHours / 24);
+                        return `${diffDays} d`;
+                    } catch (e) {
+                        return dateString;
+                    }
+                };
                 
                 // Prefer ReproSteps for Bug if present, else System.Description
                 const descriptionHtml = fields['Microsoft.VSTS.TCM.ReproSteps'] || fields['System.Description'] || '<em>No description</em>';
@@ -6610,6 +6637,9 @@
                 // Version and Assigned as neutral badges with high contrast
                 if (patchVersion) meta.push(`<span class="meta-badge">Version: ${patchVersion}</span>`);
                 meta.push(`<span class="meta-badge">Assigned: ${assigned}</span>`);
+                // Created and Changed dates
+                if (createdDate) meta.push(`<span class="meta-badge" title="Created: ${createdDate}">Created: ${formatDate(createdDate)}</span>`);
+                if (changedDate) meta.push(`<span class="meta-badge" title="Changed: ${changedDate}">Changed: ${formatDate(changedDate)}</span>`);
                 metaEl.innerHTML = meta.join('');
                 
                 // Set description HTML (trusted from DevOps)
