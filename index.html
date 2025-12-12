@@ -1178,11 +1178,72 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            flex: 0 1 auto;
+            flex: 1 1 auto;
             min-width: 0;
             cursor: pointer;
             position: relative;
             z-index: 1;
+            max-width: calc(100% - 80px);
+        }
+        
+        /* Created badge in work item title */
+        .work-item-created-badge {
+            flex-shrink: 0;
+            margin-left: 6px;
+        }
+        
+        /* Age-based color coding for created badge - shades of gray (max 50% gray) */
+        /* Text is always dark, only background changes */
+        .work-item-created-badge.age-very-new {
+            background-color: #f8f9fa; /* Velmi světlá šedá - 0-60 min */
+            color: #000000;
+        }
+        .work-item-created-badge.age-new {
+            background-color: #f0f0f0; /* Světlá šedá - 1-24h */
+            color: #000000;
+        }
+        .work-item-created-badge.age-recent {
+            background-color: #e0e0e0; /* Střední šedá - 1-7 dní */
+            color: #000000;
+        }
+        .work-item-created-badge.age-medium {
+            background-color: #d0d0d0; /* Tmavší šedá - 7-30 dní */
+            color: #000000;
+        }
+        .work-item-created-badge.age-old {
+            background-color: #b8b8b8; /* Tmavá šedá - 30-100 dní */
+            color: #000000;
+        }
+        .work-item-created-badge.age-very-old {
+            background-color: #b0b0b0; /* ~30% šedá - 100+ dní (maximum) */
+            color: #000000;
+        }
+        
+        /* Dark theme adjustments for age badges */
+        /* In dark mode, text is light, background changes from dark to ~30% gray */
+        [data-theme="dark"] .work-item-created-badge.age-very-new {
+            background-color: #2a2a2a; /* Velmi tmavá šedá - 0-60 min */
+            color: #ffffff;
+        }
+        [data-theme="dark"] .work-item-created-badge.age-new {
+            background-color: #353535; /* Tmavá šedá - 1-24h */
+            color: #ffffff;
+        }
+        [data-theme="dark"] .work-item-created-badge.age-recent {
+            background-color: #404040; /* Střední tmavá šedá - 1-7 dní */
+            color: #ffffff;
+        }
+        [data-theme="dark"] .work-item-created-badge.age-medium {
+            background-color: #4a4a4a; /* Světlejší tmavá šedá - 7-30 dní */
+            color: #ffffff;
+        }
+        [data-theme="dark"] .work-item-created-badge.age-old {
+            background-color: #555555; /* Světlá tmavá šedá - 30-100 dní */
+            color: #ffffff;
+        }
+        [data-theme="dark"] .work-item-created-badge.age-very-old {
+            background-color: #b0b0b0; /* ~30% šedá - 100+ dní (maximum) */
+            color: #ffffff;
         }
         .work-item-title:has(.add-task-btn):has(.change-patch-btn) > a {
             flex: 0 1 calc(100% - 50px);
@@ -1286,11 +1347,22 @@
             line-height: 1.1;
         }
         
+        /* Meta badge in work item rows */
+        .work-item:not(.child-task) .work-item-created-badge {
+            font-size: 12px !important;
+            line-height: 1.1;
+        }
+        .work-item.child-task .work-item-created-badge {
+            font-size: 11px !important;
+            line-height: 1.1;
+        }
+        
         /* Prevent flex from stretching badges */
         .state-badge,
         .priority-badge,
         .severity-badge,
-        .assigned-to-badge {
+        .assigned-to-badge,
+        .work-item-created-badge {
             flex: 0 0 auto !important;
         }
 
@@ -1759,7 +1831,7 @@
                     © 2025 Tomas Belak
                 </div>
                 <div class="version">
-                    Version: 1.0.20
+                    Version: 1.0.21
                 </div>
                 <div class="powered-by">
                     <span>Powered by</span>
@@ -3812,6 +3884,45 @@
             return html + '</span>';
         }
 
+        // Format dates as relative time (min/hours/days) with age-based color class
+        function formatRelativeDate(dateString) {
+            if (!dateString) return { text: '', class: '' };
+            try {
+                const date = new Date(dateString);
+                const diffMs = Date.now() - date.getTime();
+                const diffMin = Math.max(1, Math.floor(diffMs / 60000));
+                const diffHours = Math.floor(diffMin / 60);
+                const diffDays = Math.floor(diffHours / 24);
+                
+                let text = '';
+                let ageClass = '';
+                
+                if (diffMin < 60) {
+                    text = `${diffMin} min`;
+                    ageClass = 'age-very-new'; // 0-60 min - velmi světlá šedá
+                } else if (diffHours < 24) {
+                    text = `${diffHours} h`;
+                    ageClass = 'age-new'; // 1-24h - světlá šedá
+                } else if (diffDays < 7) {
+                    text = `${diffDays} d`;
+                    ageClass = 'age-recent'; // 1-7 dní - střední šedá
+                } else if (diffDays < 30) {
+                    text = `${diffDays} d`;
+                    ageClass = 'age-medium'; // 7-30 dní - tmavší šedá
+                } else if (diffDays < 100) {
+                    text = `${diffDays} d`;
+                    ageClass = 'age-old'; // 30-100 dní - tmavá šedá
+                } else {
+                    text = `${diffDays} d`;
+                    ageClass = 'age-very-old'; // 100+ dní - velmi tmavá šedá
+                }
+                
+                return { text, class: ageClass };
+            } catch (e) {
+                return { text: '', class: '' };
+            }
+        }
+
         // ===== Work Item Rendering =====
         function createWorkItemElement(item) {
             const div = document.createElement('div');
@@ -3825,6 +3936,8 @@
             div.setAttribute('data-work-item-id', item.id);
             const assignedTo = item.fields['System.AssignedTo']?.displayName || 'Unassigned';
             const state = item.fields['System.State'];
+            const createdDate = item.fields['System.CreatedDate'] || '';
+            const createdDateInfo = formatRelativeDate(createdDate);
             
             const isExpanded = isWorkItemExpanded(item.id);
             const detailClass = isExpanded ? '' : 'd-none';
@@ -3843,6 +3956,7 @@
                         <span class="work-item-title-text" onclick="event.stopPropagation(); openWorkItemDetailModal(${item.id});" title="${title.replace(/"/g, '&quot;')}">
                             ${title}
                         </span>
+                        ${createdDateInfo.text ? `<span class="meta-badge work-item-created-badge ${createdDateInfo.class}" title="Created: ${createdDate}">${createdDateInfo.text}</span>` : ''}
                         <button class="add-task-btn" data-work-item-id="${item.id}" data-work-item-title="${title.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"')}" 
                                 title="Create Child Task" style="display: none;">
                             <i class="fa-solid fa-plus"></i><i class="fa-solid fa-clipboard-list"></i>
