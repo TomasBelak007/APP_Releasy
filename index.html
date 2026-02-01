@@ -1334,6 +1334,7 @@
         .work-item:not(.child-task) .state-badge,
         .work-item:not(.child-task) .priority-badge,
         .work-item:not(.child-task) .severity-badge,
+        .work-item:not(.child-task) .tshirt-badge,
         .work-item:not(.child-task) .assigned-to-badge {
             font-size: 12px !important;
             line-height: 1.1;
@@ -1342,6 +1343,7 @@
         .work-item.child-task .state-badge,
         .work-item.child-task .priority-badge,
         .work-item.child-task .severity-badge,
+        .work-item.child-task .tshirt-badge,
         .work-item.child-task .assigned-to-badge {
             font-size: 11px !important;
             line-height: 1.1;
@@ -1361,6 +1363,7 @@
         .state-badge,
         .priority-badge,
         .severity-badge,
+        .tshirt-badge,
         .assigned-to-badge,
         .work-item-created-badge {
             flex: 0 0 auto !important;
@@ -1407,6 +1410,28 @@
         .severity-3 { background-color: var(--color-medium); color: black; }
         .severity-4 { background-color: var(--color-low); color: black; }
         .severity-badge:not([class*="severity-"]) {
+            background-color: var(--border-color);
+            color: var(--text-secondary);
+        }
+        .tshirt-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.75em;
+            font-weight: 700;
+            white-space: nowrap;
+            min-width: 20px;
+            text-align: center;
+            margin-left: 4px;
+        }
+        .tshirt-s { background-color: #0d6efd; color: white; }
+        .tshirt-m { background-color: #fd7e14; color: white; }
+        .tshirt-l { background-color: #dc3545; color: white; }
+        .tshirt-unknown {
+            background-color: var(--border-color);
+            color: var(--text-secondary);
+        }
+        .tshirt-badge:not([class*="tshirt-"]) {
             background-color: var(--border-color);
             color: var(--text-secondary);
         }
@@ -1500,6 +1525,51 @@
         .severity-badge-wrapper.read-only .severity-edit-icon {
             display: none !important;
         }
+        
+        /* T-shirt Size Edit Wrapper */
+        .tshirt-badge-wrapper {
+            position: relative;
+            display: inline-block;
+            cursor: default;
+            transition: all 0.2s;
+            z-index: 1;
+            overflow: visible;
+        }
+        .tshirt-badge-wrapper.clickable {
+            cursor: pointer;
+        }
+        .tshirt-badge-wrapper.clickable:hover {
+            transform: translateY(-1px);
+        }
+        .tshirt-badge-wrapper.clickable:active {
+            transform: translateY(0);
+        }
+        .tshirt-edit-icon {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6em;
+            color: var(--text-primary);
+            z-index: 1000;
+            pointer-events: none;
+        }
+        .tshirt-badge-wrapper.clickable:hover .tshirt-edit-icon {
+            display: flex;
+        }
+        .tshirt-badge-wrapper.read-only {
+            cursor: default;
+        }
+        .tshirt-badge-wrapper.read-only .tshirt-edit-icon {
+            display: none !important;
+        }
         /* Special styling for release features */
         .work-item.release-feature {
             border-left: 3px solid var(--color-high);
@@ -1569,6 +1639,7 @@
         #workItemDetailModal .state-badge,
         #workItemDetailModal .priority-badge,
         #workItemDetailModal .severity-badge,
+        #workItemDetailModal .tshirt-badge,
         #workItemDetailModal .meta-badge {
             display: inline-flex;
             align-items: center;
@@ -1991,6 +2062,30 @@
         </div>
     </div>
 
+    <!-- T-shirt Size Change Modal -->
+    <div id="tshirtChangeModal" class="modal-overlay" onclick="if(event.target === this) closeTshirtChangeModal()">
+        <div class="modal-content" style="position: relative;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-shirt"></i> Change T-shirt Size</h3>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 15px; color: var(--text-secondary);">
+                    <strong id="tshirtChangeWorkItemTitle"></strong>
+                </p>
+                <p style="margin-bottom: 20px; font-size: 0.9em; color: var(--text-secondary);">
+                    Current size: <strong id="tshirtChangeCurrentValue"></strong>
+                </p>
+                <div id="tshirtOptionsContainer"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeTshirtChangeModal()">Cancel</button>
+            </div>
+            <div class="modal-loading-overlay" id="tshirtChangeLoading">
+                <div class="modal-spinner"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Assigned To Change Modal -->
     <div id="assignedToChangeModal" class="modal-overlay" onclick="if(event.target === this) closeAssignedToChangeModal()">
         <div class="modal-content" style="position: relative;">
@@ -2386,6 +2481,19 @@
                                 <option value="2">2 - High</option>
                                 <option value="3" selected>3 - Medium</option>
                                 <option value="4">4 - Low</option>
+                            </select>
+                        </div>
+
+                        <!-- T-shirt Size (only for Feature) -->
+                        <div class="col-6" id="tshirtField" style="display: block;">
+                            <label for="workItemTshirtSize" class="form-label" style="color: var(--text-primary); font-weight: 600;">
+                                <i class="fa-solid fa-shirt"></i> T-shirt Size
+                            </label>
+                            <select class="form-select" id="workItemTshirtSize"
+                                    style="background-color: var(--bg-secondary); color: var(--text-primary); border-color: var(--border-color);">
+                                <option value="S">S</option>
+                                <option value="M" selected>M</option>
+                                <option value="L">L</option>
                             </select>
                         </div>
                     </div>
@@ -3103,6 +3211,7 @@
             // Update priority and severity edit visibility
             updatePriorityEditVisibility(hasWritePermission);
             updateSeverityEditVisibility(hasWritePermission);
+            updateTshirtEditVisibility(hasWritePermission);
             
             // Update assigned to edit visibility
             updateAssignedToEditVisibility(hasWritePermission);
@@ -3209,7 +3318,13 @@
                     workItemId: wrapper.getAttribute('data-work-item-id'),
                     workItemType: wrapper.getAttribute('data-work-item-type'),
                     workItemTitle: wrapper.getAttribute('data-work-item-title')
-                })
+                }),
+                buildModalArgs = (attrs) => ([
+                    attrs.workItemId,
+                    attrs.workItemType,
+                    attrs.currentValue,
+                    attrs.workItemTitle
+                ])
             } = options;
             
             const wrappers = document.querySelectorAll(selector);
@@ -3233,7 +3348,8 @@
                         e.stopPropagation();
                         e.preventDefault();
                         const attrs = getDataAttrs(wrapper);
-                        openModalFn(attrs.workItemId, attrs.workItemType, attrs.currentValue, attrs.workItemTitle);
+                        const args = buildModalArgs(attrs);
+                        openModalFn(...args);
                         return false;
                     };
                     
@@ -3307,6 +3423,32 @@
                         currentValue: wrapper.getAttribute('data-severity'),
                         workItemTitle: wrapper.getAttribute('data-work-item-title')
                     })
+                }
+            );
+        }
+        
+        function updateTshirtEditVisibility(hasWritePermission) {
+            updateEditVisibility(
+                '.tshirt-badge-wrapper',
+                hasWritePermission,
+                openTshirtChangeModal,
+                '_tshirtClickHandler',
+                {
+                    useClassList: true,
+                    getDataAttrs: (wrapper) => ({
+                        workItemId: wrapper.getAttribute('data-work-item-id'),
+                        workItemType: wrapper.getAttribute('data-work-item-type'),
+                        currentValue: wrapper.getAttribute('data-tshirt-size'),
+                        fieldKey: wrapper.getAttribute('data-tshirt-field'),
+                        workItemTitle: wrapper.getAttribute('data-work-item-title')
+                    }),
+                    buildModalArgs: (attrs) => ([
+                        attrs.workItemId,
+                        attrs.workItemType,
+                        attrs.currentValue,
+                        attrs.workItemTitle,
+                        attrs.fieldKey
+                    ])
                 }
             );
         }
@@ -3643,6 +3785,7 @@
             updateStatusEditVisibility(hasWritePermission);
             updatePriorityEditVisibility(hasWritePermission);
             updateSeverityEditVisibility(hasWritePermission);
+        updateTshirtEditVisibility(hasWritePermission);
             updateAssignedToEditVisibility(hasWritePermission);
         }
         
@@ -3837,16 +3980,43 @@
             const match = String(value).match(/^(\d+)/);
             return match ? match[1] : value;
         }
+        
+        function getTshirtFieldKey(fields = {}) {
+            return Object.prototype.hasOwnProperty.call(fields, 'Custom.Shirtsize')
+                ? 'Custom.Shirtsize'
+                : null;
+        }
+        
+        function normalizeTshirtSize(value) {
+            if (!value) return null;
+            if (value === null || value === undefined) return null;
+            const rawValue = typeof value === 'object' && value !== null
+                ? (value.displayName || value.name || JSON.stringify(value))
+                : value;
+            const str = String(rawValue).trim().toUpperCase();
+            if (!str) return null;
+            const match = str.match(/\b([SML])\b/);
+            if (!match) return null;
+            const size = match[1];
+            return ['S', 'M', 'L'].includes(size) ? size : null;
+        }
+        
+        function getTshirtSizeFromFields(fields = {}) {
+            const key = getTshirtFieldKey(fields);
+            return normalizeTshirtSize(key ? fields[key] : '');
+        }
 
         function getPriorityBadge(item) {
             const type = item.fields['System.WorkItemType'];
             const priority = extractNumber(item.fields['Microsoft.VSTS.Common.Priority']);
             const severity = extractNumber(item.fields['Microsoft.VSTS.Common.Severity']);
+            const tshirtFieldKey = getTshirtFieldKey(item.fields);
+            const tshirtSize = getTshirtSizeFromFields(item.fields);
             const workItemId = item.id;
             const title = item.fields['System.Title'];
             
             // If no priority data available, show placeholder
-            if (!priority && (type !== 'Bug' || !severity)) {
+            if (!priority && (type !== 'Bug' || !severity) && (type !== 'Feature' || !tshirtSize)) {
                 return '<span class="priority-severity">-</span>';
             }
             
@@ -3872,8 +4042,23 @@
                 html += `<span class="severity-badge ${severityClass}" title="${severityTooltip}">${severityNum}</span>`;
                 html += `<i class="fa-solid fa-pen severity-edit-icon"></i>`;
                 html += `</span>`;
+            } else if (type === 'Feature') {
+                // Feature: Show Priority + T-shirt size badges with edit icons
+                const tooltip = `Priority: ${priorityNum}`;
+                html += `<span class="priority-badge-wrapper" data-work-item-id="${workItemId}" data-work-item-type="${type}" data-priority="${priorityNum}" data-work-item-title="${title.replace(/'/g, '&apos;').replace(/"/g, '&quot;')}">`;
+                html += `<span class="priority-badge ${priorityClass}" title="${tooltip}">${priorityNum}</span>`;
+                html += `<i class="fa-solid fa-pen priority-edit-icon"></i>`;
+                html += `</span>`;
+                
+                const tshirtNum = tshirtSize || '-';
+                const tshirtClass = tshirtSize ? `tshirt-${tshirtSize.toLowerCase()}` : 'tshirt-unknown';
+                const tshirtTooltip = `T-shirt size: ${tshirtNum}`;
+                html += `<span class="tshirt-badge-wrapper" data-work-item-id="${workItemId}" data-work-item-type="${type}" data-tshirt-size="${tshirtNum}" data-tshirt-field="${tshirtFieldKey || ''}" data-work-item-title="${title.replace(/'/g, '&apos;').replace(/"/g, '&quot;')}">`;
+                html += `<span class="tshirt-badge ${tshirtClass}" title="${tshirtTooltip}">${tshirtNum}</span>`;
+                html += `<i class="fa-solid fa-pen tshirt-edit-icon"></i>`;
+                html += `</span>`;
             } else {
-                // Feature: Show only Priority badge with edit icon
+                // Other types: show only Priority
                 const tooltip = `Priority: ${priorityNum}`;
                 html += `<span class="priority-badge-wrapper" data-work-item-id="${workItemId}" data-work-item-type="${type}" data-priority="${priorityNum}" data-work-item-title="${title.replace(/'/g, '&apos;').replace(/"/g, '&quot;')}">`;
                 html += `<span class="priority-badge ${priorityClass}" title="${tooltip}">${priorityNum}</span>`;
@@ -4533,6 +4718,7 @@
             
             try {
                 loading.style.display = 'flex';
+                const tshirtFieldSelect = `,\n                        [Custom.Shirtsize]`;
                 const allReleaseResults = [];
                 for (const releaseConfig of releaseNames) {
                     const wiqlQuery = `SELECT
@@ -4544,7 +4730,7 @@
                         [Custom.PlatformRelease],
                         [Custom.Epictitle],
                         [Microsoft.VSTS.Common.Priority],
-                        [Microsoft.VSTS.Common.Severity]
+                        [Microsoft.VSTS.Common.Severity]${tshirtFieldSelect}
                     FROM workitems
                     WHERE
                         [System.TeamProject] = 'Board'
@@ -4613,6 +4799,7 @@
                 // Update priority and severity edit visibility
                 updatePriorityEditVisibility(hasWritePermission);
                 updateSeverityEditVisibility(hasWritePermission);
+                updateTshirtEditVisibility(hasWritePermission);
                 
                 // Update assigned to edit visibility
                 updateAssignedToEditVisibility(hasWritePermission);
@@ -4789,11 +4976,14 @@
         window.toggleSeverityField = function() {
             const isBug = document.getElementById('typeBug').checked;
             const severityField = document.getElementById('severityField');
+            const tshirtField = document.getElementById('tshirtField');
             
             if (isBug) {
                 severityField.style.display = 'block';
+                if (tshirtField) tshirtField.style.display = 'none';
             } else {
                 severityField.style.display = 'none';
+                if (tshirtField) tshirtField.style.display = 'block';
             }
         };
         
@@ -5341,6 +5531,7 @@
             const assignee = document.getElementById('workItemAssignee').value;
             const priority = document.getElementById('workItemPriority').value;
             const severity = document.getElementById('workItemSeverity').value;
+            const tshirtSize = document.getElementById('workItemTshirtSize')?.value || '';
             
             // Find epicID based on release name
             const releaseConfig = releaseNames.find(r => 
@@ -5362,6 +5553,7 @@
                 assignee: assignee,
                 priority: parseInt(priority),
                 severity: workItemType === 'Bug' ? parseInt(severity) : null,
+                tshirtSize: workItemType === 'Feature' ? tshirtSize : null,
                 platformRelease: `${createWorkItemContext.releaseName}-${createWorkItemContext.major}.${createWorkItemContext.patch}`,
                 product: createWorkItemContext.product,
                 epicID: epicID,
@@ -5429,6 +5621,15 @@
                         op: 'add',
                         path: '/fields/Microsoft.VSTS.Common.Severity',
                         value: severityMap[workItemData.severity] || '3 - Medium'
+                    });
+                }
+                
+                // Add T-shirt size for features
+                if (workItemData.type === 'Feature' && workItemData.tshirtSize) {
+                    operations.push({
+                        op: 'add',
+                        path: '/fields/Custom.Shirtsize',
+                        value: workItemData.tshirtSize
                     });
                 }
                 
@@ -6032,7 +6233,8 @@
                 successMessage,
                 errorMessage,
                 onSuccess = null,
-                updateUI = null
+                updateUI = null,
+                operation = 'replace'
             } = options;
             
             // Show loading overlay if provided
@@ -6046,10 +6248,12 @@
                 const url = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems/${workItemId}?api-version=7.1`;
                 
                 const patchOperation = {
-                    'op': 'replace',
-                    'path': fieldPath,
-                    'value': newValue
+                    'op': operation,
+                    'path': fieldPath
                 };
+                if (operation !== 'remove') {
+                    patchOperation.value = newValue;
+                }
                 
                 const response = await fetch(url, {
                     method: 'PATCH',
@@ -6061,7 +6265,8 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`Failed to update: ${response.statusText}`);
+                    const errorText = await response.text();
+                    throw new Error(`Failed to update: ${response.statusText}${errorText ? ` - ${errorText}` : ''}`);
                 }
                 
                 // Update UI if callback provided
@@ -6452,6 +6657,128 @@
             );
         }
         
+        // ===== T-shirt Size Change Functions =====
+        window.openTshirtChangeModal = async function(workItemId, workItemType, currentSize, title, fieldKey) {
+            // Check if user has write permission
+            const hasWritePermission = localStorage.getItem('tokenHasWriteCapability') === 'true';
+            if (!hasWritePermission) {
+                return; // Don't open modal for read-only users
+            }
+            
+            if (workItemType !== 'Feature') {
+                return;
+            }
+            
+            let resolvedFieldKey = fieldKey;
+            let resolvedSize = currentSize;
+            
+            if (!resolvedFieldKey || !resolvedSize || resolvedSize === '-') {
+                try {
+                    const pat = await getPAT();
+                    const data = await devOpsGet(`/wit/workitems/${workItemId}?api-version=7.1`);
+                    const fields = data.fields || {};
+                    resolvedFieldKey = getTshirtFieldKey(fields) || resolvedFieldKey;
+                    const fetchedSize = getTshirtSizeFromFields(fields);
+                    if (fetchedSize) {
+                        resolvedSize = fetchedSize;
+                    }
+                } catch (error) {
+                    Logger.warn('Failed to resolve T-shirt field from API:', error);
+                }
+            }
+            
+            if (!resolvedFieldKey) {
+                resolvedFieldKey = 'Custom.Shirtsize';
+            }
+            
+            // Set title and current size
+            document.getElementById('tshirtChangeWorkItemTitle').textContent = title;
+            document.getElementById('tshirtChangeCurrentValue').textContent = resolvedSize || '-';
+            
+            const sizeOptions = [
+                { value: '-', label: '-', class: 'tshirt-unknown' },
+                { value: 'S', label: 'S', class: 'tshirt-s' },
+                { value: 'M', label: 'M', class: 'tshirt-m' },
+                { value: 'L', label: 'L', class: 'tshirt-l' }
+            ];
+            
+            const container = document.getElementById('tshirtOptionsContainer');
+            container.innerHTML = '';
+            
+            sizeOptions.forEach(option => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'status-option';
+                if (option.value === resolvedSize) {
+                    optionDiv.className += ' current-status';
+                }
+                
+                const badge = document.createElement('span');
+                badge.className = `tshirt-badge ${option.class}`;
+                badge.textContent = option.label;
+                
+                optionDiv.appendChild(badge);
+                
+                if (option.value !== (resolvedSize || '-')) {
+                    optionDiv.style.cursor = 'pointer';
+                    optionDiv.onclick = () => changeWorkItemTshirtSize(workItemId, option.value, title, resolvedFieldKey, resolvedSize);
+                } else {
+                    optionDiv.style.cursor = 'default';
+                    optionDiv.title = 'Current size';
+                }
+                
+                container.appendChild(optionDiv);
+            });
+            
+            document.getElementById('tshirtChangeModal').classList.add('show');
+            lockBodyScroll();
+        };
+        
+        window.closeTshirtChangeModal = function() {
+            document.getElementById('tshirtChangeModal').classList.remove('show');
+            unlockBodyScroll();
+        };
+        
+        async function changeWorkItemTshirtSize(workItemId, newSize, title, fieldKey, currentSize) {
+            const resolvedFieldKey = 'Custom.Shirtsize';
+            const fieldPath = `/fields/${resolvedFieldKey}`;
+            const isClear = newSize === '-';
+            await updateWorkItemField(
+                workItemId,
+                fieldPath,
+                isClear ? '' : newSize,
+                {
+                    loadingOverlayId: 'tshirtChangeLoading',
+                    successMessage: isClear
+                        ? `T-shirt size cleared for: ${title}`
+                        : `T-shirt size changed to "${newSize}" for: ${title}`,
+                    errorMessage: `Error changing T-shirt size:`,
+                    onSuccess: closeTshirtChangeModal,
+                    operation: isClear ? 'remove' : (currentSize && currentSize !== '-' ? 'replace' : 'add'),
+                    updateUI: (id, value) => {
+                        const tshirtWrappers = document.querySelectorAll(`.tshirt-badge-wrapper[data-work-item-id="${id}"]`);
+                        tshirtWrappers.forEach(wrapper => {
+                            const badge = wrapper.querySelector('.tshirt-badge');
+                            if (badge) {
+                                badge.className = badge.className.replace(/tshirt-(?:s|m|l|unknown)/g, '').trim();
+                                badge.classList.remove('tshirt-unknown');
+                                const nextValue = isClear ? '-' : value;
+                                if (isClear) {
+                                    badge.classList.add('tshirt-unknown');
+                                } else {
+                                    badge.classList.add(`tshirt-${String(value).toLowerCase()}`);
+                                }
+                                badge.textContent = nextValue;
+                                wrapper.setAttribute('data-tshirt-size', nextValue);
+                                if (!wrapper.getAttribute('data-tshirt-field') && resolvedFieldKey) {
+                                    wrapper.setAttribute('data-tshirt-field', resolvedFieldKey);
+                                }
+                            }
+                        });
+                    }
+                }
+            );
+        }
+        
         // ===== Change Patch Version Functions =====
         window.openChangePatchModal = function(workItemId, title) {
             // Check if user has write permission
@@ -6712,6 +7039,13 @@
                 const priority = fields['Microsoft.VSTS.Common.Priority'] || '';
                 const severityRaw = fields['Microsoft.VSTS.Common.Severity'] || '';
                 const severityNum = typeof severityRaw === 'string' ? (parseInt(severityRaw) || parseInt((severityRaw.match(/^(\d+)/)||[])[1])) : severityRaw;
+                const tshirtFieldKey = getTshirtFieldKey(fields);
+                const tshirtSize = getTshirtSizeFromFields(fields);
+                Logger.debug('T-shirt field info:', {
+                    workItemId,
+                    tshirtFieldKey,
+                    tshirtRawValue: tshirtFieldKey ? fields[tshirtFieldKey] : null
+                });
                 const patchVersion = fields['Custom.PlatformRelease'] || '';
                 const createdDate = fields['System.CreatedDate'] || '';
                 const changedDate = fields['System.ChangedDate'] || '';
@@ -6754,6 +7088,12 @@
                 if (priority) meta.push(`<span class="priority-badge priority-${priority}" title="Priority: ${priority}">Priority: ${priority}</span>`);
                 // Severity badge (1-4) + label
                 if (severityNum) meta.push(`<span class="severity-badge severity-${severityNum}" title="Severity: ${severityRaw}">Severity: ${severityNum}</span>`);
+                // T-shirt size badge (Feature only)
+                if (type === 'Feature') {
+                    const tshirtLabel = tshirtSize || '-';
+                    const tshirtClass = tshirtSize ? `tshirt-${tshirtSize.toLowerCase()}` : 'tshirt-unknown';
+                    meta.push(`<span class="tshirt-badge ${tshirtClass}" title="T-shirt size: ${tshirtLabel}">T-shirt: ${tshirtLabel}</span>`);
+                }
                 // Version and Assigned as neutral badges with high contrast
                 if (patchVersion) meta.push(`<span class="meta-badge">Version: ${patchVersion}</span>`);
                 meta.push(`<span class="meta-badge">Assigned: ${assigned}</span>`);

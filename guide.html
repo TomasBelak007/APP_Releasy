@@ -62,6 +62,9 @@
                             <a href="#help-change-severity" class="help-nav-link" onclick="showHelpSection('help-change-severity'); return false;">
                                 <i class="fa-solid fa-triangle-exclamation"></i> Change Severity
                             </a>
+                            <a href="#help-change-tshirt" class="help-nav-link" onclick="showHelpSection('help-change-tshirt'); return false;">
+                                <i class="fa-solid fa-shirt"></i> Change T-shirt Size
+                            </a>
                             <a href="#help-change-assigned-to" class="help-nav-link" onclick="showHelpSection('help-change-assigned-to'); return false;">
                                 <i class="fa-solid fa-user"></i> Change Assigned To
                             </a>
@@ -172,7 +175,7 @@
                         <p>Click any work item title (Feature, Bug, or Task) to open a detail modal with the most important information.</p>
                         <ul>
                             <li><strong>Lazy-loaded Description:</strong> The description is loaded when the modal opens to improve performance. HTML content (including images) is rendered as-is from Azure DevOps.</li>
-                            <li><strong>Meta badges:</strong> Status, Priority, Severity, Version and Assigned To are shown with the same colors and styles as in the main view.</li>
+                            <li><strong>Meta badges:</strong> Status, Priority, Severity, T-shirt Size (Features), Version and Assigned To are shown with the same colors and styles as in the main view.</li>
                             <li><strong>Copy Title:</strong> Use the copy icon next to the work item title to copy the title to clipboard in Conventional Commits format (e.g., "feat(): 123 feature name" or "fix(): 456 bug name").</li>
                             <li><strong>Edit Title and Description (Read-Write Mode only):</strong> In read-write mode, you can edit the work item title and description directly in the modal. The description editor includes a rich text toolbar for formatting (bold, italic, lists, links, etc.). You can paste screenshots directly into the description (Ctrl+V / Cmd+V), and they will be automatically uploaded as attachments to Azure DevOps when you save.</li>
                             <li><strong>Update Button:</strong> After editing title or description, click the "Update" button to save your changes to Azure DevOps.</li>
@@ -392,6 +395,7 @@
                     <li><strong>Assigned To:</strong> Select an assignee or leave as "Unassigned" (default)</li>
                     <li><strong>Priority:</strong> Set priority from 1 (Critical) to 4 (Low) - default is 3 (Medium)</li>
                     <li><strong>Severity (Bugs only):</strong> For bugs, set severity from 1 (Critical) to 4 (Low) - default is 3 (Medium)</li>
+                    <li><strong>T-shirt Size (Features only):</strong> Select S, M, or L (default is M). Use <strong>-</strong> to keep it empty.</li>
                     <li><strong>Review & Submit:</strong> Check the patch version info at the bottom and click <strong>+ Create Work Item</strong></li>
                 </ol>
 
@@ -591,6 +595,49 @@
 
                         <p><strong>Applies to:</strong> Bugs only (Features and Tasks do not have severity)</p>
                     </div>
+                    
+                    <!-- Change T-shirt Size Section -->
+                    <div id="help-change-tshirt" class="help-section">
+                        <h4><i class="fa-solid fa-shirt"></i> Changing T-shirt Size</h4>
+                        <p>When in <strong>Read-Write mode</strong>, you can quickly change the T-shirt size of any <strong>Feature</strong> directly from the application:</p>
+                        
+                        <div class="note" style="background-color: rgba(13, 110, 253, 0.1); border-left-color: #0d6efd;">
+                            <strong><i class="fa-solid fa-info-circle" style="color: #0d6efd;"></i> Prerequisites:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>Your PAT must have <code>Work Items: Read & Write</code> scope</li>
+                                <li>You must select <strong>Read-Write</strong> permission when entering your PAT</li>
+                                <li>A small <i class="fa-solid fa-pen" style="color: #888;"></i> icon appears in the top-right corner of T-shirt badges when you hover over them</li>
+                            </ul>
+                        </div>
+
+                        <p><strong>How to change T-shirt size:</strong></p>
+                        <ol>
+                            <li><strong>Hover over T-shirt badge:</strong> Move your cursor over the T-shirt badge next to Priority (e.g., <span class="tshirt-badge tshirt-m">M</span>)</li>
+                            <li><strong>Click the badge:</strong> The entire badge is clickable - a small <i class="fa-solid fa-pen"></i> icon appears in the top-right corner</li>
+                            <li><strong>Select size:</strong> A modal appears with available sizes (S, M, L) and <strong>-</strong> for empty</li>
+                            <li><strong>Confirm change:</strong> Click on the desired size to apply the change immediately</li>
+                        </ol>
+
+                        <p><strong>Available sizes:</strong></p>
+                        <ul>
+                            <li><span class="tshirt-badge tshirt-s">S</span> Small (blue)</li>
+                            <li><span class="tshirt-badge tshirt-m">M</span> Medium (orange)</li>
+                            <li><span class="tshirt-badge tshirt-l">L</span> Large (red)</li>
+                            <li><span class="tshirt-badge tshirt-unknown">-</span> Empty (gray)</li>
+                        </ul>
+
+                        <div class="note" style="background-color: rgba(40, 167, 69, 0.1); border-left-color: #28a745;">
+                            <strong><i class="fa-solid fa-check-circle" style="color: #28a745;"></i> Immediate Update:</strong>
+                            <ul style="margin: 8px 0 0 0;">
+                                <li>The T-shirt size is updated immediately in Azure DevOps</li>
+                                <li>The badge updates in real-time without page reload</li>
+                                <li>A success notification confirms the change</li>
+                                <li>The current size is highlighted in green when you reopen the modal</li>
+                            </ul>
+                        </div>
+
+                        <p><strong>Applies to:</strong> Features only (Bugs and Tasks do not have T-shirt size)</p>
+                    </div>
 
                     <!-- Change Assigned To Section -->
                     <div id="help-change-assigned-to" class="help-section">
@@ -706,18 +753,18 @@
                         </ul>
                     </div>
 
-                    <!-- Priority & Severity Section -->
+                    <!-- Priority, Severity & T-shirt Section -->
                     <div id="help-priority" class="help-section">
-                        <h4><i class="fa-solid fa-flag"></i> Priority & Severity</h4>
-                        <p>Each work item displays priority/severity as color-coded numeric badges:</p>
+                        <h4><i class="fa-solid fa-flag"></i> Priority, Severity & T-shirt Size</h4>
+                        <p>Work items display priority/severity as color-coded numeric badges, and features show an extra T-shirt size badge:</p>
                         <ul>
                             <li><span class="priority-badge priority-1">1</span> = Critical (Red)</li>
                             <li><span class="priority-badge priority-2">2</span> = High (Orange)</li>
                             <li><span class="priority-badge priority-3">3</span> = Medium (Yellow)</li>
                             <li><span class="priority-badge priority-4">4</span> = Low (Cyan)</li>
                         </ul>
-                        <p><strong>Features:</strong> One badge showing Priority only → <span class="priority-badge priority-1" title="Priority: 1">1</span></p>
-                        <p><strong>Bugs:</strong> Two badges showing Priority and Severity → <span class="priority-badge priority-2" title="Priority: 2 / Severity: 3">2</span><span class="severity-badge severity-3" title="Priority: 2 / Severity: 3">3</span></p>
+                        <p><strong>Features:</strong> Priority + T-shirt size → <span class="priority-badge priority-1" title="Priority: 1">1</span><span class="tshirt-badge tshirt-m" title="T-shirt size: M">M</span></p>
+                        <p><strong>Bugs:</strong> Priority + Severity → <span class="priority-badge priority-2" title="Priority: 2 / Severity: 3">2</span><span class="severity-badge severity-3" title="Priority: 2 / Severity: 3">3</span></p>
                         <p><strong>Tip:</strong> Hover over any badge to see the full description (e.g., "Priority: 2 / Severity: 3")</p>
                     </div>
 
