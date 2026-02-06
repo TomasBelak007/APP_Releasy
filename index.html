@@ -5798,220 +5798,193 @@
         // ===== PDF Export =====
         window.exportPatchToPDF = async function(product, releaseName, major, patch, patchId) {
             try {
-                // Najít všechny work items pro tento patch
-                const workItems = [];
-                
-                // Najít epic-group s odpovídajícím data-patch-id
+                // Najít všechny work items pro tento patch (respektuje filtry a skryté verze)
+                const workItemIds = [];
                 const epicGroup = document.querySelector(`.epic-group[data-patch-id="${patchId}"]`);
-                
                 if (epicGroup) {
                     epicGroup.querySelectorAll('.work-item:not(.child-task)').forEach(item => {
-                        const id = item.getAttribute('data-work-item-id') || 'N/A';
-                        const titleEl = item.querySelector('.work-item-title-text') || item.querySelector('.work-item-title');
-                        const assigneeEl = item.querySelector('.assigned-to');
-                        const stateEl = item.querySelector('.state-badge');
-                        const priorityEl = item.querySelector('.priority-badge');
-                        const severityEl = item.querySelector('.severity-badge');
-                        
-                        const title = titleEl ? titleEl.textContent.trim() : '';
-                        const type = item.classList.contains('release-feature') ? 'Feature' : 'Bug';
-                        
-                        workItems.push({
-                            id: id,
-                            type: type,
-                            title: title,
-                            assignee: assigneeEl ? assigneeEl.textContent.trim() : 'Unassigned',
-                            state: stateEl ? stateEl.textContent.trim() : 'N/A',
-                            priority: priorityEl ? priorityEl.textContent.trim() : 'N/A',
-                            severity: severityEl ? severityEl.textContent.trim() : 'N/A'
-                        });
+                        if (!isElementVisible(item)) return;
+                        const id = item.getAttribute('data-work-item-id');
+                        if (id) workItemIds.push(parseInt(id));
                     });
                 }
                 
-                if (workItems.length === 0) {
+                if (workItemIds.length === 0) {
                     alert('No work items found for this patch version.');
                     return;
                 }
                 
+                // Načíst detailní data z Azure DevOps (title, description, priority, severity, t-shirt)
+                const workItemsData = await devOpsGet(`/wit/workitems?ids=${workItemIds.join(',')}&$expand=fields&api-version=7.1`);
+                const workItemsById = new Map();
+                (workItemsData.value || []).forEach(item => {
+                    workItemsById.set(item.id, item);
+                });
+                
+                // Helper pro převod HTML na text s odstavci
+                const htmlToText = (html) => {
+                    if (!html) return '';
+                    const temp = document.createElement('div');
+                    temp.innerHTML = html;
+                    temp.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+                    temp.querySelectorAll('p').forEach(p => {
+                        if ((p.textContent || '').trim()) {
+                            p.insertAdjacentText('beforebegin', '\n');
+                            p.insertAdjacentText('afterend', '\n');
+                        }
+                    });
+                    temp.querySelectorAll('li').forEach(li => {
+                        li.insertAdjacentText('beforebegin', '\n- ');
+                    });
+                    const text = temp.textContent || temp.innerText || '';
+                    const cleaned = text
+                        .replace(/\u00a0/g, ' ')
+                        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+                        // Keep letters, numbers, punctuation, symbols, space and LF only
+                        .replace(/[^\p{L}\p{N}\p{P}\p{S}\n ]/gu, '')
+                        .replace(/\r/g, '')
+                        .replace(/[ ]+\n/g, '\n')
+                        .replace(/\n{3,}/g, '\n\n')
+                        .trim();
+                    // Collapse words where every letter is spaced out: "C i l e m" -> "Cilem"
+                    const collapsed = cleaned.replace(/\b(?:\p{L}\s+){2,}\p{L}\b/gu, (match) => match.replace(/\s+/g, ''));
+                    // Collapse long sequences of single-letter tokens on a line
+                    return collapsed.replace(/(?:\b\p{L}\b\s+){5,}\b\p{L}\b/gu, (match) => match.replace(/\s+/g, ''));
+                };
+                
+                const normalizePdfText = (text) => {
+                    if (!text) return '';
+                    return text
+                        .normalize('NFD')
+                        .replace(/\p{Diacritic}+/gu, '');
+                };
+                
+                const softWrapLongWords = (text, maxLen = 25) => {
+                    if (!text) return '';
+                    return String(text).replace(new RegExp(`(\\S{${maxLen}})(\\S)`, 'g'), '$1 $2');
+                };
+                
+                const workItems = workItemIds.map(id => {
+                    const item = workItemsById.get(id);
+                    if (!item) return null;
+                    const fields = item.fields || {};
+                    const type = fields['System.WorkItemType'] || '';
+                    const title = fields['System.Title'] || '';
+                    const priority = extractNumber(fields['Microsoft.VSTS.Common.Priority']) || '';
+                    const severity = extractNumber(fields['Microsoft.VSTS.Common.Severity']) || '';
+                    const tshirt = normalizeTshirtSize(fields['Custom.Shirtsize']) || '-';
+                    const descriptionHtml = type === 'Bug'
+                        ? (fields['Microsoft.VSTS.TCM.ReproSteps'] || fields['System.Description'] || '')
+                        : (fields['System.Description'] || '');
+                    const description = normalizePdfText(htmlToText(descriptionHtml));
+                    
+                    return {
+                        id,
+                        type,
+                        title: normalizePdfText(title),
+                        description,
+                        priority,
+                        tshirt: type === 'Feature' ? tshirt : '',
+                        severity: type === 'Bug' ? severity : ''
+                    };
+                }).filter(Boolean);
+                
                 // Vytvořit PDF v landscape orientaci pro více prostoru
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF('landscape');
+                doc.setFont('helvetica', 'normal');
+                doc.setCharSpace(0);
+                doc.setLineHeightFactor(1.2);
                 
-                // Přidat header (landscape - střed je na 148mm)
+                // Přidat jednoduchý header
                 const pageWidth = doc.internal.pageSize.width;
                 const centerX = pageWidth / 2;
                 
-                doc.setFontSize(20);
-                doc.setTextColor(26, 26, 46);
-                doc.text('Releasy', centerX, 20, { align: 'center' });
-                
-                doc.setFontSize(14);
-                doc.setTextColor(50, 50, 50);
-                doc.text(`${product} - ${releaseName}`, centerX, 30, { align: 'center' });
-                
                 doc.setFontSize(16);
-                doc.setTextColor(0, 102, 204);
-                doc.text(`Version: ${releaseName}-${major}.${patch}`, centerX, 40, { align: 'center' });
-                
-                // Statistiky
-                const statsByState = {};
-                const statsByType = { Feature: 0, Bug: 0 };
-                
-                workItems.forEach(item => {
-                    statsByState[item.state] = (statsByState[item.state] || 0) + 1;
-                    statsByType[item.type]++;
-                });
-                
-                // Přidat statistiky s barevnými čtverečky
+                doc.setTextColor(0, 0, 0);
+                doc.text('Release Overview', centerX, 16, { align: 'center' });
                 doc.setFontSize(11);
-                doc.setTextColor(50, 50, 50);
-                doc.setFontSize(10);
-                doc.setFont(undefined, 'bold');
-                let statsY = 50;
-                doc.text(`Summary:`, 15, statsY);
-                doc.setFont(undefined, 'normal');
+                doc.text(`${product} - ${releaseName}-${major}.${patch}`, centerX, 24, { align: 'center' });
                 
-                // Celkové statistiky
-                statsY += 7;
-                doc.setFontSize(9);
-                doc.text(`Total: ${workItems.length} items`, 15, statsY);
-                doc.setTextColor(13, 110, 253);
-                doc.text(`${statsByType.Feature || 0} Features`, 55, statsY);
-                doc.setTextColor(220, 53, 69);
-                doc.text(`${statsByType.Bug || 0} Bugs`, 95, statsY);
+                // Přidat tabulku s work items (bez ikon a bez statusu)
+                const marginX = 10;
+                const usableWidth = pageWidth - marginX * 2;
+                let currentY = 30;
+                const pdfPageHeight = doc.internal.pageSize.height;
+                const footerReserve = 12;
+                const lineHeight = 4;
+                const minHeaderHeight = 12;
                 
-                // States statistiky s barevnými čtverečky
-                doc.setTextColor(50, 50, 50);
-                statsY += 8;
-                let xPos = 15;
-                const stateColors = {
-                    'Closed': [40, 167, 69],
-                    'Resolved': [13, 110, 253],
-                    'Active': [23, 162, 184],
-                    'New': [124, 129, 133],
-                    'Evaluation': [220, 53, 69]
-                };
-                
-                Object.entries(statsByState).forEach(([state, count]) => {
-                    if (stateColors[state]) {
-                        // Barevný čtvereček
-                        doc.setFillColor(...stateColors[state]);
-                        doc.rect(xPos, statsY - 3, 3, 3, 'F');
-                        
-                        // Text
-                        doc.setTextColor(80, 80, 80);
-                        doc.text(`${state}: ${count}`, xPos + 5, statsY);
-                        xPos += 35;
+                workItems.forEach((item) => {
+                    if (currentY + minHeaderHeight > pdfPageHeight - footerReserve) {
+                        doc.addPage();
+                        currentY = 20;
                     }
-                });
-                
-                // Přidat tabulku s work items
-                const tableData = workItems.map(item => [
-                    item.id,
-                    item.type,
-                    item.title.substring(0, 80) + (item.title.length > 80 ? '...' : ''),  // Více znaků v landscape
-                    item.assignee,
-                    item.state,
-                    item.priority === 'N/A' ? '' : item.priority,
-                    item.severity === 'N/A' ? '' : item.severity
-                ]);
-                
-                // Funkce pro získání barvy podle stavu
-                const getStateColor = (state) => {
-                    const colors = {
-                        'Evaluation': { fill: [220, 53, 69], text: [255, 255, 255] },     // červená
-                        'New': { fill: [124, 129, 133], text: [255, 255, 255] },          // šedá
-                        'Active': { fill: [23, 162, 184], text: [255, 255, 255] },        // světle modrá
-                        'Resolved': { fill: [13, 110, 253], text: [255, 255, 255] },      // modrá
-                        'Closed': { fill: [40, 167, 69], text: [255, 255, 255] }          // zelená
-                    };
-                    return colors[state] || { fill: [200, 200, 200], text: [0, 0, 0] };
-                };
-                
-                // Funkce pro získání barvy podle priority
-                const getPriorityColor = (priority) => {
-                    if (!priority || priority === 'N/A') return { fill: [240, 240, 240], text: [100, 100, 100] };
-                    const p = parseInt(priority);
-                    const colors = {
-                        1: { fill: [220, 53, 69], text: [255, 255, 255] },      // critical - červená
-                        2: { fill: [253, 126, 20], text: [255, 255, 255] },     // high - oranžová
-                        3: { fill: [255, 193, 7], text: [0, 0, 0] },            // medium - žlutá
-                        4: { fill: [13, 202, 240], text: [0, 0, 0] }            // low - světle modrá
-                    };
-                    return colors[p] || { fill: [200, 200, 200], text: [0, 0, 0] };
-                };
-                
-                doc.autoTable({
-                    startY: statsY + 10,
-                    head: [['ID', 'Type', 'Title', 'Assignee', 'State', 'Pri', 'Sev']],
-                    body: tableData,
-                    theme: 'grid',
-                    margin: { left: 10, right: 10 },
-                    tableWidth: 'auto',
-                    headStyles: {
-                        fillColor: [26, 26, 46],
-                        textColor: [255, 255, 255],
-                        fontSize: 9,
-                        fontStyle: 'bold',
-                        halign: 'center'
-                    },
-                    bodyStyles: {
-                        fontSize: 8,
-                        cellPadding: 2
-                    },
-                    columnStyles: {
-                        0: { cellWidth: 12, halign: 'center', fontStyle: 'bold', textColor: [0, 102, 204] },  // ID
-                        1: { cellWidth: 17, halign: 'center', fontStyle: 'bold' },  // Type
-                        2: { cellWidth: 'auto' },  // Title - auto šířka
-                        3: { cellWidth: 32 },  // Assignee
-                        4: { cellWidth: 20, halign: 'center', fontStyle: 'bold' },  // State
-                        5: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },  // Priority
-                        6: { cellWidth: 12, halign: 'center', fontStyle: 'bold' }   // Severity
-                    },
-                    alternateRowStyles: {
-                        fillColor: [248, 249, 250]
-                    },
-                    didParseCell: function(data) {
-                        // Obarvení Type sloupce
-                        if (data.column.index === 1 && data.section === 'body') {
-                            const type = workItems[data.row.index].type;
-                            data.cell.styles.textColor = type === 'Feature' ? [13, 110, 253] : [220, 53, 69];
-                            data.cell.styles.fontStyle = 'bold';
-                }
-                        
-                        // Obarvení State sloupce
-                        if (data.column.index === 4 && data.section === 'body') {
-                            const state = workItems[data.row.index].state;
-                            const colors = getStateColor(state);
-                            data.cell.styles.fillColor = colors.fill;
-                            data.cell.styles.textColor = colors.text;
+                    const headerRow = [[
+                        item.id,
+                        item.type,
+                        item.title,
+                        item.priority || '',
+                        item.tshirt || '',
+                        item.severity || ''
+                    ]];
+                    
+                    doc.autoTable({
+                        startY: currentY,
+                        head: [['ID', 'Type', 'Title', 'Priority', 'T-shirt', 'Severity']],
+                        body: headerRow,
+                        theme: 'grid',
+                        margin: { left: marginX, right: marginX },
+                        tableWidth: usableWidth,
+                        headStyles: {
+                            fillColor: [240, 240, 240],
+                            textColor: [0, 0, 0],
+                            fontSize: 9,
+                            fontStyle: 'bold',
+                            halign: 'left'
+                        },
+                        bodyStyles: {
+                            fontSize: 8,
+                            cellPadding: 2,
+                            textColor: [0, 0, 0],
+                            overflow: 'linebreak'
+                        },
+                        columnStyles: {
+                            0: { cellWidth: 12 }, // ID
+                            1: { cellWidth: 18 }, // Type
+                            2: { cellWidth: usableWidth - (12 + 18 + 14 + 16 + 14) }, // Title
+                            3: { cellWidth: 14 }, // Priority
+                            4: { cellWidth: 16 }, // T-shirt
+                            5: { cellWidth: 14 }  // Severity
                         }
-                        
-                        // Obarvení Priority sloupce
-                        if (data.column.index === 5 && data.section === 'body') {
-                            const priority = workItems[data.row.index].priority;
-                            if (priority && priority !== 'N/A') {
-                                const colors = getPriorityColor(priority);
-                                data.cell.styles.fillColor = colors.fill;
-                                data.cell.styles.textColor = colors.text;
-                            }
-                        }
-                        
-                        // Obarvení Severity sloupce
-                        if (data.column.index === 6 && data.section === 'body') {
-                            const severity = workItems[data.row.index].severity;
-                            if (severity && severity !== 'N/A') {
-                                const colors = getPriorityColor(severity);
-                                data.cell.styles.fillColor = colors.fill;
-                                data.cell.styles.textColor = colors.text;
-                            }
-                        }
+                    });
+                    
+                    const descriptionText = item.description ? item.description : '-';
+                    const wrappedDescription = softWrapLongWords(descriptionText, 25);
+                    const descLines = doc.splitTextToSize(wrappedDescription, usableWidth - 4);
+                    const boxHeight = 10 + (descLines.length * lineHeight);
+                    let boxY = doc.lastAutoTable.finalY + 2;
+                    
+                    if (boxY + boxHeight > pdfPageHeight - footerReserve) {
+                        doc.addPage();
+                        boxY = 20;
                     }
+                    
+                    doc.setDrawColor(220, 220, 220);
+                    doc.setFillColor(248, 249, 250);
+                    doc.rect(marginX, boxY, usableWidth, boxHeight, 'FD');
+                    doc.setFont('helvetica', 'normal');
+                    doc.setCharSpace(0);
+                    doc.setFontSize(8);
+                    doc.setTextColor(0, 0, 0);
+                    doc.text('Description:', marginX + 2, boxY + 5);
+                    doc.text(descLines, marginX + 2, boxY + 10, { maxWidth: usableWidth - 4, lineHeightFactor: 1.2 });
+                    
+                    currentY = boxY + boxHeight + 6;
                 });
                 
                 // Footer
                 const pageCount = doc.internal.getNumberOfPages();
-                const pageHeight = doc.internal.pageSize.height;
                 for (let i = 1; i <= pageCount; i++) {
                     doc.setPage(i);
                     doc.setFontSize(8);
@@ -6023,9 +5996,9 @@
                         hour: '2-digit',
                         minute: '2-digit'
                     });
-                    doc.text(`Exported: ${exportDate}`, 15, pageHeight - 10);
-                    doc.text(`© 2025 Tomas Belak | Powered by Integray`, centerX, pageHeight - 10, { align: 'center' });
-                    doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, pageHeight - 10, { align: 'right' });
+                    doc.text(`Exported: ${exportDate}`, 15, pdfPageHeight - 10);
+                    doc.text(`© 2025 Tomas Belak | Powered by Integray`, centerX, pdfPageHeight - 10, { align: 'center' });
+                    doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, pdfPageHeight - 10, { align: 'right' });
                 }
                 
                 // Otevřít PDF v novém okně
@@ -6033,8 +6006,16 @@
                 // a přejmenujte soubor na požadovaný název
                 const filename = `${product}_${releaseName}-${major}.${patch}_${new Date().toISOString().split('T')[0]}.pdf`;
                 
-                // Použít data URL pro otevření v novém okně (zachová lepší kompatibilitu)
-                doc.output('dataurlnewwindow', { filename: filename });
+                // Force download with correct filename
+                const pdfBlob = doc.output('blob');
+                const downloadUrl = URL.createObjectURL(pdfBlob);
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(downloadUrl);
                 
             } catch (error) {
                 Logger.error('Error exporting PDF:', error);
