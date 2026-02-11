@@ -1902,7 +1902,7 @@
                     © 2026 Tomas Belak
                 </div>
                 <div class="version">
-                    Version: 1.0.26
+                    Version: 1.0.27
                 </div>
                 <div class="powered-by">
                     <span>Powered by</span>
@@ -2136,7 +2136,7 @@
 
     <!-- Work Item Detail Modal -->
     <div id="workItemDetailModal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 800px; position: relative;">
+        <div class="modal-content" style="max-width: 1000px; position: relative;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-circle-info"></i> Work Item Detail</h3>
             </div>
@@ -2352,7 +2352,7 @@
 
     <!-- Create Work Item Modal -->
     <div id="createWorkItemModal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 650px;">
+        <div class="modal-content" style="max-width: 1000px;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-plus-circle"></i> Create New Work Item</h3>
             </div>
@@ -2511,7 +2511,7 @@
 
     <!-- Create Task Modal -->
     <div id="createTaskModal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-content" style="max-width: 1000px;">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-clipboard-list" style="color: #8B4513;"></i> Create Child Task</h3>
             </div>
@@ -5291,6 +5291,12 @@
             
             // Populate parent info
             document.getElementById('modalParentInfo').textContent = `#${parentWorkItemId} - ${parentTitle}`;
+            
+            // Prefill task title based on parent work item title
+            const taskTitleInput = document.getElementById('taskTitle');
+            if (taskTitleInput) {
+                taskTitleInput.value = String(parentTitle || '').trim();
+            }
             
             // Populate task title prefix dropdown
             const prefixSelect = document.getElementById('taskTitlePrefix');
