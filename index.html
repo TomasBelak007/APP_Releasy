@@ -1902,7 +1902,7 @@
                     © 2026 Tomas Belak
                 </div>
                 <div class="version">
-                    Version: 1.0.27
+                    Version: 1.0.28
                 </div>
                 <div class="powered-by">
                     <span>Powered by</span>
@@ -2509,6 +2509,22 @@
         </div>
     </div>
 
+    <!-- Build Changes Modal -->
+    <div id="buildChangesModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 1000px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-code-branch"></i> Build Changes</h3>
+            </div>
+            <div class="modal-body" style="padding: 30px;">
+                <div id="buildChangesMeta" style="margin-bottom: 12px; color: var(--text-secondary); font-size: 1.2em; font-weight: 600;"></div>
+                <div id="buildChangesContent"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeBuildChangesModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Create Task Modal -->
     <div id="createTaskModal" class="modal-overlay">
         <div class="modal-content" style="max-width: 1000px;">
@@ -2661,6 +2677,13 @@
             { product: 'Repository', release: 'Orlik', epicID: '4380'},
             { product: 'Connectors', release: 'Madeira', epicID: '9134'}
         ];
+        
+        // ===== Build Changes Pipeline Mapping =====
+        const buildChangesPipelineMap = {
+            Xeelo: 'Xeelo_REL_PROV',
+            Integray: 'Integray_REL_PROV',
+            Repository: 'IntegrayCR_REL_PROV'
+        };
 
         // ===== Assignees Configuration =====
         const assignees = [
@@ -4568,6 +4591,10 @@
                     level1Div.className = `release-header level-1${isPatchHidden ? ' version-hidden' : ''}`;
                     const hidePatchBtn = `<button class="hide-toggle-btn" onclick="event.stopPropagation(); toggleAndHide('patch', '${patchId}', this)" title="Hide element"><i class="fa-solid fa-eye-slash"></i></button>`;
                     const exportPdfBtn = `<button class="hide-toggle-btn" onclick="event.stopPropagation(); exportPatchToPDF('${product}', '${releaseName}', '${major}', '${patch}', '${patchId}')" title="Export to PDF" style="margin-left: 8px;"><i class="fa-solid fa-file-pdf"></i></button>`;
+                    const pipeline = buildChangesPipelineMap[product];
+                    const buildChangesBtn = pipeline
+                        ? `<button class="hide-toggle-btn" onclick="event.stopPropagation(); openBuildChangesModal('${product}', '${releaseName}', '${major}', '${patch}', '${pipeline}')" title="Build Changes" style="margin-left: 8px;"><i class="fa-solid fa-code-branch"></i></button>`
+                        : '';
                     
                     // Create Work Item button - zobrazit jen pokud má uživatel Read-Write oprávnění
                     const hasWritePermission = localStorage.getItem('tokenPermission') === 'write';
@@ -4576,7 +4603,7 @@
                         : '';
                     
                     const caretIcon1 = isPatchExpanded ? 'fa-caret-down' : 'fa-caret-right';
-                    level1Div.innerHTML = `<div class="release-header-content"><h4 class="release-header-title"><i class="fa-solid ${caretIcon1} expand-icon"></i>${releaseName}-${major}.${patch}${hidePatchBtn}${exportPdfBtn}${createWorkItemBtn}</h4>${createProgressBar(items)}</div>`;
+                    level1Div.innerHTML = `<div class="release-header-content"><h4 class="release-header-title"><i class="fa-solid ${caretIcon1} expand-icon"></i>${releaseName}-${major}.${patch}${hidePatchBtn}${exportPdfBtn}${buildChangesBtn}${createWorkItemBtn}</h4>${createProgressBar(items)}</div>`;
                     patchContainer.appendChild(level1Div);
                     
                     // Epic a work items
@@ -5349,6 +5376,63 @@
             } catch (e) {
                 Logger.warn('Failed to initialize HTML toolbar:', e);
             }
+        };
+
+        // ===== Build Changes Modal =====
+        window.openBuildChangesModal = async function(product, releaseName, major, patch, pipeline) {
+            const modal = document.getElementById('buildChangesModal');
+            const metaEl = document.getElementById('buildChangesMeta');
+            const contentEl = document.getElementById('buildChangesContent');
+            if (!modal || !metaEl || !contentEl) return;
+            
+            metaEl.textContent = `${product} - ${releaseName}-${major}.${patch}`;
+            contentEl.innerHTML = '<div style="color: var(--text-secondary);">Loading…</div>';
+            
+            modal.classList.add('show');
+            lockBodyScroll();
+            
+            try {
+                const branch = `rel-2025-${major}.${patch}`;
+                const url = `https://provisioning.integray.app/api/endpoint/web-app/jenkins/build-changes?pipeline=${encodeURIComponent(pipeline)}&branch=${encodeURIComponent(branch)}`;
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`Failed to load build changes: ${response.statusText}`);
+                }
+                const data = await response.json();
+                const changes = data?.[0]?.changes || [];
+                
+                if (changes.length === 0) {
+                    contentEl.innerHTML = '<div style="color: var(--text-secondary);">No build changes found.</div>';
+                    return;
+                }
+                
+                let html = '<div style="display: flex; flex-direction: column; gap: 10px;">';
+                changes.forEach(change => {
+                    html += `
+                        <div style="padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary);">
+                            <div style="font-weight: 600; font-size: 1.05em; margin-bottom: 6px; color: var(--text-primary);">
+                                ${change.message ?? '-'}
+                            </div>
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap; color: var(--text-secondary); font-size: 0.9em;">
+                                <div><strong>Build:</strong> ${change.build ?? '-'}</div>
+                                <div><strong>Date:</strong> ${change.date ?? '-'}</div>
+                                <div><strong>Author:</strong> ${change.author ?? '-'}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                contentEl.innerHTML = html;
+            } catch (error) {
+                Logger.error('Error loading build changes:', error);
+                contentEl.innerHTML = '<div style="color: var(--text-secondary);">No build changes found.</div>';
+            }
+        };
+        
+        window.closeBuildChangesModal = function() {
+            const modal = document.getElementById('buildChangesModal');
+            if (modal) modal.classList.remove('show');
+            unlockBodyScroll();
         };
         
         window.closeCreateTaskModal = function() {
