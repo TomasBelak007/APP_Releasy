@@ -664,6 +664,16 @@
         .version {
             color: var(--text-secondary);
             transition: color 0.3s ease;
+            display: flex;
+            align-items: baseline;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.15em 0.35em;
+        }
+        .version-updated-ago {
+            font-size: 0.92em;
+            opacity: 0.88;
+            cursor: default;
         }
         .powered-by {
             display: flex;
@@ -2023,8 +2033,9 @@
                 <div class="copyright">
                     © 2026 Tomas Belak
                 </div>
-                <div class="version">
-                    Version: 1.0.32
+                <div class="version" id="appVersionFooter">
+                    <span id="appVersionLabel"></span>
+                    <span id="appVersionUpdatedAgo" class="version-updated-ago" title=""></span>
                 </div>
                 <div class="powered-by">
                     <span>Powered by</span>
@@ -2753,6 +2764,15 @@
             project: 'Board'
         };
 
+        /**
+         * App version shown in the footer. On each release, bump `version` and set `updatedAt`
+         * to the deployment time (ISO 8601 UTC), e.g. new Date().toISOString() in the console.
+         */
+        const APP_RELEASE = {
+            version: '1.0.32',
+            updatedAt: '2026-03-20T07:50:51.000Z'
+        };
+
         // ===== API Configuration =====
         const API_BASE_URL = `https://dev.azure.com/${config.organization}/${config.project}/_apis`;
 
@@ -3304,7 +3324,42 @@
             return parts.join(', ');
         }
 
+        function formatTimeSinceAppRelease(iso) {
+            const t = Date.parse(iso);
+            if (Number.isNaN(t)) return '';
+            let diffMs = Date.now() - t;
+            if (diffMs < 0) diffMs = 0;
+            const sec = Math.floor(diffMs / 1000);
+            if (sec < 60) return `${sec} second${sec === 1 ? '' : 's'}`;
+            const min = Math.floor(sec / 60);
+            if (min < 60) return `${min} minute${min === 1 ? '' : 's'}`;
+            const hr = Math.floor(min / 60);
+            if (hr < 72) return `${hr} hour${hr === 1 ? '' : 's'}`;
+            const days = Math.floor(hr / 24);
+            return `${days} day${days === 1 ? '' : 's'}`;
+        }
+
+        function updateAppReleaseFooter() {
+            const label = document.getElementById('appVersionLabel');
+            const agoEl = document.getElementById('appVersionUpdatedAgo');
+            if (!label || !agoEl) return;
+            label.textContent = `Version: ${APP_RELEASE.version}`;
+            const rel = formatTimeSinceAppRelease(APP_RELEASE.updatedAt);
+            if (rel) {
+                agoEl.textContent = `· updated ${rel} ago`;
+                try {
+                    agoEl.title = new Date(APP_RELEASE.updatedAt).toLocaleString();
+                } catch {
+                    agoEl.title = APP_RELEASE.updatedAt;
+                }
+            } else {
+                agoEl.textContent = '';
+                agoEl.title = '';
+            }
+        }
+
         function updateLastReloadDisplay() {
+            updateAppReleaseFooter();
             const lastReloadTime = getLastReloadTime();
             const infoElement = document.getElementById('lastReloadInfo');
             
@@ -7965,6 +8020,7 @@
         
         // Initialize application on page load
         window.addEventListener('DOMContentLoaded', function() {
+            updateAppReleaseFooter();
             // Aplikovat uložený theme
             const savedTheme = getThemePreference();
             applyTheme(savedTheme);
