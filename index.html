@@ -1676,6 +1676,58 @@
             color: #e8e8e8;
         }
         
+        /* Work item detail modal — child task grid */
+        .work-item-detail-tasks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 10px;
+            margin-top: 8px;
+        }
+        .work-item-detail-task-card {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 12px;
+            background: var(--bg-secondary);
+            cursor: pointer;
+            text-align: left;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .work-item-detail-task-card:hover {
+            border-color: var(--text-secondary);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        }
+        [data-theme="dark"] .work-item-detail-task-card:hover {
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+        }
+        .work-item-detail-task-card:focus {
+            outline: 2px solid var(--bs-primary, #0d6efd);
+            outline-offset: 2px;
+        }
+        .work-item-detail-task-card .task-card-title {
+            font-weight: 600;
+            font-size: 0.92em;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            line-height: 1.35;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .work-item-detail-task-card .task-card-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+            font-size: 0.8em;
+        }
+        .work-item-detail-task-card .task-card-id {
+            font-size: 0.75em;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+        
         /* ===== Status Edit Feature ===== */
         .state-badge-wrapper {
             position: relative;
@@ -1902,7 +1954,7 @@
                     © 2026 Tomas Belak
                 </div>
                 <div class="version">
-                    Version: 1.0.29
+                    Version: 1.0.30
                 </div>
                 <div class="powered-by">
                     <span>Powered by</span>
@@ -2159,6 +2211,12 @@
                     </div>
                 </div>
                 <div id="workItemDetailMeta" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;"></div>
+                <div id="workItemDetailTasksSection" style="display: none; margin-bottom: 20px;">
+                    <label class="form-label" style="color: var(--text-primary); font-weight: 600;">
+                        <i class="fa-solid fa-clipboard-list" style="color: #8B4513;"></i> Tasks
+                    </label>
+                    <div id="workItemDetailTasksGrid" class="work-item-detail-tasks-grid" aria-live="polite"></div>
+                </div>
                 <div id="workItemDetailDescriptionContainer" style="margin-top: 16px;">
                     <label for="workItemDetailDescription" class="form-label" style="color: var(--text-primary); font-weight: 600;">
                         <i class="fa-solid fa-align-left"></i> Description
@@ -3666,6 +3724,73 @@
             } catch (error) {
                 Logger.error('Error fetching child tasks:', error);
                 return {};
+            }
+        }
+        
+        async function loadAndRenderWorkItemDetailTasks(workItemId, workItemType, pat) {
+            const section = document.getElementById('workItemDetailTasksSection');
+            const grid = document.getElementById('workItemDetailTasksGrid');
+            if (!section || !grid) return;
+            const esc = (s) => String(s ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/"/g, '&quot;');
+            if (workItemType === 'Task') {
+                section.style.display = 'none';
+                grid.innerHTML = '';
+                return;
+            }
+            section.style.display = 'block';
+            grid.innerHTML = '<p style="color:var(--text-secondary);margin:0;font-size:0.95em;"><i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Loading tasks…</p>';
+            const statusOrder = {
+                'Evaluation': 1,
+                'New': 2,
+                'On Hold': 3,
+                'Active': 4,
+                'Resolved': 5,
+                'Closed': 6
+            };
+            try {
+                const data = await fetchChildTasksForWorkItems([workItemId], pat);
+                const raw = data[workItemId] || [];
+                const tasks = raw.filter((t) => {
+                    const state = t.fields['System.State'];
+                    const typ = t.fields['System.WorkItemType'];
+                    return state !== 'Removed' && typ === 'Task';
+                });
+                tasks.sort((a, b) => {
+                    const stateA = a.fields['System.State'] || '';
+                    const stateB = b.fields['System.State'] || '';
+                    const orderA = statusOrder[stateA] || 999;
+                    const orderB = statusOrder[stateB] || 999;
+                    if (orderA !== orderB) return orderA - orderB;
+                    const titleA = (a.fields['System.Title'] || '').toLowerCase();
+                    const titleB = (b.fields['System.Title'] || '').toLowerCase();
+                    return titleA.localeCompare(titleB, 'cs', { sensitivity: 'base' });
+                });
+                if (tasks.length === 0) {
+                    grid.innerHTML = '<p style="color:var(--text-secondary);margin:0;font-size:0.95em;">No child tasks.</p>';
+                    return;
+                }
+                grid.innerHTML = tasks.map((task) => {
+                    const id = task.id;
+                    const title = task.fields['System.Title'] || `#${id}`;
+                    const state = task.fields['System.State'] || '';
+                    const assigned = task.fields['System.AssignedTo']?.displayName || 'Unassigned';
+                    return `<div class="work-item-detail-task-card" role="button" tabindex="0" data-task-id="${id}"
+                        onclick="openWorkItemDetailModal(${id}, ${workItemId})"
+                        onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openWorkItemDetailModal(${id}, ${workItemId});}">
+                        <div class="task-card-title">${esc(title)}</div>
+                        <div class="task-card-meta">
+                            <span class="task-card-id">#${id}</span>
+                            <span class="badge state-badge" data-state="${esc(state)}">${esc(state)}</span>
+                            <span class="meta-badge" style="font-size:0.85em;max-width:100%;">${esc(assigned)}</span>
+                        </div>
+                    </div>`;
+                }).join('');
+            } catch (e) {
+                Logger.error(e);
+                grid.innerHTML = '<p style="color:#dc3545;margin:0;font-size:0.95em;">Failed to load tasks.</p>';
             }
         }
         
@@ -7038,8 +7163,14 @@
             window.open(url, '_blank', 'noopener,noreferrer');
         };
         
-        window.openWorkItemDetailModal = async function(workItemId) {
+        window.openWorkItemDetailModal = async function(workItemId, returnToParentWorkItemId) {
             window._lastDetailWorkItemId = workItemId;
+            const parsedParent = parseInt(returnToParentWorkItemId, 10);
+            if (returnToParentWorkItemId !== undefined && returnToParentWorkItemId !== null && !Number.isNaN(parsedParent) && parsedParent > 0) {
+                window._detailModalReturnToWorkItemId = parsedParent;
+            } else {
+                window._detailModalReturnToWorkItemId = null;
+            }
             const loading = document.getElementById('workItemDetailLoading');
             const modal = document.getElementById('workItemDetailModal');
             const titleEl = document.getElementById('workItemDetailTitle');
@@ -7083,6 +7214,10 @@
             headerEl.textContent = '';
             metaEl.innerHTML = '';
             descEl.innerHTML = '';
+            const tasksSection = document.getElementById('workItemDetailTasksSection');
+            const tasksGrid = document.getElementById('workItemDetailTasksGrid');
+            if (tasksSection) tasksSection.style.display = 'none';
+            if (tasksGrid) tasksGrid.innerHTML = '';
             
             // Update URL with workitem parameter
             const newUrl = getWorkItemUrl(workItemId);
@@ -7173,6 +7308,8 @@
                 if (changedDate) meta.push(`<span class="meta-badge" title="Changed: ${changedDate}">Changed: ${formatDate(changedDate)}</span>`);
                 metaEl.innerHTML = meta.join('');
                 
+                await loadAndRenderWorkItemDetailTasks(workItemId, type, pat);
+                
                 // Set description HTML (trusted from DevOps)
                 descEl.innerHTML = descriptionHtml;
                 
@@ -7202,7 +7339,17 @@
             }
         };
         
-        window.closeWorkItemDetailModal = function() {
+        window.closeWorkItemDetailModal = function(forceFullClose) {
+            if (!forceFullClose) {
+                const returnTo = window._detailModalReturnToWorkItemId;
+                if (returnTo != null && returnTo > 0) {
+                    window._detailModalReturnToWorkItemId = null;
+                    openWorkItemDetailModal(returnTo);
+                    return;
+                }
+            } else {
+                window._detailModalReturnToWorkItemId = null;
+            }
             const modal = document.getElementById('workItemDetailModal');
             if (modal) modal.classList.remove('show');
             unlockBodyScroll();
@@ -7616,8 +7763,8 @@
                     openWorkItemDetailModal(id);
                 }
             } else if (modal && modal.classList.contains('show')) {
-                // URL doesn't have workitem parameter but modal is open - close it
-                closeWorkItemDetailModal();
+                // URL doesn't have workitem parameter but modal is open - close it (no "return to parent")
+                closeWorkItemDetailModal(true);
             }
         });
         
