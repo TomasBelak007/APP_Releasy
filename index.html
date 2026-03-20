@@ -1727,6 +1727,61 @@
             color: var(--text-secondary);
             font-weight: 600;
         }
+        .work-item-detail-tasks-empty {
+            color: var(--text-secondary);
+            font-size: 0.95em;
+            margin: 0;
+            padding: 4px 0 2px;
+        }
+        /* Add-task tile — same grid cell footprint as task cards */
+        .work-item-detail-task-add-tile {
+            font-family: inherit;
+            -webkit-appearance: none;
+            appearance: none;
+            border: 2px dashed rgba(139, 69, 19, 0.42);
+            border-radius: 8px;
+            padding: 10px 12px;
+            background: transparent;
+            cursor: pointer;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 92px;
+            color: #8B4513;
+            font-weight: 600;
+            font-size: 0.92em;
+            line-height: 1.3;
+            transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+        }
+        .work-item-detail-task-add-tile:hover {
+            border-color: #8B4513;
+            border-style: solid;
+            background: rgba(139, 69, 19, 0.09);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+        }
+        .work-item-detail-task-add-tile:focus {
+            outline: 2px solid #8B4513;
+            outline-offset: 2px;
+        }
+        .work-item-detail-task-add-tile .task-add-tile-icon {
+            font-size: 1.35em;
+            opacity: 0.9;
+        }
+        [data-theme="dark"] .work-item-detail-task-add-tile {
+            border-color: rgba(205, 155, 110, 0.45);
+            color: #d4a574;
+        }
+        [data-theme="dark"] .work-item-detail-task-add-tile:hover {
+            border-color: #d4a574;
+            background: rgba(205, 155, 110, 0.12);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+        }
+        [data-theme="dark"] .work-item-detail-task-add-tile:focus {
+            outline-color: #d4a574;
+        }
         
         /* ===== Status Edit Feature ===== */
         .state-badge-wrapper {
@@ -1954,7 +2009,7 @@
                     © 2026 Tomas Belak
                 </div>
                 <div class="version">
-                    Version: 1.0.30
+                    Version: 1.0.31
                 </div>
                 <div class="powered-by">
                     <span>Powered by</span>
@@ -3727,7 +3782,15 @@
             }
         }
         
-        async function loadAndRenderWorkItemDetailTasks(workItemId, workItemType, pat) {
+        function workItemDetailAddTaskTileHtml() {
+            return `<button type="button" class="work-item-detail-task-card work-item-detail-task-add-tile"
+                onclick="openCreateTaskFromWorkItemDetailModal()" title="Create a child task for this work item">
+                <span class="task-add-tile-icon" aria-hidden="true"><i class="fa-solid fa-plus"></i></span>
+                <span class="task-add-tile-label">Add task</span>
+            </button>`;
+        }
+
+        async function loadAndRenderWorkItemDetailTasks(workItemId, workItemType, pat, allowAddTask) {
             const section = document.getElementById('workItemDetailTasksSection');
             const grid = document.getElementById('workItemDetailTasksGrid');
             if (!section || !grid) return;
@@ -3741,7 +3804,7 @@
                 return;
             }
             section.style.display = 'block';
-            grid.innerHTML = '<p style="color:var(--text-secondary);margin:0;font-size:0.95em;"><i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Loading tasks…</p>';
+            grid.innerHTML = '<p class="work-item-detail-tasks-empty" style="grid-column: 1 / -1;"><i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Loading tasks…</p>';
             const statusOrder = {
                 'Evaluation': 1,
                 'New': 2,
@@ -3768,11 +3831,12 @@
                     const titleB = (b.fields['System.Title'] || '').toLowerCase();
                     return titleA.localeCompare(titleB, 'cs', { sensitivity: 'base' });
                 });
+                const addTile = allowAddTask ? workItemDetailAddTaskTileHtml() : '';
                 if (tasks.length === 0) {
-                    grid.innerHTML = '<p style="color:var(--text-secondary);margin:0;font-size:0.95em;">No child tasks.</p>';
+                    grid.innerHTML = addTile;
                     return;
                 }
-                grid.innerHTML = tasks.map((task) => {
+                const cardsHtml = tasks.map((task) => {
                     const id = task.id;
                     const title = task.fields['System.Title'] || `#${id}`;
                     const state = task.fields['System.State'] || '';
@@ -3788,9 +3852,10 @@
                         </div>
                     </div>`;
                 }).join('');
+                grid.innerHTML = cardsHtml + addTile;
             } catch (e) {
                 Logger.error(e);
-                grid.innerHTML = '<p style="color:#dc3545;margin:0;font-size:0.95em;">Failed to load tasks.</p>';
+                grid.innerHTML = '<p class="work-item-detail-tasks-empty" style="grid-column: 1 / -1; color: #dc3545;">Failed to load tasks.</p>';
             }
         }
         
@@ -5435,6 +5500,14 @@
             });
         }
 
+        window.openCreateTaskFromWorkItemDetailModal = function() {
+            const id = window._lastDetailWorkItemId;
+            if (!id) return;
+            const titleEl = document.getElementById('workItemDetailTitle');
+            const title = titleEl && titleEl.value ? titleEl.value.trim() : '';
+            openCreateTaskModal(id, title);
+        };
+
         window.openCreateTaskModal = async function(parentWorkItemId, parentTitle) {
             createTaskContext = {
                 parentWorkItemId: parentWorkItemId,
@@ -5563,6 +5636,9 @@
         window.closeCreateTaskModal = function() {
             document.getElementById('createTaskModal').classList.remove('show');
             unlockBodyScroll();
+            if (document.getElementById('workItemDetailModal')?.classList.contains('show')) {
+                lockBodyScroll();
+            }
             createTaskContext = null;
             const form = document.getElementById('createTaskForm');
             form.reset();
@@ -5662,8 +5738,24 @@
                 
                 const createdTask = await response.json();
                 
+                const parentIdForRefresh = createTaskContext.parentWorkItemId;
+                
                 // Close create modal
                 closeCreateTaskModal();
+                
+                const detailModal = document.getElementById('workItemDetailModal');
+                const descDetail = document.getElementById('workItemDetailDescription');
+                if (detailModal?.classList.contains('show') && parentIdForRefresh && window._lastDetailWorkItemId === parentIdForRefresh) {
+                    const wtype = descDetail?.dataset.workItemType || '';
+                    if (wtype && wtype !== 'Task') {
+                        loadAndRenderWorkItemDetailTasks(
+                            parentIdForRefresh,
+                            wtype,
+                            pat,
+                            localStorage.getItem('tokenHasWriteCapability') === 'true'
+                        ).catch((e) => Logger.warn('Refresh detail tasks:', e));
+                    }
+                }
                 
                 // Show success modal
                 const taskUrl = `https://dev.azure.com/${config.organization}/${config.project}/_workitems/edit/${createdTask.id}`;
@@ -5718,6 +5810,9 @@
         window.closeWorkItemCreatedModal = function() {
             document.getElementById('workItemCreatedModal').classList.remove('show');
             unlockBodyScroll();
+            if (document.getElementById('workItemDetailModal')?.classList.contains('show')) {
+                lockBodyScroll();
+            }
             createdWorkItemUrl = null;
             
             // Reload data to show the newly created work item
@@ -7308,7 +7403,7 @@
                 if (changedDate) meta.push(`<span class="meta-badge" title="Changed: ${changedDate}">Changed: ${formatDate(changedDate)}</span>`);
                 metaEl.innerHTML = meta.join('');
                 
-                await loadAndRenderWorkItemDetailTasks(workItemId, type, pat);
+                await loadAndRenderWorkItemDetailTasks(workItemId, type, pat, hasWritePermission);
                 
                 // Set description HTML (trusted from DevOps)
                 descEl.innerHTML = descriptionHtml;
