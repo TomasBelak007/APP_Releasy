@@ -1669,17 +1669,39 @@
             color: #fff;
         }
         
-        /* Center badges inside detail modal (horizontal + vertical) */
-        #workItemDetailModal .state-badge,
-        #workItemDetailModal .priority-badge,
-        #workItemDetailModal .severity-badge,
-        #workItemDetailModal .tshirt-badge,
-        #workItemDetailModal .meta-badge {
-            display: inline-flex;
+        /* Meta riadok v work item detaile: rovnaká typografia/výška ako Version (.meta-badge); nie task karty v modale */
+        #workItemDetailModal #workItemDetailMeta {
+            align-items: center;
+        }
+        #workItemDetailModal #workItemDetailMeta .meta-badge,
+        #workItemDetailModal #workItemDetailMeta .badge.state-badge,
+        #workItemDetailModal #workItemDetailMeta .priority-badge,
+        #workItemDetailModal #workItemDetailMeta .severity-badge,
+        #workItemDetailModal #workItemDetailMeta .tshirt-badge,
+        #workItemDetailModal #workItemDetailMeta .assigned-to-badge {
+            box-sizing: border-box;
+            display: inline-flex !important;
             align-items: center;
             justify-content: center;
-            line-height: 1;
+            padding: 4px 8px !important;
+            border-radius: 4px;
             vertical-align: middle;
+            /* Presne ako .meta-badge – em môže byť inak interpretované cez Bootstrap .badge */
+            font-size: 0.9em !important;
+            font-weight: bold !important;
+            line-height: 1 !important;
+        }
+        /* Bootstrap 5 badge – premenné inak prepisujú padding a veľkosť písma */
+        #workItemDetailModal #workItemDetailMeta .badge.state-badge {
+            --bs-badge-font-size: 0.9em;
+            --bs-badge-font-weight: 700;
+            --bs-badge-padding-x: 8px;
+            --bs-badge-padding-y: 4px;
+            --bs-badge-border-radius: 4px;
+        }
+        #workItemDetailModal #workItemDetailMeta .severity-badge,
+        #workItemDetailModal #workItemDetailMeta .tshirt-badge {
+            margin-left: 0;
         }
         
         /* Copy buttons icons - ensure visibility in dark mode */
