@@ -281,6 +281,15 @@
             display: flex;
             background-color: rgba(0, 0, 0, 0.5);
         }
+        /* Nad #workItemDetailModal (ten je neskôr v DOM pri rovnakom z-index 1000) */
+        #statusChangeModal,
+        #priorityChangeModal,
+        #severityChangeModal,
+        #tshirtChangeModal,
+        #assignedToChangeModal,
+        #changePatchModal {
+            z-index: 1200;
+        }
         .modal-content {
             background-color: var(--bg-panel);
             border-radius: 8px;
@@ -6789,17 +6798,18 @@
                     errorMessage: `Error changing status:`,
                     onSuccess: closeStatusChangeModal,
                     updateUI: (id, value) => {
-                        const workItem = document.querySelector(`.work-item[data-work-item-id="${id}"]`);
-                        if (!workItem) return;
-                        const badge = workItem.querySelector('.state-badge');
-                        if (badge) {
-                            badge.textContent = value;
-                            badge.setAttribute('data-state', value);
-                        }
-                        const wrapper = workItem.querySelector('.state-badge-wrapper');
-                        if (wrapper) {
+                        document.querySelectorAll(`.state-badge-wrapper[data-work-item-id="${id}"]`).forEach(wrapper => {
                             wrapper.setAttribute('data-work-item-state', value);
-                        }
+                            const badge = wrapper.querySelector('.state-badge');
+                            if (badge) {
+                                badge.setAttribute('data-state', value);
+                                if (badge.classList.contains('work-item-detail-state-badge')) {
+                                    badge.textContent = `Status: ${value}`;
+                                } else {
+                                    badge.textContent = value;
+                                }
+                            }
+                        });
                     }
                 }
             );
@@ -6914,8 +6924,11 @@
                 assignedToWrappers.forEach(wrapper => {
                     const badge = wrapper.querySelector('.assigned-to-badge');
                     if (badge) {
-                        badge.textContent = assigneeDisplay || 'Unassigned';
-                        wrapper.setAttribute('data-assigned-to', assigneeDisplay || 'Unassigned');
+                        const display = assigneeDisplay || 'Unassigned';
+                        badge.textContent = badge.classList.contains('work-item-detail-assigned-badge')
+                            ? `Assigned: ${display}`
+                            : display;
+                        wrapper.setAttribute('data-assigned-to', display);
                     }
                 });
                 
@@ -7039,7 +7052,9 @@
                                 badge.className = badge.className.replace(/priority-\d/g, '');
                                 // Add new priority class
                                 badge.classList.add(`priority-${value}`);
-                                badge.textContent = value;
+                                badge.textContent = badge.classList.contains('work-item-detail-priority-badge')
+                                    ? `Priority: ${value}`
+                                    : value;
                                 
                                 // Update data attribute
                                 wrapper.setAttribute('data-priority', value);
@@ -7128,7 +7143,9 @@
                                 badge.className = badge.className.replace(/severity-\d/g, '');
                                 // Add new severity class
                                 badge.classList.add(`severity-${newSeverity}`);
-                                badge.textContent = newSeverity;
+                                badge.textContent = badge.classList.contains('work-item-detail-severity-badge')
+                                    ? `Severity: ${newSeverity}`
+                                    : newSeverity;
                                 
                                 // Update data attribute
                                 wrapper.setAttribute('data-severity', newSeverity);
@@ -7249,7 +7266,9 @@
                                 } else {
                                     badge.classList.add(`tshirt-${String(value).toLowerCase()}`);
                                 }
-                                badge.textContent = nextValue;
+                                badge.textContent = badge.classList.contains('work-item-detail-tshirt-badge')
+                                    ? `T-shirt: ${nextValue}`
+                                    : nextValue;
                                 wrapper.setAttribute('data-tshirt-size', nextValue);
                                 if (!wrapper.getAttribute('data-tshirt-field') && resolvedFieldKey) {
                                     wrapper.setAttribute('data-tshirt-field', resolvedFieldKey);
@@ -7573,26 +7592,62 @@
                     copyBtn.dataset.workItemTitle = title;
                 }
                 
+                const escTitle = title.replace(/'/g, '&apos;').replace(/"/g, '&quot;');
+                const escAssignedAttr = assigned.replace(/'/g, '&apos;').replace(/"/g, '&quot;');
                 const meta = [];
-                // Status badge using same colors as main screen + label
-                if (state) meta.push(`<span class="badge state-badge" data-state="${state}">Status: ${state}</span>`);
-                // Priority badge (1-4) + label (hidden for Task work items)
-                if (priority && type !== 'Task') meta.push(`<span class="priority-badge priority-${priority}" title="Priority: ${priority}">Priority: ${priority}</span>`);
-                // Severity badge (1-4) + label
-                if (severityNum) meta.push(`<span class="severity-badge severity-${severityNum}" title="Severity: ${severityRaw}">Severity: ${severityNum}</span>`);
-                // T-shirt size badge (Feature only)
+                // Status: rovnaký vizuál ako predtým (badge + „Status: …“), edit cez ceruzku + modal ako na gride
+                if (state) {
+                    meta.push(
+                        `<span class="state-badge-wrapper" data-work-item-id="${workItemId}" data-work-item-type="${type}" data-work-item-state="${state}" data-work-item-title="${escTitle}">` +
+                        `<span class="badge state-badge work-item-detail-state-badge" data-state="${state}">Status: ${state}</span>` +
+                        `<i class="fa-solid fa-pen state-edit-icon"></i></span>`
+                    );
+                }
+                // Priority: rovnaký vizuál „Priority: …“ + ceruzka + modal ako na gride
+                if (priority && type !== 'Task') {
+                    const p = String(priority);
+                    meta.push(
+                        `<span class="priority-badge-wrapper" data-work-item-id="${workItemId}" data-work-item-type="${type}" data-priority="${p}" data-work-item-title="${escTitle}">` +
+                        `<span class="priority-badge priority-${p} work-item-detail-priority-badge" title="Priority: ${p}">Priority: ${p}</span>` +
+                        `<i class="fa-solid fa-pen priority-edit-icon"></i></span>`
+                    );
+                }
+                // Severity (Bug)
+                if (severityNum && type === 'Bug') {
+                    const s = String(severityNum);
+                    meta.push(
+                        `<span class="severity-badge-wrapper" data-work-item-id="${workItemId}" data-work-item-type="${type}" data-severity="${s}" data-work-item-title="${escTitle}">` +
+                        `<span class="severity-badge severity-${s} work-item-detail-severity-badge" title="Severity: ${severityRaw}">Severity: ${s}</span>` +
+                        `<i class="fa-solid fa-pen severity-edit-icon"></i></span>`
+                    );
+                }
+                // T-shirt (Feature)
                 if (type === 'Feature') {
                     const tshirtLabel = tshirtSize || '-';
                     const tshirtClass = tshirtSize ? `tshirt-${tshirtSize.toLowerCase()}` : 'tshirt-unknown';
-                    meta.push(`<span class="tshirt-badge ${tshirtClass}" title="T-shirt size: ${tshirtLabel}">T-shirt: ${tshirtLabel}</span>`);
+                    meta.push(
+                        `<span class="tshirt-badge-wrapper" data-work-item-id="${workItemId}" data-work-item-type="${type}" data-tshirt-size="${tshirtLabel}" data-tshirt-field="${tshirtFieldKey || ''}" data-work-item-title="${escTitle}">` +
+                        `<span class="tshirt-badge ${tshirtClass} work-item-detail-tshirt-badge" title="T-shirt size: ${tshirtLabel}">T-shirt: ${tshirtLabel}</span>` +
+                        `<i class="fa-solid fa-pen tshirt-edit-icon"></i></span>`
+                    );
                 }
-                // Version and Assigned as neutral badges with high contrast
+                // Version + Assigned (Assigned: rovnaký vizuál + ceruzka + modal ako na gride)
                 if (patchVersion) meta.push(`<span class="meta-badge">Version: ${patchVersion}</span>`);
-                meta.push(`<span class="meta-badge">Assigned: ${assigned}</span>`);
+                meta.push(
+                    `<span class="assigned-to-badge-wrapper" data-work-item-id="${workItemId}" data-work-item-type="${type}" data-assigned-to="${escAssignedAttr}" data-work-item-title="${escTitle}">` +
+                    `<span class="assigned-to-badge work-item-detail-assigned-badge">Assigned: ${assigned}</span>` +
+                    `<i class="fa-solid fa-pen assigned-to-edit-icon"></i></span>`
+                );
                 // Created and Changed dates
                 if (createdDate) meta.push(`<span class="meta-badge" title="Created: ${createdDate}">Created: ${formatDate(createdDate)}</span>`);
                 if (changedDate) meta.push(`<span class="meta-badge" title="Changed: ${changedDate}">Changed: ${formatDate(changedDate)}</span>`);
                 metaEl.innerHTML = meta.join('');
+                
+                updateStatusEditVisibility(hasWritePermission);
+                updatePriorityEditVisibility(hasWritePermission);
+                updateSeverityEditVisibility(hasWritePermission);
+                updateTshirtEditVisibility(hasWritePermission);
+                updateAssignedToEditVisibility(hasWritePermission);
                 
                 await loadAndRenderWorkItemDetailTasks(workItemId, type, pat, hasWritePermission);
                 
