@@ -7632,7 +7632,7 @@
                     );
                 }
                 // Version + Assigned (Assigned: rovnaký vizuál + ceruzka + modal ako na gride)
-                if (patchVersion) meta.push(`<span class="meta-badge">Version: ${patchVersion}</span>`);
+                if (patchVersion && type !== 'Task') meta.push(`<span class="meta-badge">Version: ${patchVersion}</span>`);
                 meta.push(
                     `<span class="assigned-to-badge-wrapper" data-work-item-id="${workItemId}" data-work-item-type="${type}" data-assigned-to="${escAssignedAttr}" data-work-item-title="${escTitle}">` +
                     `<span class="assigned-to-badge work-item-detail-assigned-badge">Assigned: ${assigned}</span>` +
