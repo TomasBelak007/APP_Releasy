@@ -2839,7 +2839,9 @@
             { email: 'libor.zoubek@intelstudios.com', name: 'Libor Zoubek' },
             { email: 'tomas.kocyan@intelstudios.com', name: 'Tomáš Kocyan' },
             { email: 'michal.rucker@intelstudios.com', name: 'Michal Rucker' },
-            { email: 'veronika.pruchova@intelstudios.com', name: 'Veronika Pruchova' }
+            { email: 'veronika.pruchova@intelstudios.com', name: 'Veronika Průchová' },
+            { email: 'monika.doubko@intelstudios.com', name: 'Monika Doubková' },
+            { email: 'marketa.cechova@intelstudios.com', name: 'Markéta Čechová' }
         ];
 
         // ===== Title Prefixes Bug and Feature Configuration =====
@@ -7574,8 +7576,8 @@
                 const meta = [];
                 // Status badge using same colors as main screen + label
                 if (state) meta.push(`<span class="badge state-badge" data-state="${state}">Status: ${state}</span>`);
-                // Priority badge (1-4) + label
-                if (priority) meta.push(`<span class="priority-badge priority-${priority}" title="Priority: ${priority}">Priority: ${priority}</span>`);
+                // Priority badge (1-4) + label (hidden for Task work items)
+                if (priority && type !== 'Task') meta.push(`<span class="priority-badge priority-${priority}" title="Priority: ${priority}">Priority: ${priority}</span>`);
                 // Severity badge (1-4) + label
                 if (severityNum) meta.push(`<span class="severity-badge severity-${severityNum}" title="Severity: ${severityRaw}">Severity: ${severityNum}</span>`);
                 // T-shirt size badge (Feature only)
