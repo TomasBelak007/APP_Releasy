@@ -1739,6 +1739,45 @@
             gap: 10px;
             margin-top: 8px;
         }
+        /* Komentáre pod popisom: každý v boxe; scroll len .modal-body (žiadny vlastný scrollbar) */
+        .work-item-detail-comments {
+            margin-top: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .work-item-detail-comments .work-item-detail-comment {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 14px;
+            background: var(--bg-secondary);
+        }
+        [data-theme="dark"] .work-item-detail-comments .work-item-detail-comment {
+            background: var(--bg-primary);
+        }
+        .work-item-detail-comments .work-item-detail-comment-meta {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .work-item-detail-comments .work-item-detail-comment-body {
+            line-height: 1.45;
+            word-break: break-word;
+        }
+        .work-item-detail-comments .work-item-detail-comment-body img {
+            max-width: 100%;
+            height: auto;
+        }
+        .work-item-detail-comments .work-item-detail-comments-empty,
+        .work-item-detail-comments .work-item-detail-comments-loading {
+            margin: 0;
+            padding: 14px;
+            color: var(--text-secondary);
+            border: 1px dashed var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-secondary);
+        }
         .work-item-detail-task-card {
             border: 1px solid var(--border-color);
             border-radius: 8px;
@@ -2365,6 +2404,12 @@
                          placeholder="Enter description (optional)"
                          style="min-height: 140px; background-color: var(--bg-secondary); color: var(--text-primary); border-color: var(--border-color);"></div>
                 </div>
+                <div id="workItemDetailCommentsContainer" style="display: none;">
+                    <label class="form-label" style="color: var(--text-primary); font-weight: 600; margin-top: 8px;">
+                        <i class="fa-solid fa-comments"></i> Comments
+                    </label>
+                    <div id="workItemDetailComments" class="work-item-detail-comments" aria-live="polite"></div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeWorkItemDetailModal()">Close</button>
@@ -2800,8 +2845,8 @@
          * to the deployment time (ISO 8601 UTC), e.g. new Date().toISOString() in the console.
          */
         const APP_RELEASE = {
-            version: '1.0.33',
-            updatedAt: '2026-04-15T12:00:00.000Z'
+            version: '1.0.34',
+            updatedAt: '2026-04-16T08:40:00.000Z'
         };
 
         // ===== API Configuration =====
@@ -7484,6 +7529,119 @@
             }
         }
         
+        /** Komentár ADO: dátum/čas v Europe/Prague (CET/CEST), formát dd.mm.yyyy HH:mm (24h). */
+        function formatWorkItemCommentDate(isoString) {
+            if (!isoString) return '';
+            try {
+                const d = new Date(isoString);
+                const fmt = new Intl.DateTimeFormat('en-GB', {
+                    timeZone: 'Europe/Prague',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                });
+                const parts = fmt.formatToParts(d);
+                const get = (t) => parts.find(p => p.type === t)?.value || '';
+                return `${get('day')}.${get('month')}.${get('year')} ${get('hour')}:${get('minute')}`;
+            } catch (e) {
+                return String(isoString);
+            }
+        }
+        
+        async function fetchWorkItemCommentsAll(workItemId, pat) {
+            const base = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems/${workItemId}/comments`;
+            const all = [];
+            let continuationToken = null;
+            do {
+                const url = new URL(base);
+                url.searchParams.set('api-version', '7.1-preview.3');
+                url.searchParams.set('$top', '200');
+                if (continuationToken) url.searchParams.set('continuationToken', continuationToken);
+                const res = await fetch(url.toString(), {
+                    headers: { 'Authorization': 'Basic ' + btoa(':' + pat) }
+                });
+                if (!res.ok) {
+                    const errText = await res.text().catch(() => '');
+                    throw new Error(`${res.status} ${res.statusText}${errText ? ': ' + errText.slice(0, 200) : ''}`);
+                }
+                const data = await res.json();
+                const comments = data.comments || [];
+                for (const c of comments) all.push(c);
+                continuationToken = data.continuationToken || null;
+            } while (continuationToken);
+            all.sort((a, b) => {
+                const ta = new Date(a.createdDate || a.modifiedDate || 0).getTime();
+                const tb = new Date(b.createdDate || b.modifiedDate || 0).getTime();
+                return tb - ta;
+            });
+            return all;
+        }
+        
+        /** Opraví img src, ak ADO vráti len GUID (bez hostiteľa) — inak 404 na aktuálnej doméne. */
+        function normalizeCommentAttachmentImages(container) {
+            const uuidOnly = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/;
+            container.querySelectorAll('img[src]').forEach((img) => {
+                const raw = (img.getAttribute('src') || '').trim();
+                if (!raw || raw.startsWith('data:') || raw.startsWith('blob:')) return;
+                if (raw.includes('dev.azure.com') || raw.startsWith('/')) return;
+                const idPart = raw.split('?')[0];
+                if (uuidOnly.test(idPart)) {
+                    const q = raw.includes('?') ? raw.slice(raw.indexOf('?')) : '';
+                    img.setAttribute('src', `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/attachments/${idPart}${q}`);
+                }
+            });
+        }
+        
+        async function loadAndRenderWorkItemDetailComments(workItemId, pat) {
+            const wrap = document.getElementById('workItemDetailCommentsContainer');
+            const root = document.getElementById('workItemDetailComments');
+            if (!wrap || !root) return;
+            wrap.style.display = '';
+            root.innerHTML = '<p class="work-item-detail-comments-loading">Loading comments…</p>';
+            try {
+                const list = await fetchWorkItemCommentsAll(workItemId, pat);
+                if (!list.length) {
+                    root.innerHTML = '<p class="work-item-detail-comments-empty">No comments.</p>';
+                    return;
+                }
+                root.innerHTML = '';
+                const frag = document.createDocumentFragment();
+                for (const c of list) {
+                    const author = c.createdBy?.displayName || c.createdBy?.uniqueName || 'Unknown';
+                    const when = formatWorkItemCommentDate(c.createdDate || c.modifiedDate);
+                    const text = c.text || c.renderedText || '';
+                    const box = document.createElement('div');
+                    box.className = 'work-item-detail-comment';
+                    const meta = document.createElement('div');
+                    meta.className = 'work-item-detail-comment-meta';
+                    meta.textContent = `${author} • ${when}`;
+                    const body = document.createElement('div');
+                    body.className = 'work-item-detail-comment-body';
+                    body.innerHTML = text;
+                    normalizeCommentAttachmentImages(body);
+                    box.appendChild(meta);
+                    box.appendChild(body);
+                    frag.appendChild(box);
+                }
+                root.appendChild(frag);
+                try {
+                    await replaceImagesWithAuthenticatedBlobs(root);
+                } catch (e) {
+                    Logger.warn('Comment images:', e);
+                }
+            } catch (e) {
+                Logger.warn('Comments load failed', e);
+                root.innerHTML = '';
+                const p = document.createElement('p');
+                p.className = 'work-item-detail-comments-empty';
+                p.textContent = `Comments could not be loaded: ${e.message || e}`;
+                root.appendChild(p);
+            }
+        }
+        
         // ===== Work Item Detail (Lazy Load) =====
         window.openInDevOps = function(workItemId) {
             const url = `https://dev.azure.com/${config.organization}/${config.project}/_workitems/edit/${workItemId}`;
@@ -7545,6 +7703,10 @@
             const tasksGrid = document.getElementById('workItemDetailTasksGrid');
             if (tasksSection) tasksSection.style.display = 'none';
             if (tasksGrid) tasksGrid.innerHTML = '';
+            const commentsWrap = document.getElementById('workItemDetailCommentsContainer');
+            const commentsRoot = document.getElementById('workItemDetailComments');
+            if (commentsWrap) commentsWrap.style.display = '';
+            if (commentsRoot) commentsRoot.innerHTML = '<p class="work-item-detail-comments-loading">Loading comments…</p>';
             
             // Update URL with workitem parameter
             const newUrl = getWorkItemUrl(workItemId);
@@ -7555,8 +7717,10 @@
             loading.classList.add('show');
             lockBodyScroll();
             
+            let commentsPromise = Promise.resolve();
             try {
                 const pat = await getPAT();
+                commentsPromise = loadAndRenderWorkItemDetailComments(workItemId, pat);
                 const url = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems/${workItemId}?api-version=7.1`;
                 const response = await fetch(url, {
                     headers: { 'Authorization': 'Basic ' + btoa(':' + pat) }
@@ -7694,9 +7858,11 @@
                 
                 // Store work item type for update function
                 descEl.dataset.workItemType = type;
+                commentsPromise.catch((e) => Logger.warn('Comments:', e));
             } catch (err) {
                 Logger.error(err);
                 showNotification(err.message || 'Failed to load work item', 'error');
+                commentsPromise.catch(() => {});
             } finally {
                 loading.classList.remove('show');
             }
