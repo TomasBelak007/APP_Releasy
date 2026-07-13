@@ -1560,6 +1560,51 @@
             display: none !important;
         }
         
+        /* Version (Patch) Edit Wrapper */
+        .version-badge-wrapper {
+            position: relative;
+            display: inline-block;
+            cursor: default;
+            transition: all 0.2s;
+            z-index: 1;
+            overflow: visible;
+        }
+        .version-badge-wrapper.clickable {
+            cursor: pointer;
+        }
+        .version-badge-wrapper.clickable:hover {
+            transform: translateY(-1px);
+        }
+        .version-badge-wrapper.clickable:active {
+            transform: translateY(0);
+        }
+        .version-edit-icon {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6em;
+            color: var(--text-primary);
+            z-index: 1000;
+            pointer-events: none;
+        }
+        .version-badge-wrapper.clickable:hover .version-edit-icon {
+            display: flex;
+        }
+        .version-badge-wrapper.read-only {
+            cursor: default;
+        }
+        .version-badge-wrapper.read-only .version-edit-icon {
+            display: none !important;
+        }
+        
         /* T-shirt Size Edit Wrapper */
         .tshirt-badge-wrapper {
             position: relative;
@@ -1678,6 +1723,7 @@
         #workItemDetailModal #workItemDetailMeta .priority-badge,
         #workItemDetailModal #workItemDetailMeta .severity-badge,
         #workItemDetailModal #workItemDetailMeta .tshirt-badge,
+        #workItemDetailModal #workItemDetailMeta .version-badge,
         #workItemDetailModal #workItemDetailMeta .assigned-to-badge {
             box-sizing: border-box;
             display: inline-flex !important;
@@ -2880,8 +2926,8 @@
          * to the deployment time (ISO 8601 UTC), e.g. new Date().toISOString() in the console.
          */
         const APP_RELEASE = {
-            version: '1.0.38',
-            updatedAt: '2026-06-02T14:00:00.000Z'
+            version: '1.0.39',
+            updatedAt: '2026-07-13T14:01:00.000Z'
         };
 
         // ===== API Configuration =====
@@ -3543,6 +3589,7 @@
             
             // Update assigned to edit visibility
             updateAssignedToEditVisibility(hasWritePermission);
+            updateVersionEditVisibility(hasWritePermission);
         }
         
         function initializePermissionBadge() {
@@ -3795,6 +3842,26 @@
                         workItemTitle: wrapper.getAttribute('data-work-item-title')
                     }),
                     editIconSelector: '.assigned-to-edit-icon'
+                }
+            );
+        }
+        
+        function updateVersionEditVisibility(hasWritePermission) {
+            updateEditVisibility(
+                '.version-badge-wrapper',
+                hasWritePermission,
+                openChangePatchModal,
+                '_versionClickHandler',
+                {
+                    useClassList: true,
+                    getDataAttrs: (wrapper) => ({
+                        workItemId: wrapper.getAttribute('data-work-item-id'),
+                        workItemTitle: wrapper.getAttribute('data-work-item-title')
+                    }),
+                    buildModalArgs: (attrs) => ([
+                        attrs.workItemId,
+                        attrs.workItemTitle
+                    ])
                 }
             );
         }
@@ -7399,27 +7466,10 @@
                 return; // Don't open modal for read-only users
             }
             
-            // Find work item to get current patch version (use data-work-item-id instead of <a> link)
-            const workItem = document.querySelector(`.work-item[data-work-item-id="${workItemId}"]`);
-            if (!workItem) {
-                showNotification('Work item not found', 'error');
+            workItemId = parseInt(workItemId, 10);
+            if (!workItemId) {
+                showNotification('Invalid work item id', 'error');
                 return;
-            }
-            
-            // Get current patch version from work item data or fetch it
-            // We need to get it from the loaded data
-            let currentPatchVersion = null;
-            let product = null;
-            
-            // Try to find work item in loaded data
-            const allWorkItems = document.querySelectorAll('.work-item:not(.child-task)');
-            for (let item of allWorkItems) {
-                const link = item.querySelector(`a[href*="${workItemId}"]`);
-                if (link) {
-                    // Try to get from data attribute or fetch from API
-                    // For now, we'll need to fetch it or store it
-                    break;
-                }
             }
             
             // Fetch work item to get current patch version
@@ -7437,7 +7487,8 @@
                     }
                     
                     const workItemData = await response.json();
-                    currentPatchVersion = workItemData.fields['Custom.PlatformRelease'] || 'Not set';
+                    let currentPatchVersion = workItemData.fields['Custom.PlatformRelease'] || 'Not set';
+                    let product = null;
                     
                     // Determine product from patch version or title prefix
                     if (currentPatchVersion && currentPatchVersion !== 'Not set') {
@@ -7525,6 +7576,9 @@
         window.closeChangePatchModal = function() {
             document.getElementById('changePatchModal').classList.remove('show');
             unlockBodyScroll();
+            if (document.getElementById('workItemDetailModal')?.classList.contains('show')) {
+                lockBodyScroll();
+            }
         };
         
         async function changeWorkItemPatchVersion(workItemId, newPatchVersion, title) {
@@ -7554,6 +7608,15 @@
                 if (!response.ok) {
                     throw new Error(`Failed to update patch version: ${response.statusText}`);
                 }
+                
+                document.querySelectorAll(`.version-badge-wrapper[data-work-item-id="${workItemId}"]`).forEach(wrapper => {
+                    wrapper.setAttribute('data-patch-version', newPatchVersion);
+                    const badge = wrapper.querySelector('.work-item-detail-version-badge');
+                    if (badge) {
+                        badge.textContent = `Version: ${newPatchVersion}`;
+                        badge.title = `Patch version: ${newPatchVersion}`;
+                    }
+                });
                 
                 // Success - reload page to show updated patch version
                 showNotification(`Patch version changed to "${newPatchVersion}" for: ${title}`, 'success');
@@ -7856,7 +7919,14 @@
                     );
                 }
                 // Version + Assigned (Assigned: rovnaký vizuál + ceruzka + modal ako na gride)
-                if (patchVersion && type !== 'Task') meta.push(`<span class="meta-badge">Version: ${patchVersion}</span>`);
+                if (type !== 'Task') {
+                    const patchLabel = patchVersion || 'Not set';
+                    meta.push(
+                        `<span class="version-badge-wrapper" data-work-item-id="${workItemId}" data-patch-version="${patchLabel.replace(/"/g, '&quot;')}" data-work-item-title="${escTitle}">` +
+                        `<span class="meta-badge version-badge work-item-detail-version-badge" title="Patch version: ${patchLabel.replace(/"/g, '&quot;')}">Version: ${patchLabel}</span>` +
+                        `<i class="fa-solid fa-pen version-edit-icon"></i></span>`
+                    );
+                }
                 meta.push(
                     `<span class="assigned-to-badge-wrapper" data-work-item-id="${workItemId}" data-work-item-type="${type}" data-assigned-to="${escAssignedAttr}" data-work-item-title="${escTitle}">` +
                     `<span class="assigned-to-badge work-item-detail-assigned-badge">Assigned: ${assigned}</span>` +
@@ -7872,6 +7942,7 @@
                 updateSeverityEditVisibility(hasWritePermission);
                 updateTshirtEditVisibility(hasWritePermission);
                 updateAssignedToEditVisibility(hasWritePermission);
+                updateVersionEditVisibility(hasWritePermission);
                 
                 await loadAndRenderWorkItemDetailTasks(workItemId, type, pat, hasWritePermission);
                 
