@@ -645,6 +645,65 @@
             align-items: center;
             flex-wrap: wrap;
         }
+        
+        .grid-search-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            flex: 1 1 220px;
+            min-width: 180px;
+            max-width: 360px;
+        }
+        .grid-search-icon {
+            position: absolute;
+            left: 12px;
+            color: var(--text-secondary);
+            pointer-events: none;
+            font-size: 0.9em;
+        }
+        .grid-search-input {
+            width: 100%;
+            height: 38px;
+            padding: 0 36px 0 36px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 0.95em;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .grid-search-input:focus {
+            outline: none;
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+        }
+        .grid-search-input.active {
+            border-color: #0d6efd;
+        }
+        .grid-search-clear {
+            position: absolute;
+            right: 6px;
+            width: 26px;
+            height: 26px;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .grid-search-clear:hover {
+            background-color: rgba(108, 117, 125, 0.15);
+            color: var(--text-primary);
+        }
+        .grid-search-count {
+            margin-left: 8px;
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
 
         /* ===== Button Text ===== */
         .btn {
@@ -2150,7 +2209,15 @@
                     </button>
                     <button id="expandAllBtn" class="btn btn-outline-primary">Expand All</button>
                     <button id="collapseAllBtn" class="btn btn-outline-secondary">Collapse All</button>
-        </div>
+                </div>
+                <div class="grid-search-container">
+                    <i class="fa-solid fa-magnifying-glass grid-search-icon"></i>
+                    <input type="search" id="gridSearchInput" class="grid-search-input" placeholder="Search work items..." autocomplete="off" spellcheck="false">
+                    <button type="button" id="gridSearchClearBtn" class="grid-search-clear" title="Clear search" style="display: none;">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <span id="gridSearchCount" class="grid-search-count" style="display: none;"></span>
                 <div id="lastReloadInfo" class="last-reload-info">
                     <span id="permissionBadge" class="permission-badge checking">
                         <i class="fa-solid fa-spinner fa-spin"></i>
@@ -2926,8 +2993,8 @@
          * to the deployment time (ISO 8601 UTC), e.g. new Date().toISOString() in the console.
          */
         const APP_RELEASE = {
-            version: '1.0.39',
-            updatedAt: '2026-07-13T14:01:00.000Z'
+            version: '1.0.40',
+            updatedAt: '2026-07-15T07:02:00.000Z'
         };
 
         // ===== API Configuration =====
@@ -3617,7 +3684,7 @@
             if (newMode) {
                 await loadAndDisplayChildTasks();
                 // Aplikovat aktivní filtry na child tasky
-                if (hiddenAssignees.length > 0 || hiddenStatuses.length > 0) {
+                if (hiddenAssignees.length > 0 || hiddenStatuses.length > 0 || gridSearchQuery) {
                     filterWorkItems();
                 }
             } else {
@@ -4202,6 +4269,7 @@
                         taskDiv.className = 'work-item child-task';
                         taskDiv.setAttribute('data-parent-id', parentId);
                         taskDiv.setAttribute('data-work-item-id', task.id);
+                        taskDiv.setAttribute('data-search-text', buildWorkItemSearchText(task.fields, task.id));
                         
                         const title = task.fields['System.Title'];
                         const type = task.fields['System.WorkItemType'];
@@ -4581,6 +4649,25 @@
         }
 
         // ===== Work Item Rendering =====
+        function buildWorkItemSearchText(fields, workItemId) {
+            const parts = [
+                workItemId,
+                fields['System.Title'],
+                fields['System.WorkItemType'],
+                fields['System.AssignedTo']?.displayName,
+                fields['System.State'],
+                fields['Custom.PlatformRelease'],
+                fields['Custom.Epictitle'],
+                fields['Microsoft.VSTS.Common.Priority'],
+                fields['Microsoft.VSTS.Common.Severity'],
+                getTshirtSizeFromFields(fields)
+            ];
+            return parts
+                .filter(value => value !== undefined && value !== null && value !== '')
+                .join(' ')
+                .toLowerCase();
+        }
+
         function createWorkItemElement(item) {
             const div = document.createElement('div');
             const title = item.fields['System.Title'];
@@ -4591,6 +4678,7 @@
             div.className = `work-item${isReleaseFeature ? ' release-feature' : ''}`;
             // Store work item id for later lookups (child task loading, updates, etc.)
             div.setAttribute('data-work-item-id', item.id);
+            div.setAttribute('data-search-text', buildWorkItemSearchText(item.fields, item.id));
             const assignedTo = item.fields['System.AssignedTo']?.displayName || 'Unassigned';
             const state = item.fields['System.State'];
             const createdDate = item.fields['System.CreatedDate'] || '';
@@ -5258,7 +5346,7 @@
                 }
                 
                 // Apply saved filters if any (PO načtení child tasků!)
-                if (hiddenAssignees.length > 0 || hiddenStatuses.length > 0) {
+                if (hiddenAssignees.length > 0 || hiddenStatuses.length > 0 || gridSearchQuery) {
                     updateFilterUI();
                     filterWorkItems();
                 }
@@ -8375,6 +8463,7 @@
         // Initialize application on page load
         window.addEventListener('DOMContentLoaded', function() {
             updateAppReleaseFooter();
+            initializeGridSearch();
             // Aplikovat uložený theme
             const savedTheme = getThemePreference();
             applyTheme(savedTheme);
@@ -8435,6 +8524,126 @@
         const savedFilters = getSavedFilters();
         let hiddenAssignees = savedFilters.hiddenAssignees || [];
         let hiddenStatuses = savedFilters.hiddenStatuses || [];
+        let gridSearchQuery = '';
+        let gridSearchDebounceTimer = null;
+        
+        function normalizeGridSearchQuery(value) {
+            return (value || '').trim().toLowerCase();
+        }
+        
+        function getWorkItemAssigneeStatus(item) {
+            const assigneeElement = item.querySelector('.assigned-to');
+            const assigneeText = assigneeElement ? assigneeElement.textContent.trim() : '';
+            const assignee = assigneeText || 'Unassigned';
+            const statusBadge = item.querySelector('.state-badge');
+            const status = statusBadge ? statusBadge.textContent.trim() : '';
+            return { assignee, status };
+        }
+        
+        function passesAssigneeStatusFilters(assignee, status) {
+            if (hiddenAssignees.length === 0 && hiddenStatuses.length === 0) {
+                return true;
+            }
+            const assigneeVisible = !hiddenAssignees.includes(assignee);
+            const statusVisible = !hiddenStatuses.includes(status);
+            return assigneeVisible && statusVisible;
+        }
+        
+        function passesSearchFilter(item) {
+            if (!gridSearchQuery) {
+                return true;
+            }
+            const text = item.getAttribute('data-search-text') || '';
+            const terms = gridSearchQuery.split(/\s+/).filter(Boolean);
+            return terms.every(term => text.includes(term));
+        }
+        
+        function workItemIsVisible(item) {
+            const { assignee, status } = getWorkItemAssigneeStatus(item);
+            return passesAssigneeStatusFilters(assignee, status) && passesSearchFilter(item);
+        }
+        
+        function getChildTasksForParent(parentItem) {
+            const children = [];
+            let nextElement = parentItem.nextElementSibling;
+            while (nextElement && nextElement.classList.contains('child-task')) {
+                children.push(nextElement);
+                nextElement = nextElement.nextElementSibling;
+            }
+            return children;
+        }
+        
+        function updateSearchUI() {
+            const input = document.getElementById('gridSearchInput');
+            const clearBtn = document.getElementById('gridSearchClearBtn');
+            const countEl = document.getElementById('gridSearchCount');
+            const hasQuery = gridSearchQuery.length > 0;
+            
+            if (input) {
+                input.classList.toggle('active', hasQuery);
+            }
+            if (clearBtn) {
+                clearBtn.style.display = hasQuery ? 'inline-flex' : 'none';
+            }
+            if (countEl) {
+                if (!hasQuery) {
+                    countEl.style.display = 'none';
+                    countEl.textContent = '';
+                } else {
+                    const visibleParents = Array.from(document.querySelectorAll('.work-item:not(.child-task)'))
+                        .filter(item => item.style.display !== 'none');
+                    const visibleChildren = getTaskMode()
+                        ? Array.from(document.querySelectorAll('.work-item.child-task'))
+                            .filter(item => item.style.display !== 'none')
+                        : [];
+                    const totalVisible = visibleParents.length + visibleChildren.length;
+                    countEl.textContent = `${totalVisible} result${totalVisible === 1 ? '' : 's'}`;
+                    countEl.style.display = '';
+                }
+            }
+        }
+        
+        function setGridSearchQuery(value, options = {}) {
+            const { applyFilter = true } = options;
+            gridSearchQuery = normalizeGridSearchQuery(value);
+            const input = document.getElementById('gridSearchInput');
+            if (input && input.value !== value) {
+                input.value = value;
+            }
+            updateSearchUI();
+            if (applyFilter) {
+                filterWorkItems();
+            }
+        }
+        
+        function initializeGridSearch() {
+            const input = document.getElementById('gridSearchInput');
+            const clearBtn = document.getElementById('gridSearchClearBtn');
+            if (!input) {
+                return;
+            }
+            
+            input.addEventListener('input', () => {
+                clearTimeout(gridSearchDebounceTimer);
+                gridSearchDebounceTimer = setTimeout(() => {
+                    setGridSearchQuery(input.value);
+                }, 200);
+            });
+            
+            input.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    setGridSearchQuery('');
+                }
+            });
+            
+            if (clearBtn) {
+                clearBtn.addEventListener('click', () => {
+                    setGridSearchQuery('');
+                    input.focus();
+                });
+            }
+        }
         
         // Helper function to check if element is visible in DOM
         function isElementVisible(element) {
@@ -8710,165 +8919,82 @@
             }
         }
         
-        function filterWorkItems() {
-            const hasHiddenAssignees = hiddenAssignees.length > 0;
-            const hasHiddenStatuses = hiddenStatuses.length > 0;
-            const isTaskModeActive = getTaskMode();
-            
-            if (!hasHiddenAssignees && !hasHiddenStatuses) {
-                // Show all work items
-                document.querySelectorAll('.work-item:not(.child-task)').forEach(item => {
-                    item.style.display = '';
-                });
-                
-                // Show all child tasks if Task Mode is active
-                if (isTaskModeActive) {
-                    document.querySelectorAll('.work-item.child-task').forEach(childTask => {
-                        childTask.style.display = '';
-                    });
+        function epicGroupHasVisibleItems(group) {
+            return Array.from(group.querySelectorAll('.work-item:not(.child-task)'))
+                .some(item => item.style.display !== 'none');
+        }
+        
+        function updateHierarchyVisibility() {
+            document.querySelectorAll('.epic-group').forEach(group => {
+                if (group.classList.contains('version-hidden')) {
+                    return;
                 }
-            } else {
-                // Filter work items by assignee and/or status (hide items that are in hidden lists)
-                document.querySelectorAll('.work-item:not(.child-task)').forEach(item => {
-                    const assigneeElement = item.querySelector('.assigned-to');
-                    const assigneeText = assigneeElement ? assigneeElement.textContent.trim() : '';
-                    const assignee = assigneeText || 'Unassigned';
-                    
-                    const statusBadge = item.querySelector('.state-badge');
-                    const status = statusBadge ? statusBadge.textContent.trim() : '';
-                    
-                    // Check if assignee is NOT hidden (visible)
-                    const assigneeVisible = !hiddenAssignees.includes(assignee);
-                    
-                    // Check if status is NOT hidden (visible)
-                    const statusVisible = !hiddenStatuses.includes(status);
-                    
-                    // Parent work item is visible if both assignee AND status are visible
-                    const parentVisible = assigneeVisible && statusVisible;
-                    
-                    // Check child tasks if Task Mode is active and parent is not visible
-                    let anyChildVisible = false;
-                    if (isTaskModeActive && !parentVisible) {
-                        // Find all child tasks for this parent work item
-                        let nextElement = item.nextElementSibling;
-                        while (nextElement && nextElement.classList.contains('child-task')) {
-                            const childAssigneeElement = nextElement.querySelector('.assigned-to');
-                            const childAssigneeText = childAssigneeElement ? childAssigneeElement.textContent.trim() : '';
-                            const childAssignee = childAssigneeText || 'Unassigned';
-                            
-                            const childStatusBadge = nextElement.querySelector('.state-badge');
-                            const childStatus = childStatusBadge ? childStatusBadge.textContent.trim() : '';
-                            
-                            // Check if child task is visible
-                            const childAssigneeVisible = !hiddenAssignees.includes(childAssignee);
-                            const childStatusVisible = !hiddenStatuses.includes(childStatus);
-                            
-                            if (childAssigneeVisible && childStatusVisible) {
-                                anyChildVisible = true;
-                                break;
-                            }
-                            
-                            nextElement = nextElement.nextElementSibling;
-                        }
-                    }
-                    
-                    // Show item if parent is visible OR any child task is visible (OR logic)
-                    if (parentVisible || anyChildVisible) {
-                        item.style.display = '';
-                    } else {
-                        item.style.display = 'none';
-                    }
-                });
+                group.style.display = epicGroupHasVisibleItems(group) ? '' : 'none';
+            });
+            
+            document.querySelectorAll('.release-header.level-1').forEach(patchHeader => {
+                if (patchHeader.classList.contains('version-hidden')) {
+                    return;
+                }
+                const epicGroup = patchHeader.nextElementSibling;
+                const hasVisible = epicGroup?.classList.contains('epic-group') && epicGroupHasVisibleItems(epicGroup);
+                patchHeader.style.display = hasVisible ? '' : 'none';
+            });
+            
+            document.querySelectorAll('.major-container').forEach(majorContainer => {
+                const majorHeader = majorContainer.querySelector(':scope > .release-header.level-0');
+                const patchContainer = majorContainer.querySelector(':scope > .patch-container');
                 
-                // Filter child tasks individually if Task Mode is active
-                if (isTaskModeActive && (hasHiddenAssignees || hasHiddenStatuses)) {
+                const hasVisibleContent = patchContainer
+                    ? Array.from(patchContainer.querySelectorAll('.release-header.level-1'))
+                        .some(header => header.style.display !== 'none' && !header.classList.contains('version-hidden'))
+                    : false;
+                
+                if (majorHeader && !majorHeader.classList.contains('version-hidden')) {
+                    majorHeader.style.display = hasVisibleContent ? '' : 'none';
+                }
+                if (patchContainer && !patchContainer.classList.contains('version-hidden')) {
+                    patchContainer.style.display = hasVisibleContent ? '' : 'none';
+                }
+            });
+            
+            document.querySelectorAll('.release-container').forEach(container => {
+                const visibleMajors = Array.from(container.querySelectorAll('.release-header.level-0'))
+                    .filter(major => major.style.display !== 'none' && !major.classList.contains('version-hidden'));
+                container.style.display = visibleMajors.length === 0 ? 'none' : '';
+            });
+        }
+        
+        function filterWorkItems() {
+            const isTaskModeActive = getTaskMode();
+            const hasActiveFilters = hiddenAssignees.length > 0 || hiddenStatuses.length > 0 || gridSearchQuery;
+            
+            document.querySelectorAll('.work-item:not(.child-task)').forEach(item => {
+                const parentVisible = workItemIsVisible(item);
+                
+                let anyChildVisible = false;
+                if (isTaskModeActive && !parentVisible) {
+                    anyChildVisible = getChildTasksForParent(item).some(child => workItemIsVisible(child));
+                }
+                
+                item.style.display = (parentVisible || anyChildVisible) ? '' : 'none';
+            });
+            
+            if (isTaskModeActive) {
+                if (hasActiveFilters) {
                     document.querySelectorAll('.work-item.child-task').forEach(childTask => {
-                        const childAssigneeElement = childTask.querySelector('.assigned-to');
-                        const childAssigneeText = childAssigneeElement ? childAssigneeElement.textContent.trim() : '';
-                        const childAssignee = childAssigneeText || 'Unassigned';
-                        
-                        const childStatusBadge = childTask.querySelector('.state-badge');
-                        const childStatus = childStatusBadge ? childStatusBadge.textContent.trim() : '';
-                        
-                        // Check if child task is visible (not hidden)
-                        const childAssigneeVisible = !hiddenAssignees.includes(childAssignee);
-                        const childStatusVisible = !hiddenStatuses.includes(childStatus);
-                        
-                        if (childAssigneeVisible && childStatusVisible) {
-                            childTask.style.display = '';
-                        } else {
-                            childTask.style.display = 'none';
-                        }
+                        childTask.style.display = workItemIsVisible(childTask) ? '' : 'none';
                     });
-                } else if (isTaskModeActive) {
-                    // No filters - show all child tasks
+                } else {
                     document.querySelectorAll('.work-item.child-task').forEach(childTask => {
                         childTask.style.display = '';
                     });
                 }
             }
             
-            // Hide empty epic groups
-            document.querySelectorAll('.epic-group').forEach(group => {
-                const visibleItems = Array.from(group.querySelectorAll('.work-item:not(.child-task)'))
-                    .filter(item => item.style.display !== 'none');
-                
-                if (visibleItems.length === 0) {
-                    group.style.display = 'none';
-                } else {
-                    group.style.display = '';
-                }
-            });
+            updateHierarchyVisibility();
             
-            // Hide empty patch versions
-            document.querySelectorAll('.patch-container').forEach(container => {
-                const visibleGroups = Array.from(container.querySelectorAll('.epic-group'))
-                    .filter(group => group.style.display !== 'none');
-                
-                const patchHeader = container.previousElementSibling;
-                if (visibleGroups.length === 0) {
-                    if (patchHeader && patchHeader.classList.contains('release-header')) {
-                        patchHeader.style.display = 'none';
-                    }
-                    container.style.display = 'none';
-                } else {
-                    if (patchHeader && patchHeader.classList.contains('release-header')) {
-                        patchHeader.style.display = '';
-                    }
-                    container.style.display = '';
-                }
-            });
-            
-            // Hide empty major versions
-            document.querySelectorAll('.major-container').forEach(container => {
-                const visiblePatches = Array.from(container.querySelectorAll('.patch-container'))
-                    .filter(patch => patch.style.display !== 'none');
-                
-                const majorHeader = container.previousElementSibling;
-                if (visiblePatches.length === 0) {
-                    if (majorHeader && majorHeader.classList.contains('release-header')) {
-                        majorHeader.style.display = 'none';
-                    }
-                    container.style.display = 'none';
-                } else {
-                    if (majorHeader && majorHeader.classList.contains('release-header')) {
-                        majorHeader.style.display = '';
-                    }
-                    container.style.display = '';
-                }
-            });
-            
-            // Hide empty release containers
-            document.querySelectorAll('.release-container').forEach(container => {
-                const visibleMajors = Array.from(container.querySelectorAll('.release-header.level-0'))
-                    .filter(major => !major.classList.contains('version-hidden') && major.style.display !== 'none');
-                
-                if (visibleMajors.length === 0) {
-                    container.style.display = 'none';
-                } else {
-                    container.style.display = '';
-                }
-            });
+            updateSearchUI();
         }
         
         // ===== End of Script =====
