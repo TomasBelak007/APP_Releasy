@@ -19,7 +19,8 @@
             --color-active: #17a2b8;
             --color-resolved: #0d6efd;
             --color-closed: #28a745;
-            --color-new: #7c8185;
+            --color-new: #fd7e14;
+            --color-onhold: #7c8185;
             --bg-dark-gradient-start: #1a1a2e;
             --bg-dark-gradient-end: #16213e;
             
@@ -1769,7 +1770,7 @@
             color: #fff;
         }
         .badge.state-badge[data-state="On Hold"] {
-            background-color: var(--color-new) !important;
+            background-color: var(--color-onhold) !important;
             color: #fff;
         }
         
@@ -2994,8 +2995,8 @@
          * to the deployment time (ISO 8601 UTC), e.g. new Date().toISOString() in the console.
          */
         const APP_RELEASE = {
-            version: '1.0.41',
-            updatedAt: '2026-07-17T09:32:00.000Z'
+            version: '1.0.42',
+            updatedAt: '2026-08-12T06:31:00.000Z'
         };
 
         // ===== API Configuration =====
@@ -3502,13 +3503,14 @@
             const stateColors = {
                 'Evaluation': 'var(--color-critical)',
                 'New': 'var(--color-new)',
+                'On Hold': 'var(--color-onhold)',
                 'Active': 'var(--color-active)',
                 'Resolved': 'var(--color-resolved)',
                 'Closed': 'var(--color-closed)'
             };
 
             // Definice pořadí stavů v progress baru (zleva doprava)
-            const stateOrder = ['Closed', 'Resolved', 'Active', 'New', 'Evaluation'];
+            const stateOrder = ['Closed', 'Resolved', 'Active', 'On Hold', 'New', 'Evaluation'];
 
             let progressHtml = '<div class="progress" style="height: 20px; width: 200px;">';
             // Přidáme segmenty pro každý stav v definovaném pořadí
@@ -7192,9 +7194,9 @@
         
         // ===== Status Change Feature =====
         const statusOptions = {
-            'Bug': ['Evaluation', 'New', 'Active', 'Closed', 'Removed'],
-            'Feature': ['Evaluation', 'New', 'Active', 'Closed', 'Removed'],
-            'Task': ['New', 'Active', 'On Hold', 'Closed', 'Removed']
+            'Bug': ['Evaluation', 'New', 'On Hold', 'Active', 'Closed', 'Removed'],
+            'Feature': ['Evaluation', 'New', 'On Hold', 'Active', 'Closed', 'Removed'],
+            'Task': ['New', 'On Hold', 'Active', 'Closed', 'Removed']
         };
         
         let currentEditingWorkItem = null;
