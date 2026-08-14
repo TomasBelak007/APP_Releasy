@@ -12,10 +12,13 @@ Azure DevOps Release Overview Application
 - 📊 **Hierarchický přehled** - Zobrazení work items podle produktu → release → major verze → patch verze
 - 📈 **Progress bary** - Vizuální indikátory průběhu podle statusů (Closed, Resolved, Active, New, Evaluation)
 - 🔍 **Filtrování** - Filtrování work items podle assignee a statusu
-- 👁️ **Detail work itemu** - Zobrazení detailních informací včetně popisu
+- 🔎 **Fulltextové hledání** - Hledání v gridu podle ID a názvu work itemů
+- 👁️ **Detail work itemu** - Zobrazení detailních informací včetně popisu a komentářů
+- 📋 **Kopírování** - Zkopírování názvu nebo odkazu na work item do schránky
+- 🔀 **Build Changes** - Přehled změn v buildu pro patch verze s namapovanou pipeline
 - 📄 **Export do PDF** - Export patch verzí do PDF dokumentu
-- 🎨 **Témata** - Podpora světlého a tmavého režimu
-- 🔄 **Reload dat** - Aktualizace dat z Azure DevOps
+- 🎨 **Témata** - Světlý režim, tmavý režim a automatický režim podle nastavení systému
+- 🔄 **Reload dat** - Aktualizace dat z Azure DevOps včetně informace o posledním načtení
 - 👁️ **Skrývání verzí** - Možnost skrýt major nebo patch verze pro lepší přehled
 
 ### Read-Write funkce (rozšířený režim)
@@ -33,6 +36,7 @@ Všechny read-only funkce plus:
 ## Požadavky
 
 - Moderní webový prohlížeč (Chrome, Firefox, Edge, Safari)
+- Připojení k internetu - knihovny (Vue, Bootstrap, Font Awesome, jsPDF) se načítají z CDN
 - Azure DevOps účet s přístupem k projektu
 - Personal Access Token (PAT) s příslušnými oprávněními:
   - **Read-Only režim**: `Work Items: Read`
@@ -45,6 +49,15 @@ Všechny read-only funkce plus:
 1. Naklonujte nebo stáhněte tento repozitář
 2. Otevřete soubor `index.html` v webovém prohlížeči
 3. Při prvním spuštění zadejte svůj Azure DevOps Personal Access Token
+
+Aplikace nepotřebuje žádný build step - `index.html` je kompletní aplikace včetně Vue komponent.
+Pro načtení lokální kopie uživatelské příručky (`guide.html`) je vhodné soubory naservírovat přes
+HTTP, protože prohlížeče blokují `fetch` z protokolu `file://`:
+
+```bash
+python3 -m http.server 8000
+# aplikace pak běží na http://localhost:8000/index.html
+```
 
 ### Nasazení na server
 
@@ -77,6 +90,8 @@ APP_Releasy/
 ├── guide.html          # Uživatelská příručka (načítá se dynamicky)
 ├── logo_dark.png       # Logo pro tmavý režim
 ├── logo_light.png      # Logo pro světlý režim
+├── ARCHITECTURE.md     # Technická mapa aplikace (pro vývoj a AI asistenty)
+├── AGENTS.md           # Pravidla a vstupní bod pro AI asistenty
 └── README.md           # Tento soubor
 ```
 
@@ -84,11 +99,30 @@ APP_Releasy/
 
 - **HTML5** - Struktura aplikace
 - **CSS3** - Stylování s CSS proměnnými pro theming
-- **Vanilla JavaScript** - Veškerá logika aplikace (bez frameworků)
+- **Vue 3.5.13** - Reaktivní vykreslování a stav aplikace, načtený z CDN (global build s runtime
+  kompilátorem, takže aplikace zůstává jediný soubor bez build stepu)
 - **Bootstrap 5.3.0** - UI komponenty a grid systém
 - **Font Awesome 6.5.0** - Ikony
-- **jsPDF 2.5.1** - Generování PDF dokumentů
+- **jsPDF 2.5.1 + AutoTable 3.8.2** - Generování PDF dokumentů
+- **Web Crypto API** - Šifrování Personal Access Tokenu (AES-GCM) před uložením do localStorage
 - **Azure DevOps REST API** - Komunikace s Azure DevOps
+
+## Architektura
+
+Aplikace je postavená na Vue 3, ale zůstává jediným HTML souborem - žádný bundler ani build step:
+
+- **Reaktivní store** - Centrální stav aplikace (data z Azure DevOps, filtry, hledání, rozbalené
+  sekce, skryté verze, téma, stav všech modalů) je jeden reaktivní objekt. Odvozená data jako
+  filtrovaný strom work itemů jsou computed properties.
+- **Komponenty** - Šablony jsou definované jako `<script type="text/x-template">` bloky:
+  `ReleasyGrid`, `PatchSection`, `WorkItemRow`, `ProgressBar`, `PriorityCell` a `HtmlEditor`
+  (sdílený editor popisu pro detail i zakládací formuláře).
+- **Vue aplikace** - Vue je připojené na několik nezávislých kořenů (grid, toolbar, filtry,
+  notifikace, přepínač témat, hlavička, footer a jednotlivé modaly).
+- **Generický picker** - Změna statusu, priority, severity, assignee a patch verze používá jednu
+  společnou komponentu místo šesti duplikovaných modalů.
+- **Persistence** - Ukládání preferencí do localStorage řeší `watch` nad store, takže se stav
+  synchronizuje automaticky bez ručních volání.
 
 ## Zobrazené work items
 
@@ -114,18 +148,23 @@ Aplikace automaticky ukládá následující preference do localStorage:
 - Skryté verze
 - Aktivní filtry
 - Task Mode stav
-- Vybrané téma (světlé/tmavé)
-- Personal Access Token (šifrovaný)
+- Naposledy vybraný produkt (záložka)
+- Čas posledního načtení dat
+- Vybrané téma (světlé/tmavé/automatické)
+- Úroveň oprávnění tokenu (read-only / read-write)
+- Personal Access Token (šifrovaný pomocí AES-GCM)
 
 ## Dokumentace
 
 Podrobná uživatelská příručka je dostupná přímo v aplikaci:
 - Klikněte na ikonu nápovědy (❓) v hlavním rozhraní
 - Příručka obsahuje detailní popis všech funkcí a možností
+- Přednostně se načítá lokální `guide.html`; pokud není dostupný, aplikace ji stáhne z asset
+  služby Integray
 
 ## Bezpečnost
 
-- Personal Access Token je uložen pouze lokálně v prohlížeči
+- Personal Access Token je uložen pouze lokálně v prohlížeči a je šifrovaný (AES-GCM)
 - Token není odesílán na žádný server kromě Azure DevOps API
 - Všechna komunikace probíhá přes HTTPS
 - Aplikace neukládá žádná citlivá data na externí servery
