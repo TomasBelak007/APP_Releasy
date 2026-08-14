@@ -60,10 +60,10 @@ reactive layer. Plain functions mutate `store` and never touch the DOM to expres
 
 ## Startup sequence
 
-1. The script runs top to bottom: constants -> helpers -> API -> `window.*` modal functions ->
-   `VUE LAYER` (store, derived state, persistence watchers, components, `mountApp` calls,
-   `MODAL_STACK`). Definition order matters in a few places, e.g. `darkModeQuery`
-   (`Theme Management`) is read while the store is being created.
+1. The script runs top to bottom: configuration constants -> helpers -> API -> `window.*` modal
+   functions -> `VUE LAYER` (store, derived state, persistence watchers, components, `mountApp`
+   calls, `MODAL_STACK`). Definition order matters in a few places, e.g. `darkModeQuery` is read
+   while the store is being created, so it must be defined before `Store`.
 2. `mountApp(options, selector)` wraps `createApp(...).mount(selector)` and attaches an
    `errorHandler` - the production Vue build strips warnings, so without it a throwing render
    silently renders nothing.
@@ -73,7 +73,11 @@ reactive layer. Plain functions mutate `store` and never touch the DOM to expres
 
 ## Configuration
 
-All in the `Configuration` .. `Available patch versions Configuration` sections:
+All plain data constants live together at the top of the script, from `Configuration` through
+`Theme Configuration`, before the `Helper Functions` section starts. This is deliberate: anything
+that looks like "settings" for a non-developer to tweak (assignees, allowed statuses, patch
+versions, ...) sits in one place instead of being scattered next to the feature that happens to use
+it first.
 
 | Constant | Purpose |
 | --- | --- |
@@ -83,12 +87,12 @@ All in the `Configuration` .. `Available patch versions Configuration` sections:
 | `IS_PRODUCTION` | false only on `localhost` / `127.0.0.1`; sets `Logger.level` |
 | `releaseNames` | The 5 products: `{ product, release, epicID }`. Drives both the WIQL loop and the parent Epic link when creating work items |
 | `buildChangesPipelineMap` | product -> Jenkins pipeline name; a product missing here has no Build Changes button |
-| `assignees` | Hardcoded assignee list for the pickers and create forms |
+| `assignees` | Assignee list (`{ email, name }`) for the "Change Assigned To" picker, create forms, **and** `store.availableAssignees` (see below) |
 | `titlePrefixes`, `titlePrefixesTask` | Allowed title prefixes per product / for tasks |
 | `availablePatchVersions` | Options in the "Change Patch Version" picker (`999` = next release bucket) |
-| `statusOptions` | Allowed `System.State` values per work item type |
+| `statusOptions` | Allowed `System.State` values per work item type; also the source for `store.availableStatuses` |
 | `RATING_LEVELS` | Shared 1-4 scale for priority and severity |
-| `THEMES`, `LOGO_URLS` | Theme buttons and the logo served per resolved theme |
+| `THEMES`, `darkModeQuery`, `LOGO_URLS` | Theme buttons, the system dark-mode media query and the logo served per resolved theme |
 
 ## Data model
 
@@ -144,7 +148,7 @@ Derived (`VUE LAYER > Derived state`):
 | `resolvedTheme` | `theme`, with `auto` resolved through `systemPrefersDark` |
 | `hiddenCount`, `activeFilterCount` | Badge counters |
 | `lastReloadText` | Relative label; depends on `clockTick` |
-| `availableAssignees`, `availableStatuses` | Filter options, derived from loaded items |
+| `availableAssignees`, `availableStatuses` | Filter options, from the `assignees` / `statusOptions` **configuration** - not from loaded items, so an option is offered even if no currently loaded item uses it |
 | `searchTerms` | `search` split on whitespace |
 | `tree` | **The rendered hierarchy.** One pass over `releaseResults` for `activeProduct`: skips hidden majors/patches, sorts, applies `itemPasses()`, keeps a parent whose child task matches, prunes empty branches |
 | `visibleResultCount` | Result counter in the toolbar |
@@ -152,7 +156,9 @@ Derived (`VUE LAYER > Derived state`):
 
 `itemPasses(item)` = assignee filter + status filter + all search terms found in
 `buildWorkItemSearchText()`. `visibleChildTasksFor(parentId)` returns sorted, non-`Removed`,
-filtered child tasks (empty unless Task Mode).
+filtered child tasks (empty unless Task Mode). Note `availableStatuses` includes `Removed` (it is
+in `statusOptions` for every type), even though `loadData()`'s WIQL query never loads `Removed`
+items - so that option in the Filter modal currently can never hide anything.
 
 Persistence (`VUE LAYER > Persistence`) - one `watch` per key:
 `expanded_sections`, `hidden_versions`, `workItemFilters`, `taskMode`, `lastActiveTab`,

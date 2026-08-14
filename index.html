@@ -3191,9 +3191,9 @@
 
         // ===== Title Prefixes Bug and Feature Configuration =====
         const titlePrefixes = {
-            'Xeelo': ['Xeelo', 'Xeelo mobile', 'Xeelo GraphQL'],
+            'Xeelo': ['Xeelo', 'Xeelo mobile', 'Xeelo GraphQL', 'Xeelo services'],
             'XeeloAdmin': ['Xeelo admin'],
-            'Integray': ['Integray', 'Integray runtime', 'Integray admin'],
+            'Integray': ['Integray', 'Integray runtime', 'Integray admin', 'Integray agent', 'Integray endpoint'],
             'Repository': ['Repository'],
             'Connectors': ['Connectors']
         };
@@ -3235,6 +3235,32 @@
                 ]
             }
         ];
+
+        // ===== Status Options Configuration =====
+        const statusOptions = {
+            'Bug': ['Evaluation', 'New', 'On Hold', 'Active', 'Closed', 'Removed'],
+            'Feature': ['Evaluation', 'New', 'On Hold', 'Active', 'Closed', 'Removed'],
+            'Task': ['New', 'On Hold', 'Active', 'Closed', 'Removed']
+        };
+
+        // ===== Priority & Severity Rating Configuration =====
+        // Priority and severity share this scale, and Azure DevOps stores severity as the label
+        const RATING_LEVELS = ['1 - Critical', '2 - High', '3 - Medium', '4 - Low']
+            .map(label => ({ value: label[0], label }));
+
+        // ===== Theme Configuration =====
+        const THEMES = [
+            { value: 'light', icon: 'fa-sun', title: 'Light Mode' },
+            { value: 'auto', icon: 'fa-circle-half-stroke', title: 'Auto (System)' },
+            { value: 'dark', icon: 'fa-moon', title: 'Dark Mode' }
+        ];
+
+        const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+        const LOGO_URLS = {
+            dark: 'https://provisioning.integray.app/api/endpoint/web-app/azure-devops/release-overview-assets?Name=logo_dark.png',
+            light: 'https://provisioning.integray.app/api/endpoint/web-app/azure-devops/release-overview-assets?Name=logo_light.png'
+        };
 
         // ===== Helper Functions (Phase 1 Optimizations - Safe Version) =====
         
@@ -5248,30 +5274,9 @@
         // applyTheme() used to toggle .hidden on two logo <img>s and .active across the three
         // buttons by hand. store.theme is the preference, store.resolvedTheme is what "auto"
         // currently means, and both the buttons and the logo bind to them.
-        const THEMES = [
-            { value: 'light', icon: 'fa-sun', title: 'Light Mode' },
-            { value: 'auto', icon: 'fa-circle-half-stroke', title: 'Auto (System)' },
-            { value: 'dark', icon: 'fa-moon', title: 'Dark Mode' }
-        ];
-        
-        const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        
-        const LOGO_URLS = {
-            dark: 'https://provisioning.integray.app/api/endpoint/web-app/azure-devops/release-overview-assets?Name=logo_dark.png',
-            light: 'https://provisioning.integray.app/api/endpoint/web-app/azure-devops/release-overview-assets?Name=logo_light.png'
-        };
-        
-        // ===== Status Change Feature =====
-        const statusOptions = {
-            'Bug': ['Evaluation', 'New', 'On Hold', 'Active', 'Closed', 'Removed'],
-            'Feature': ['Evaluation', 'New', 'On Hold', 'Active', 'Closed', 'Removed'],
-            'Task': ['New', 'On Hold', 'Active', 'Closed', 'Removed']
-        };
-        
-        // Priority and severity share this scale, and Azure DevOps stores severity as the label
-        const RATING_LEVELS = ['1 - Critical', '2 - High', '3 - Medium', '4 - Low']
-            .map(label => ({ value: label[0], label }));
-        
+        // THEMES, darkModeQuery and LOGO_URLS now live in the Configuration section at the top
+        // of the script, next to the other constant config values.
+
         // ===== Value picker =====
         // The six "change X" modals were the same 50 lines six times over: check the permission,
         // write the title and current value into two <strong>s, build option <div>s with
@@ -6199,8 +6204,8 @@
         // include by walking computed styles. Both read store.tree now.
         
         // isVersionVisible() and openFilterModal() removed (~140 lines). The modal used to build
-        // its own option lists by reading rendered rows out of the DOM; the Vue version computes
-        // availableAssignees / availableStatuses straight from the loaded work items.
+        // its own option lists by reading rendered rows out of the DOM; the Vue version derives
+        // availableAssignees / availableStatuses from the assignees / statusOptions configuration.
         
         // applyFilter(), removeFilter(), updateFilterUI(), epicGroupHasVisibleItems(),
         // updateHierarchyVisibility() and filterWorkItems() removed (~190 lines).
@@ -6450,23 +6455,14 @@
         store.activeFilterCount = computed(() =>
             store.filters.hiddenAssignees.length + store.filters.hiddenStatuses.length);
 
-        // Filter options are derived from the loaded work items, not from rendered rows.
-        store.availableAssignees = computed(() => {
-            const names = new Set(['Unassigned']);
-            store.forEachWorkItem(item => names.add(assigneeOf(item)));
-            return [...names].sort((a, b) => {
-                if (a === 'Unassigned') return 1;
-                if (b === 'Unassigned') return -1;
-                return a.localeCompare(b);
-            });
-        });
+        // Filter options come from configuration (assignees / statusOptions), not from the
+        // loaded work items - so a filter option is offered even if nobody currently matches it.
+        store.availableAssignees = computed(() =>
+            [...assignees.map(a => a.name), 'Unassigned']);
 
         store.availableStatuses = computed(() => {
             const states = new Set();
-            store.forEachWorkItem(item => {
-                const state = item.fields['System.State'];
-                if (state) states.add(state);
-            });
+            Object.values(statusOptions).forEach(list => list.forEach(state => states.add(state)));
             return [...states].sort((a, b) => {
                 const ia = STATE_ORDER.indexOf(a);
                 const ib = STATE_ORDER.indexOf(b);
