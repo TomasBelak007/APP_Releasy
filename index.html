@@ -3108,12 +3108,14 @@
         };
 
         /**
-         * App version shown in the footer. On each release, bump `version` and set `updatedAt`
-         * to the deployment time (ISO 8601 UTC), e.g. new Date().toISOString() in the console.
+         * App version shown in the footer.
+         * - `updatedAt` (ISO 8601 UTC, e.g. new Date().toISOString()): update on every change to
+         *   this file, to the time of the change.
+         * - `version`: bump only when explicitly asked to.
          */
         const APP_RELEASE = {
             version: '1.0.42',
-            updatedAt: '2026-08-12T06:31:00.000Z'
+            updatedAt: '2026-08-14T18:40:00.000Z'
         };
 
         // ===== API Configuration =====

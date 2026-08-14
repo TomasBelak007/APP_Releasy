@@ -29,6 +29,9 @@ Read [`ARCHITECTURE.md`](ARCHITECTURE.md) before changing `index.html`. It maps 
 8. Description editors are uncontrolled: push via the `html` prop, read back with
    `readEditorHtml(id)`.
 9. Use `Logger`, not `console`, and keep the `mountApp` error handler on new apps.
+10. On every change to `index.html`, update `APP_RELEASE.updatedAt` (ISO 8601 UTC, e.g.
+    `new Date().toISOString()`) to the time of the change. Only bump `APP_RELEASE.version` when the
+    user explicitly asks for a version bump.
 
 Full reasoning and the remaining conventions are in `ARCHITECTURE.md`.
 
@@ -48,4 +51,3 @@ There are no automated tests. After editing:
   invariant) must be reflected in `ARCHITECTURE.md` in the same change.
 - User-visible features, dependencies or localStorage keys also belong in `README.md`, which is
   written in Czech.
-- On release, bump `APP_RELEASE.version` and `APP_RELEASE.updatedAt` in `index.html`.
