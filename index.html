@@ -2221,7 +2221,7 @@
                             :disabled="!store.hiddenCount" @click="store.openUnhideModal()">
                         {{ store.hiddenCount ? 'Unhide (' + store.hiddenCount + ')' : 'Unhide' }}
                     </button>
-                    <button class="btn" :class="{ active: store.activeFilterCount > 0 }"
+                    <button id="filterBtn" class="btn" :class="{ active: store.activeFilterCount > 0 }"
                             @click="store.openFilterModal()" title="Filter by Assignee">
                         <i class="fa-solid fa-filter"></i>
                         <span v-if="store.activeFilterCount > 0" class="filter-badge"></span>
@@ -3115,7 +3115,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.42',
-            updatedAt: '2026-08-14T18:40:00.000Z'
+            updatedAt: '2026-08-14T18:48:00.000Z'
         };
 
         // ===== API Configuration =====
