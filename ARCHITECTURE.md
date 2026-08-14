@@ -68,7 +68,10 @@ reactive layer. Plain functions mutate `store` and never touch the DOM to expres
    `errorHandler` - the production Vue build strips warnings, so without it a throwing render
    silently renders nothing.
 3. `DOMContentLoaded` (registered just above `VUE LAYER`) runs:
-   `initializePermissionBadge()` -> `loadData()` -> `checkAndOpenWorkItemFromUrl()`.
+   `initializePermissionBadge()` -> `activateProduct(store.activeProduct)` -> `checkAndOpenWorkItemFromUrl()`.
+   Only the active tab's data (and, if Task Mode is already on, its tasks) is fetched; the other
+   4 products load lazily the first time the user switches to them (see
+   [Load / reload](#flows-what-calls-what)).
 4. `popstate` opens or closes the detail modal from the `?workitem=<id>` query parameter.
 
 ## Configuration
@@ -96,7 +99,8 @@ it first.
 
 ## Data model
 
-`store.releaseResults` - one entry per product, filled by `loadData()`:
+`store.releaseResults` - one entry per **loaded** product (products not yet visited are simply
+absent), filled per-product by `loadProductData()`:
 
 ```js
 [{ product: 'Xeelo', release: 'Labe',
@@ -107,8 +111,10 @@ The nesting `release -> major -> patch` is built by `groupWorkItems()`, which pa
 `Custom.PlatformRelease` with `parseReleaseVersion()` (`/([A-Za-z]+)-(\d{2})\.(\d{3})/`, e.g.
 `Labe-07.015`). **Items without a parseable `Custom.PlatformRelease` are silently dropped.**
 
-`store.childTasks` - `{ [parentId]: Task[] }`, filled only in Task Mode by
-`fetchChildTasksForWorkItems()`.
+`store.childTasks` - `{ [parentId]: Task[] }` across **all** products fetched so far (not just the
+active one), filled only in Task Mode by `fetchChildTasksForWorkItems()` and merged in by
+`loadChildTasksIntoStore()` - never replaced wholesale, so loading one product's tasks cannot wipe
+out another's.
 
 Work items are raw Azure DevOps objects (`{ id, fields, relations }`). Fields the app reads:
 
@@ -128,22 +134,28 @@ name is not identical across projects.
 derived is a computed assigned onto the store afterwards (`reactive()` unwraps them, so both
 templates and plain JS read `store.x`).
 
-Raw state: `loading`, `theme`, `systemPrefersDark`, `releaseResults`, `childTasks`, `taskMode`,
-`taskModeBusy`, `permission`, `activeProduct`, `search`, `expanded`, `hidden`, `filters`,
-`filterModalOpen`, `unhideModalOpen`, `notifications`, `closeDetailAfterCreate`, `lastReloadAt`,
-`clockTick`, plus **one slice per modal**: `picker`, `pat`, `help`, `created`, `buildChanges`,
-`createWorkItem`, `createTask`, `detail`.
+Raw state: `theme`, `systemPrefersDark`, `releaseResults`, `loadingProducts`, `childTasks`,
+`taskLoadedProducts`, `taskMode`, `taskModeBusy`, `permission`, `activeProduct`, `search`,
+`expanded`, `hidden`, `filters`, `filterModalOpen`, `unhideModalOpen`, `notifications`,
+`closeDetailAfterCreate`, `lastReloadAt`, `clockTick`, plus **one slice per modal**: `picker`,
+`pat`, `help`, `created`, `buildChanges`, `createWorkItem`, `createTask`, `detail`.
+
+`loadingProducts` (products currently being fetched) and `taskLoadedProducts` (products whose
+tasks have been fetched at least once) exist purely to drive the lazy-loading functions in
+[Load / reload](#flows-what-calls-what); there is no more single `loading` boolean, since loading
+is per-product now.
 
 Store methods: `isExpanded`, `toggleExpanded`, `expandAllMajors`, `collapseAll`, `toggleHidden`,
 `unhide`, `openUnhideModal`, `openFilterModal`, `setFilters`, `clearFilters`, `applyFieldUpdate`,
-`forEachWorkItem`.
+`moveWorkItemPatch`, `insertWorkItem`, `addWorkItem`, `addChildTask`, `forEachWorkItem`.
 
 Derived (`VUE LAYER > Derived state`):
 
 | Computed | Meaning |
 | --- | --- |
-| `products` | Product tabs, from `releaseResults` |
-| `allMajorIds` | All `release-major` ids (for Expand All) |
+| `products` | Product tabs, from `releaseNames` **configuration** - static, so all 5 tabs are always visible/clickable regardless of what has been fetched |
+| `isActiveProductLoading` | `true` while `activeProduct` has no entry in `releaseResults` yet, or is in `loadingProducts`; drives the grid's loading spinner |
+| `allMajorIds` | All `release-major` ids **for `activeProduct` only** (for Expand All) |
 | `canWrite` | `permission === 'write'` - **the single gate for every edit affordance** |
 | `resolvedTheme` | `theme`, with `auto` resolved through `systemPrefersDark` |
 | `hiddenCount`, `activeFilterCount` | Badge counters |
@@ -152,13 +164,13 @@ Derived (`VUE LAYER > Derived state`):
 | `searchTerms` | `search` split on whitespace |
 | `tree` | **The rendered hierarchy.** One pass over `releaseResults` for `activeProduct`: skips hidden majors/patches, sorts, applies `itemPasses()`, keeps a parent whose child task matches, prunes empty branches |
 | `visibleResultCount` | Result counter in the toolbar |
-| `visibleParentIds` | Parent ids to fetch child tasks for |
+| `visibleParentIds` | Parent ids to fetch child tasks for, **scoped to `activeProduct`** |
 
 `itemPasses(item)` = assignee filter + status filter + all search terms found in
 `buildWorkItemSearchText()`. `visibleChildTasksFor(parentId)` returns sorted, non-`Removed`,
 filtered child tasks (empty unless Task Mode). Note `availableStatuses` includes `Removed` (it is
-in `statusOptions` for every type), even though `loadData()`'s WIQL query never loads `Removed`
-items - so that option in the Filter modal currently can never hide anything.
+in `statusOptions` for every type), even though `loadProductData()`'s WIQL query never loads
+`Removed` items - so that option in the Filter modal currently can never hide anything.
 
 Persistence (`VUE LAYER > Persistence`) - one `watch` per key:
 `expanded_sections`, `hidden_versions`, `workItemFilters`, `taskMode`, `lastActiveTab`,
@@ -166,8 +178,12 @@ Persistence (`VUE LAYER > Persistence`) - one `watch` per key:
 (encrypted), `tokenHasWriteCapability`, `tokenPermission`, `current_user_email`.
 
 Also there: a `watchEffect` that mirrors `resolvedTheme` onto `<html data-theme>`, a
-`darkModeQuery` listener, a `watch` that keeps `activeProduct` valid, and a 60s interval bumping
-`clockTick` so every relative timestamp refreshes.
+`darkModeQuery` listener, `watch(() => store.activeProduct, activateProduct)` (fires
+`ensureProductLoaded`/`ensureTasksLoaded` for a tab the moment it becomes active - see
+[Load / reload](#flows-what-calls-what)), and a 60s interval bumping `clockTick` so every relative
+timestamp refreshes. `activeProduct` itself is initialized from `lastActiveTab` only if that saved
+value is still one of the configured products, else it falls back to the first product - so a
+stale/removed product name in `localStorage` can never leave the app on a non-existent tab.
 
 ## Vue apps and mount points
 
@@ -177,7 +193,7 @@ the root element** in `<body>`; only the components below use `x-template`.
 | Root | Renders | Notable methods / state |
 | --- | --- | --- |
 | `#content` | The grid, via `<patch-section>`; loading spinner and empty state | `store.tree` |
-| `#toolbarApp` | Reload, Unhide, Filter, Task Mode, Expand/Collapse, search box, permission badge, last reload | Debounced (200 ms) write into `store.search`; `reload()` -> `loadData()` |
+| `#toolbarApp` | Reload, Unhide, Filter, Task Mode, Expand/Collapse, search box, permission badge, last reload | Debounced (200 ms) write into `store.search`; `reload()` -> `resetAndReloadActiveProduct()` |
 | `#themeApp` | Three theme buttons from `THEMES` | Sets `store.theme` |
 | `#appHeader` | Logo bound to `LOGO_URLS[resolvedTheme]` | |
 | `#helpIconApp` | Help icon | `openHelpModal` |
@@ -189,7 +205,7 @@ the root element** in `<body>`; only the components below use `x-template`.
 | `#workItemDetailApp` | Work item detail | Meta badges, `<html-editor>`, tasks, comments |
 | `#patApp` | PAT modal | `savePAT`, autofocus on open |
 | `#helpApp` | Help modal, `v-html` of the fetched guide | `showHelpSection('help-pat')` after render |
-| `#workItemCreatedApp` | Success modal after create | Close triggers `loadData()` |
+| `#workItemCreatedApp` | Success modal after create | Close just hides it - the new item was already inserted into the store when it was created |
 | `#buildChangesApp` | Build Changes list | |
 | `#createWorkItemApp` | Create Feature/Bug form | `<html-editor>`, `RATING_LEVELS` |
 | `#createTaskApp` | Create child Task form | `<html-editor>` |
@@ -209,19 +225,47 @@ Defined in `VUE LAYER > Components`, templates from `<script type="text/x-templa
 
 ## Flows: what calls what
 
-**Load / reload** - `loadData()`
-`getPAT()` -> once `checkTokenPermissions(pat)` -> for each `releaseNames` entry: WIQL via
-`handleUnauthorized(fetchWIQL)` -> `fetchWorkItems(ids)` -> `groupWorkItems()` -> assign
-`store.releaseResults` -> `saveLastReloadTime()` -> if Task Mode and `canWrite`
-`loadChildTasksIntoStore()`. `store.loading` is cleared in `finally`. A 401 clears `devops_pat`
-and re-prompts once through `handleUnauthorized()`.
+**Load / reload - data is lazy, per product.** Only `activeProduct` is ever fetched automatically;
+the other 4 products load the first time the user switches to their tab. The functions:
+
+- `loadProductData(product)` - the only function that actually talks to Azure DevOps for the main
+  hierarchy. `getPAT()` -> once (`window.tokenPermissionsChecked`) `checkTokenPermissions(pat)` ->
+  looks up `releaseConfig` for `product` -> WIQL via `handleUnauthorized(fetchWIQL)` ->
+  `fetchWorkItems(ids)` -> `groupWorkItems()` -> replaces just that product's entry in
+  `store.releaseResults` (`[...filter(r => r.product !== product), entry]`) ->
+  `saveLastReloadTime()`. Tracks itself in `store.loadingProducts` for the duration (drives
+  `isActiveProductLoading`); on failure, logs + `showNotification()` and leaves the product
+  absent so the next visit/reload retries.
+- `ensureProductLoaded(product)` - no-op if `product` is already in `releaseResults` or
+  `loadingProducts`, else `loadProductData(product)`. **Lazy** fetch.
+- `ensureTasksLoaded(product)` - no-op unless `taskMode && canWrite`, and unless `product` is
+  already in `taskLoadedProducts`, else `loadChildTasksIntoStore(product)`. **Lazy** fetch.
+- `activateProduct(product)` - `ensureProductLoaded(product)` then `ensureTasksLoaded(product)`.
+  Called by `DOMContentLoaded` (for the initial `activeProduct`) and by
+  `watch(() => store.activeProduct, activateProduct)` (on every tab click).
+- `reloadActiveProduct()` - **force** refresh of just `activeProduct`: `loadProductData()`, then
+  (if Task Mode and `canWrite`) `loadChildTasksIntoStore()`. No write flow triggers this anymore -
+  creating an item inserts it locally (`addWorkItem()`/`addChildTask()`) and a patch-version change
+  relocates it locally (`moveWorkItemPatch()`); it now exists solely as the building block for
+  `resetAndReloadActiveProduct()`.
+- `resetAndReloadActiveProduct()` - clears `releaseResults`, `childTasks` and
+  `taskLoadedProducts` entirely, then `reloadActiveProduct()`. Used by the toolbar's `reload()`
+  and by `savePAT()` (a new PAT can mean different access, so the whole cache is invalidated).
+  Other tabs simply go back to loading lazily on their next visit.
+
+A 401 clears `devops_pat` and re-prompts once through `handleUnauthorized()`.
 
 **Search / filter / expand / hide** - state only, no network, no re-render call: the toolbar or
 modal writes into `store.search` / `store.filters` / `store.expanded` / `store.hidden`, and
 `store.tree` recomputes.
 
-**Task Mode** - `toggleTaskMode()` flips `store.taskMode`, then `loadChildTasksIntoStore()` fetches
-`store.visibleParentIds` in batches of 200 (`fetchChildTasksForWorkItems`).
+**Task Mode** - `toggleTaskMode()` flips `store.taskMode`, and if turning on calls
+`ensureTasksLoaded(activeProduct)` (lazy - a no-op if that product's tasks are already cached).
+`loadChildTasksIntoStore(product)` fetches `store.visibleParentIds` (scoped to `activeProduct`) in
+batches of 200 (`fetchChildTasksForWorkItems`) and **merges** the result into `store.childTasks`
+(never replaces it), then marks `product` in `taskLoadedProducts`. Switching to another tab while
+Task Mode is on lazily loads that tab's tasks via the `activateProduct` watcher above, without
+discarding tasks already cached for other tabs.
 
 **Detail modal** - `openWorkItemDetailModal(id, returnToParentId)` resets `store.detail`, pushes
 `?workitem=<id>`, starts `loadWorkItemDetailComments()` (parallel), awaits the work item with
@@ -233,20 +277,34 @@ response. `closeWorkItemDetailModal(forceFullClose)` re-opens `returnTo` unless 
 unless `store.canWrite`) -> the `#valuePickerApp` option click -> `PICKER_KINDS[kind].apply()` ->
 `changeWorkItem*()` -> `updateWorkItemField()` -> `PATCH /wit/workitems/{id}` ->
 `store.applyFieldUpdate()` (updates grid + detail in memory) -> `showNotification()` ->
-`closeValuePicker()`. Only `changeWorkItemPatchVersion()` triggers a `loadData()`, because the item
-moves to a different branch of the hierarchy.
+`closeValuePicker()`. No re-fetch: the PATCH response already confirms the new value, so the app
+never re-reads it back from Azure DevOps.
+
+`changeWorkItemPatchVersion()` is the one field change that also relocates the item, since
+`Custom.PlatformRelease` decides which major/patch bucket it renders under. It calls
+`store.moveWorkItemPatch(workItemId, newPatchVersion)` instead of `applyFieldUpdate()`: this
+removes the item from wherever it currently sits in `store.releaseResults` (deleting any
+major/patch/release keys it leaves empty), updates its `Custom.PlatformRelease` field, and
+re-inserts it into the `releaseResults` entry whose `release` matches the new version's release
+name - creating the destination major/patch bucket if needed. If that destination product has not
+been loaded yet (lazy loading), the item is simply dropped; it appears correctly the first time
+that tab is visited. No network reload either way.
 
 **Create work item** - `openCreateWorkItemModal(product, release, major, patch, prefill)` fills
 `store.createWorkItem` -> `createWorkItem()` validates, resolves `epicID` from `releaseNames`,
 builds JSON-patch operations (title with prefix, priority, tags, `Custom.PlatformRelease`, parent
 Epic link, description into `ReproSteps` for Bug, severity for Bug / t-shirt for Feature) ->
-`createWorkItemViaApi()` -> `openWorkItemCreatedModal()`. Closing that modal calls `loadData()`.
-`copyWorkItemFromDetail()` prefills the same form and sets `store.closeDetailAfterCreate`.
+`createWorkItemViaApi()` returns the full created item -> `store.addWorkItem()` places it straight
+into `store.releaseResults` (via `insertWorkItem()`, same bucket logic as `moveWorkItemPatch()`) ->
+`openWorkItemCreatedModal()`. No reload: the create response already has every field Azure DevOps
+assigned it. `copyWorkItemFromDetail()` prefills the same form and sets
+`store.closeDetailAfterCreate`.
 
 **Create child task** - `openCreateTaskModal(parentId, parentTitle, prefill)` ->
 `createChildTask()` -> operations + `Hierarchy-Reverse` relation to the parent ->
-`createWorkItemViaApi('Task', ...)` -> refreshes `store.detail.tasks` if that parent is open ->
-success modal.
+`createWorkItemViaApi('Task', ...)` -> `store.addChildTask(parentId, createdTask)` appends it to
+`store.childTasks[parentId]`, and if the detail modal for that parent is open, it is also appended
+to `store.detail.tasks` directly (no re-fetch) -> success modal.
 
 **PDF export** - `exportPatchToPDF(product, release, major, patch, patchId)` finds the patch node in
 `store.tree` (so it exports exactly what is visible), re-fetches those ids with `$expand=fields`,
@@ -264,7 +322,8 @@ to `#helpModalBody`.
 **PAT** - `getPAT()` returns the decrypted token or opens the modal and **returns a promise that
 resolves when the user saves** (`patModalResolve`; `closePATModal()` resolves `null` so callers do
 not hang). `savePAT()` encrypts with AES-GCM (`encryptPAT`), stores the self-declared capability,
-then `checkTokenPermissions()` + `loadData()`.
+then `checkTokenPermissions()` + `resetAndReloadActiveProduct()` (a new PAT can mean different
+access entirely, so the whole cache is invalidated, same as Reload).
 
 **Modals: ESC and scroll lock** - `MODAL_STACK` (end of file) lists every modal as
 `{ isOpen, close }`, **topmost first**. One `keydown` listener closes the first open entry; one
@@ -310,8 +369,11 @@ modes:
    comments. Everything else must go through normal interpolation, which Vue escapes.
 4. **Guard every write with `store.canWrite`** in both the template (`v-if`/`v-show`) and the
    handler (early `return`).
-5. **After a successful write, call `store.applyFieldUpdate()`** rather than reloading, unless the
-   change moves the item in the hierarchy.
+5. **After a successful write, update the store in memory** - `applyFieldUpdate()` for a plain
+   field, `moveWorkItemPatch()` when the change relocates the item in the hierarchy,
+   `addWorkItem()`/`addChildTask()` for a newly created item - rather than reloading. A full reload
+   (`resetAndReloadActiveProduct()`) is reserved for cases the app cannot reconcile locally at all,
+   currently only a new PAT (different access entirely).
 6. **Register new modals in `MODAL_STACK`** and drive visibility from a `store.<modal>.open` flag
    (`:class="{ show: ... }"`); do not call `lockBodyScroll()` per modal.
 7. **Reusable components use `<script type="text/x-template">`.** In-DOM templates lowercase
@@ -356,7 +418,7 @@ modes:
 | Add a patch version to a picker | `availablePatchVersions` |
 | Add / remove an assignee | `assignees` |
 | Change allowed statuses | `statusOptions` |
-| Change which items load | the WIQL query in `loadData()` (types, `Closed` window) |
+| Change which items load | the WIQL query in `loadProductData()` (types, `Closed` window) |
 | Add a column or badge to a row | `tpl-work-item-row` (+ `WorkItemRow` computed) |
 | Add a field to the detail modal | `#workItemDetailApp` markup + its computed |
 | Add a new "change X" modal | a new entry in `PICKER_KINDS` (`build` + `apply`) - no new markup |

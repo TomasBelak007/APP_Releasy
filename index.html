@@ -3056,7 +3056,7 @@
     </script>
 
     <script type="text/x-template" id="tpl-releasy-grid">
-        <div v-if="store.loading" class="loading">
+        <div v-if="store.isActiveProductLoading" class="loading">
             <div class="loader-container">
                 <div class="loader-circles">
                     <div class="loader-circle loader-circle-1"></div>
@@ -3114,8 +3114,8 @@
          * - `version`: bump only when explicitly asked to.
          */
         const APP_RELEASE = {
-            version: '1.0.42',
-            updatedAt: '2026-08-14T18:48:00.000Z'
+            version: '1.0.43',
+            updatedAt: '2026-08-14T21:55:06.000Z'
         };
 
         // ===== API Configuration =====
@@ -3696,10 +3696,12 @@
         }
         
         // ===== Task Mode Management =====
+        // Turning Task Mode on only fetches tasks for the tab you are looking at right now;
+        // the other tabs load theirs lazily when you switch to them (see ensureTasksLoaded()).
         async function toggleTaskMode() {
             store.taskMode = !store.taskMode;
             if (store.taskMode) {
-                await loadChildTasksIntoStore();
+                await ensureTasksLoaded(store.activeProduct);
             }
         }
         
@@ -3711,20 +3713,32 @@
         // ===== Child Tasks Management =====
         // Replaces loadAndDisplayChildTasks(). The parent ids come from the store, not from
         // scraping data-work-item-id off the DOM and walking up looking for .version-hidden.
-        async function loadChildTasksIntoStore() {
+        // Fetches unconditionally (a "force refresh" for `product`); callers that want the lazy,
+        // fetch-only-if-missing behavior should go through ensureTasksLoaded() instead.
+        async function loadChildTasksIntoStore(product) {
+            store.taskModeBusy = true;
             try {
-                store.taskModeBusy = true;
-                
                 const parentIds = store.visibleParentIds;
-                if (parentIds.length === 0) return;
-                
-                const pat = await getPAT();
-                store.childTasks = await fetchChildTasksForWorkItems(parentIds, pat);
+                if (parentIds.length > 0) {
+                    const pat = await getPAT();
+                    const fetched = await fetchChildTasksForWorkItems(parentIds, pat);
+                    // Merge, never replace - other products' already-loaded tasks must survive.
+                    store.childTasks = { ...store.childTasks, ...fetched };
+                }
+                if (!store.taskLoadedProducts.includes(product)) store.taskLoadedProducts.push(product);
             } catch (error) {
                 Logger.error('Error loading child tasks:', error);
             } finally {
                 store.taskModeBusy = false;
             }
+        }
+        
+        // Fetches child tasks for `product` only if Task Mode is on, the token allows it, and
+        // this product's tasks have not already been fetched this session.
+        async function ensureTasksLoaded(product) {
+            if (!store.taskMode || !store.canWrite) return;
+            if (store.taskLoadedProducts.includes(product)) return;
+            await loadChildTasksIntoStore(product);
         }
         
         async function fetchChildTasksForWorkItems(workItemIds, pat) {
@@ -4059,7 +4073,9 @@
             if (resolve) resolve(pat);
             
             await checkTokenPermissions(pat);
-            loadData();
+            // A new PAT can mean a different user/access level entirely, so the whole cache is
+            // invalidated - other tabs go back to loading lazily on next visit, same as Reload.
+            resetAndReloadActiveProduct();
         };
 
         // ===== Azure DevOps API Integration =====
@@ -4181,21 +4197,26 @@
         // document.createElement + innerHTML + onclick assignment). The whole hierarchy is now
         // declared once in the <releasy-grid> template and re-renders from store state.
 
-        async function loadData() {
+        // Fetches exactly one product's work items and replaces just that product's entry in
+        // store.releaseResults - other products already in the store are left untouched. This is
+        // the only place that talks to Azure DevOps for the main hierarchy; every other loading
+        // helper below (ensureProductLoaded, reloadActiveProduct, ...) is a thin wrapper around it.
+        async function loadProductData(product) {
+            const releaseConfig = releaseNames.find(r => r.product === product);
+            if (!releaseConfig) return;
+
             let pat = await getPAT();
-            
+
             // Kontrola práv tokenu (pouze při prvním načtení)
             if (!window.tokenPermissionsChecked) {
                 await checkTokenPermissions(pat);
                 window.tokenPermissionsChecked = true;
             }
-            
+
+            store.loadingProducts.push(product);
             try {
-                store.loading = true;
                 const tshirtFieldSelect = `,\n                        [Custom.Shirtsize]`;
-                const allReleaseResults = [];
-                for (const releaseConfig of releaseNames) {
-                    const wiqlQuery = `SELECT
+                const wiqlQuery = `SELECT
                         [System.Id],
                         [System.WorkItemType],
                         [System.Title],
@@ -4219,42 +4240,64 @@
                                     )
                                 )
                         )`;
-                    // WIQL fetch s retry na 401
-                    const data = await handleUnauthorized((newPat) => fetchWIQL(wiqlQuery, newPat || pat));
-                    if (data.workItems && data.workItems.length > 0) {
-                        const ids = data.workItems.map(wi => wi.id);
-                        // Work items fetch s retry na 401
-                        const workItemsData = await handleUnauthorized((newPat) => fetchWorkItems(ids, newPat || pat));
-                        const workItems = workItemsData.value;
-                        const releases = groupWorkItems(workItems);
-                        allReleaseResults.push({ 
-                            product: releaseConfig.product, 
-                            release: releaseConfig.release, 
-                            releases 
-                        });
-                    } else {
-                        allReleaseResults.push({ 
-                            product: releaseConfig.product, 
-                            release: releaseConfig.release, 
-                            releases: {} 
-                        });
-                    }
+                // WIQL fetch s retry na 401
+                const data = await handleUnauthorized((newPat) => fetchWIQL(wiqlQuery, newPat || pat));
+                let releases = {};
+                if (data.workItems && data.workItems.length > 0) {
+                    const ids = data.workItems.map(wi => wi.id);
+                    // Work items fetch s retry na 401
+                    const workItemsData = await handleUnauthorized((newPat) => fetchWorkItems(ids, newPat || pat));
+                    releases = groupWorkItems(workItemsData.value);
                 }
-                // Hand the data to the store and we are done. Everything that used to
-                // follow - re-render, re-apply filters in the right order, re-attach edit
-                // handlers, refresh the Unhide button - is now derived state.
-                store.releaseResults = allReleaseResults;
-                
+                // Replace just this product's entry. Everything that used to follow -
+                // re-render, re-apply filters in the right order, re-attach edit handlers,
+                // refresh the Unhide button - is now derived state.
+                store.releaseResults = [
+                    ...store.releaseResults.filter(r => r.product !== product),
+                    { product: releaseConfig.product, release: releaseConfig.release, releases }
+                ];
+
                 saveLastReloadTime();
-                
-                if (store.taskMode && store.canWrite) {
-                    await loadChildTasksIntoStore();
-                }
             } catch (error) {
-                Logger.error('Error loading data:', error);
+                Logger.error(`Error loading data for ${product}:`, error);
+                showNotification(`Failed to load ${product}: ${error.message || error}`, 'error');
             } finally {
-                store.loading = false;
+                store.loadingProducts = store.loadingProducts.filter(p => p !== product);
             }
+        }
+
+        // Lazy: fetches `product` only if it is not already cached and not already in flight.
+        async function ensureProductLoaded(product) {
+            if (store.releaseResults.some(r => r.product === product)) return;
+            if (store.loadingProducts.includes(product)) return;
+            await loadProductData(product);
+        }
+
+        // Makes sure the tab the user is looking at has both its work items and (if Task Mode is
+        // on) its tasks. Runs on the very first load and again every time activeProduct changes.
+        async function activateProduct(product) {
+            await ensureProductLoaded(product);
+            await ensureTasksLoaded(product);
+        }
+
+        // Force-refreshes just the active tab. Used after a write that we know made the active
+        // tab's cached data stale (a new item was created, or a patch version changed) - other
+        // tabs are untouched since nothing about them changed.
+        async function reloadActiveProduct() {
+            const product = store.activeProduct;
+            await loadProductData(product);
+            if (store.taskMode && store.canWrite) {
+                await loadChildTasksIntoStore(product);
+            }
+        }
+
+        // Full reset: drops every product's cached data and tasks, then reloads just the active
+        // tab. Other tabs go back to being fetched lazily the next time they are visited.
+        async function resetAndReloadActiveProduct() {
+            store.releaseResults = [];
+            store.childTasks = {};
+            store.taskLoadedProducts = [];
+            await reloadActiveProduct();
         }
 
 
@@ -4846,13 +4889,16 @@
                 const parentId = form.parentId;
                 const createdTask = await createWorkItemViaApi('Task', operations, pat);
                 
+                // Append it straight into childTasks and (if open) the detail modal's task list -
+                // the create response already has everything the grid needs, nothing to re-fetch.
+                store.addChildTask(parentId, createdTask);
+                
                 closeDetailModalIfCopiedFrom();
                 closeCreateTaskModal();
                 
                 const detail = store.detail;
                 if (detail.open && detail.id === parentId) {
-                    loadWorkItemDetailTasks(parentId, detail.fields['System.WorkItemType'], pat)
-                        .catch((e) => Logger.warn('Refresh detail tasks:', e));
+                    detail.tasks = sortChildTasks([...detail.tasks, createdTask]);
                 }
                 
                 openWorkItemCreatedModal({
@@ -4875,8 +4921,8 @@
 
         window.closeWorkItemCreatedModal = function() {
             store.created.open = false;
-            // The grid does not know about the new work item until it comes back from the API
-            loadData();
+            // No reload: createWorkItem()/createChildTask() already inserted the new item into
+            // the store the moment the create call succeeded.
         };
 
         window.openCreatedWorkItemInDevOps = function() {
@@ -5025,6 +5071,10 @@
             try {
                 const pat = await requirePAT();
                 const createdItem = await createWorkItemViaApi(form.type, operations, pat);
+                
+                // Place it straight into the tree - the create response already has every field
+                // Azure DevOps assigned it, so there is nothing left to fetch.
+                store.addWorkItem(createdItem);
                 
                 const type = form.type;
                 closeDetailModalIfCopiedFrom();
@@ -5677,14 +5727,11 @@
                     throw new Error(`Failed to update patch version: ${response.statusText}`);
                 }
                 
-                store.applyFieldUpdate(workItemId, '/fields/Custom.PlatformRelease', newPatchVersion);
+                // Relocate the item in memory instead of re-fetching the whole product - we
+                // already know the exact new value, the same way every other field change works.
+                store.moveWorkItemPatch(workItemId, newPatchVersion);
                 
                 showNotification(`Patch version changed to "${newPatchVersion}" for: ${title}`, 'success');
-                
-                // Reload data after a short delay
-                setTimeout(() => {
-                    loadData();
-                }, 1000);
                 
                 closeValuePicker();
             } catch (error) {
@@ -6181,7 +6228,8 @@
         // Initialize application on page load
         window.addEventListener('DOMContentLoaded', function() {
             initializePermissionBadge();
-            loadData();
+            // Only the active tab is fetched; the rest load lazily as the user switches to them.
+            activateProduct(store.activeProduct);
             
             // Check URL for workitem parameter and open modal if present
             checkAndOpenWorkItemFromUrl();
@@ -6288,15 +6336,23 @@
         // Raw state only. Everything derived is a computed below - that is the whole point of the
         // exercise: there is exactly one source of truth and the DOM is not part of it.
         const store = reactive({
-            loading: true,
             theme: localStorage.getItem('themePreference') || 'auto',
             systemPrefersDark: darkModeQuery.matches,
             releaseResults: [],
+            // Products currently being fetched - dedupes concurrent loads and drives the loader
+            loadingProducts: [],
             childTasks: {},
+            // Products whose child tasks have been fetched at least once. Kept until a full
+            // reset (Reload / new PAT), so toggling Task Mode off and on again does not refetch.
+            taskLoadedProducts: [],
             taskMode: localStorage.getItem('taskMode') === 'true',
             taskModeBusy: false,
             permission: localStorage.getItem('tokenPermission') || 'checking',
-            activeProduct: localStorage.getItem('lastActiveTab') || '',
+            activeProduct: (() => {
+                const names = releaseNames.map(r => r.product);
+                const saved = localStorage.getItem('lastActiveTab');
+                return names.includes(saved) ? saved : names[0];
+            })(),
             search: '',
             expanded: readExpandedSections(),
             hidden: readHiddenVersions(),
@@ -6417,6 +6473,62 @@
                 });
                 if (Number(this.detail.id) === id) this.detail.fields[field] = value;
             },
+            // Patch version changes move the item to a different major/patch bucket, unlike
+            // every other field - applyFieldUpdate() alone is not enough because the hierarchy
+            // grouping is fixed at fetch time, not recomputed from Custom.PlatformRelease on
+            // every render. We already know the exact new value (the PATCH succeeded), so this
+            // relocates the item in memory instead of re-fetching the whole product.
+            moveWorkItemPatch(workItemId, newPatchVersion) {
+                const id = Number(workItemId);
+                const version = parseReleaseVersion(newPatchVersion);
+                if (!version) return;
+
+                let item = null;
+                // Remove the item from wherever it currently lives, cleaning up buckets it empties.
+                for (const entry of this.releaseResults) {
+                    for (const [relName, byMajor] of Object.entries(entry.releases)) {
+                        for (const [major, byPatch] of Object.entries(byMajor)) {
+                            for (const [patch, items] of Object.entries(byPatch)) {
+                                const idx = items.findIndex(i => i.id === id);
+                                if (idx === -1) continue;
+                                item = items[idx];
+                                items.splice(idx, 1);
+                                if (items.length === 0) delete byPatch[patch];
+                                if (Object.keys(byPatch).length === 0) delete byMajor[major];
+                                if (Object.keys(byMajor).length === 0) delete entry.releases[relName];
+                            }
+                        }
+                    }
+                }
+                if (!item) return;
+
+                item.fields['Custom.PlatformRelease'] = newPatchVersion;
+                if (Number(this.detail.id) === id) this.detail.fields['Custom.PlatformRelease'] = newPatchVersion;
+
+                this.insertWorkItem(item);
+            },
+            // Shared by moveWorkItemPatch() and addWorkItem(): places `item` into whichever
+            // loaded product's entry matches its Custom.PlatformRelease, creating major/patch
+            // buckets as needed. A no-op (item dropped) if that product has not been fetched yet
+            // - lazy loading picks it up correctly the first time that tab is visited.
+            insertWorkItem(item) {
+                const version = parseReleaseVersion(item.fields['Custom.PlatformRelease']);
+                if (!version) return;
+                const dest = this.releaseResults.find(r => r.release === version.name);
+                if (!dest) return;
+                (((dest.releases[version.name] ??= {})[version.major] ??= {})[version.patch] ??= []).push(item);
+            },
+            // A freshly created work item is placed straight into the tree from the create API's
+            // own response - it already has every field Azure DevOps assigned it, nothing left to
+            // fetch.
+            addWorkItem(item) {
+                this.insertWorkItem(item);
+            },
+            // Same idea for a freshly created child task.
+            addChildTask(parentId, task) {
+                const key = String(parentId);
+                this.childTasks = { ...this.childTasks, [key]: [...(this.childTasks[key] || []), task] };
+            },
             forEachWorkItem(fn) {
                 for (const { releases } of this.releaseResults) {
                     for (const byMajor of Object.values(releases)) {
@@ -6432,11 +6544,22 @@
         // ===== Derived state =====
         // Assigned as computed refs; reactive() unwraps them on property access, so templates and
         // plain JS both read them as store.x.
-        store.products = computed(() => [...new Set(store.releaseResults.map(r => r.product))]);
+        // Tabs come from configuration, not from what has been fetched - so every tab is
+        // clickable (and can trigger its own lazy load) from the very first render.
+        store.products = computed(() => releaseNames.map(r => r.product));
 
+        // Data for a product is fetched lazily (see activateProduct()); this reflects whether
+        // the currently visible tab still needs to show the loader.
+        store.isActiveProductLoading = computed(() =>
+            !store.releaseResults.some(r => r.product === store.activeProduct) ||
+            store.loadingProducts.includes(store.activeProduct));
+
+        // Scoped to the active product only: other products may have been visited (and cached)
+        // earlier in the session, but "Expand All" should only ever affect what is on screen.
         store.allMajorIds = computed(() => {
             const ids = new Set();
-            for (const { release, releases } of store.releaseResults) {
+            for (const { product, release, releases } of store.releaseResults) {
+                if (product !== store.activeProduct) continue;
                 for (const major of Object.keys(releases[release] || {})) ids.add(`${release}-${major}`);
             }
             return [...ids];
@@ -6547,10 +6670,13 @@
             return count;
         });
 
-        // Parent ids to fetch child tasks for - previously scraped out of the DOM.
+        // Parent ids to fetch child tasks for - previously scraped out of the DOM. Scoped to the
+        // active product, so turning on Task Mode (or switching tabs) only fetches tasks for
+        // what is actually visible, not for every product loaded so far this session.
         store.visibleParentIds = computed(() => {
             const ids = new Set();
-            for (const { release, releases } of store.releaseResults) {
+            for (const { product, release, releases } of store.releaseResults) {
+                if (product !== store.activeProduct) continue;
                 const byMajor = releases[release] || {};
                 for (const major of Object.keys(byMajor)) {
                     if (store.hidden.majors.includes(`${release}-${major}`)) continue;
@@ -6578,11 +6704,10 @@
         watchEffect(() => document.documentElement.setAttribute('data-theme', store.resolvedTheme));
         darkModeQuery.addEventListener('change', (e) => { store.systemPrefersDark = e.matches; });
 
-        watch(() => store.products, (products) => {
-            if (products.length && !products.includes(store.activeProduct)) {
-                store.activeProduct = products[0];
-            }
-        });
+        // Fires on every tab click; the very first load is kicked off separately from
+        // DOMContentLoaded (no `immediate: true` here) to preserve today's startup ordering
+        // relative to the mountApp() calls below.
+        watch(() => store.activeProduct, activateProduct);
 
         // Drives every relative timestamp in the UI ("last reload", "updated x ago")
         setInterval(() => { store.clockTick = Date.now(); }, 60000);
@@ -6964,7 +7089,7 @@
             methods: {
                 openPATModal,
                 toggleTaskMode,
-                reload() { loadData(); },
+                reload() { resetAndReloadActiveProduct(); },
                 clearSearch() {
                     this.query = '';
                     store.search = '';
