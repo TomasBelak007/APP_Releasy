@@ -202,7 +202,7 @@ the root element** in `<body>`; only the components below use `x-template`.
 | `#filterApp` | Filter modal (assignee + status checkboxes) | `store.setFilters()`, no reload |
 | `#hiddenVersionsApp` | Unhide modal | `store.unhide()`, no reload |
 | `#valuePickerApp` | **All six "change X" modals** | `PICKER_KINDS[kind]` |
-| `#workItemDetailApp` | Work item detail | Meta badges, `<html-editor>`, tasks, comments |
+| `#workItemDetailApp` | Work item detail | Meta badges, `<html-editor>`, tasks, comments; title splits into a prefix `<select>` + text (options from `d.titlePrefixOptions`), see [Detail modal](#flows-what-calls-what) |
 | `#patApp` | PAT modal | `savePAT`, autofocus on open |
 | `#helpApp` | Help modal, `v-html` of the fetched guide | `showHelpSection('help-pat')` after render |
 | `#workItemCreatedApp` | Success modal after create | Close just hides it - the new item was already inserted into the store when it was created |
@@ -272,6 +272,16 @@ discarding tasks already cached for other tabs.
 `$expand=Relations`, then starts `loadWorkItemDetailTasks()`. Every callback re-checks
 `d.id === workItemId` before writing, so a fast second open cannot be overwritten by a slow first
 response. `closeWorkItemDetailModal(forceFullClose)` re-opens `returnTo` unless forced.
+
+The title field is split the same way the create forms split it, for every work item type: on
+open, `d.titlePrefixOptions` is set to `titlePrefixesTask` for a Task, or to
+`titlePrefixes[resolveProductForWorkItem(fields, fields['Custom.PlatformRelease'])] || []` for a
+Feature/Bug; then `splitTitleIntoPrefixAndSuffix(d.title, d.titlePrefixOptions, '')` fills
+`store.detail.titlePrefix` (the matched prefix, or `''` if none of `titlePrefixOptions` matches -
+left blank rather than guessed) and rewrites `d.title` down to just the free-text part. Everywhere
+that needs the item's actual title (the `System.Title` PATCH, `copyWorkItemFromDetail()`'s
+prefill, the picker headings for state/assignee/priority/severity/t-shirt/patch) reads
+`detailFullTitle()`, which rejoins `titlePrefix` + `title`.
 
 **Change a single field** - `open*ChangeModal(...)` -> `openValuePicker(kind, context)` (no-op
 unless `store.canWrite`) -> the `#valuePickerApp` option click -> `PICKER_KINDS[kind].apply()` ->

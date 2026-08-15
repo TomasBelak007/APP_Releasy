@@ -2442,9 +2442,15 @@
                         <i class="fa-solid fa-heading"></i> Title <span style="color: #dc3545;">*</span>
                     </label>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <input type="text" class="form-control" ref="titleInput" required 
+                        <select class="form-select" v-model="d.titlePrefix" :disabled="!store.canWrite"
+                                style="background-color: var(--bg-secondary); color: var(--text-primary); border-color: var(--border-color); flex: 2;">
+                            <option value="">—</option>
+                            <option v-for="prefix in d.titlePrefixOptions" :key="prefix" :value="prefix">{{ prefix }}</option>
+                        </select>
+                        <span style="color: var(--text-secondary); font-weight: bold; font-size: 1.1em; flex-shrink: 0;">-</span>
+                        <input type="text" class="form-control" ref="titleInput" required
                                placeholder="Enter work item title" v-model="d.title" :readonly="!store.canWrite"
-                               style="background-color: var(--bg-secondary); color: var(--text-primary); border-color: var(--border-color); flex: 1;">
+                               style="background-color: var(--bg-secondary); color: var(--text-primary); border-color: var(--border-color); flex: 6;">
                         <button id="copyWorkItemTitleBtn" class="btn" style="height: 38px; width: 38px; padding: 0; border: 1px solid var(--border-color); background: var(--bg-secondary); flex-shrink: 0; display: flex; align-items: center; justify-content: center;" @click="copyTitle" title="Copy work item title to clipboard">
                             <i class="fa-solid fa-copy"></i>
                         </button>
@@ -3114,8 +3120,8 @@
          * - `version`: bump only when explicitly asked to.
          */
         const APP_RELEASE = {
-            version: '1.0.43',
-            updatedAt: '2026-08-14T21:55:06.000Z'
+            version: '1.0.44',
+            updatedAt: '2026-08-15T04:40:52.000Z'
         };
 
         // ===== API Configuration =====
@@ -4364,10 +4370,14 @@
         // of the severity / t-shirt fields exists at all - so toggleSeverityField(), the two
         // populate*Form() helpers and setAssigneeSelectValue() all went away with them.
         
-        function splitTitleIntoPrefixAndSuffix(fullTitle, prefixOptions) {
+        // fallbackPrefix is what to return when no confident prefix match is found. Create-form
+        // callers default to the first option (best guess); the detail modal's Task title editor
+        // passes '' instead, so an unrecognized prefix is left blank for the user to fix rather
+        // than silently mis-tagged.
+        function splitTitleIntoPrefixAndSuffix(fullTitle, prefixOptions, fallbackPrefix = prefixOptions[0] || '') {
             const title = String(fullTitle || '').trim();
             if (!title) {
-                return { prefix: prefixOptions[0] || '', suffix: '' };
+                return { prefix: fallbackPrefix, suffix: '' };
             }
             for (const prefix of prefixOptions) {
                 const marker = `${prefix} - `;
@@ -4382,7 +4392,7 @@
                     return { prefix, suffix: title.slice(dashIdx + 3).trim() };
                 }
             }
-            return { prefix: prefixOptions[0] || '', suffix: title };
+            return { prefix: fallbackPrefix, suffix: title };
         }
         
         function getCreateContextFromPlatformRelease(platformRelease, tags) {
@@ -4958,7 +4968,8 @@
                 return;
             }
             
-            if (!detailData.title.trim()) {
+            const fullTitle = detailFullTitle();
+            if (!fullTitle) {
                 showNotification('Title cannot be empty', 'error');
                 return;
             }
@@ -4970,7 +4981,7 @@
             }
             
             const prefill = {
-                title: detailData.title.trim(),
+                title: fullTitle,
                 description: readDetailDescriptionHtml(),
                 assigneeEmail: fields['System.AssignedTo']?.uniqueName || ''
             };
@@ -5817,6 +5828,8 @@
             d.fields = {};
             d.relations = [];
             d.title = '';
+            d.titlePrefix = '';
+            d.titlePrefixOptions = [];
             d.descriptionHtml = '';
             d.tasks = [];
             d.tasksError = '';
@@ -5841,6 +5854,17 @@
                 d.title = fields['System.Title'] || `#${workItemId}`;
                 
                 const type = fields['System.WorkItemType'] || '';
+                
+                // Every type gets the same prefix-select + free-text editing the create forms use;
+                // an unrecognized prefix is left blank rather than guessed (see
+                // splitTitleIntoPrefixAndSuffix()). Tasks use the fixed titlePrefixesTask list,
+                // Features/Bugs use the prefix list of the product resolved from their fields.
+                d.titlePrefixOptions = type === 'Task'
+                    ? titlePrefixesTask
+                    : titlePrefixes[resolveProductForWorkItem(fields, fields['Custom.PlatformRelease'])] || [];
+                const { prefix, suffix } = splitTitleIntoPrefixAndSuffix(d.title, d.titlePrefixOptions, '');
+                d.titlePrefix = prefix;
+                d.title = suffix;
                 
                 // Prefer ReproSteps for Bug if present, else System.Description
                 d.descriptionHtml = fields['Microsoft.VSTS.TCM.ReproSteps']
@@ -5916,6 +5940,15 @@
             window.history.pushState({}, '', url);
         };
         
+        // d.title is just the free-text part, the prefix lives separately in d.titlePrefix (see
+        // openWorkItemDetailModal()) - this is what should actually be read/sent/displayed as
+        // "the title".
+        function detailFullTitle() {
+            const d = store.detail;
+            const title = d.title.trim();
+            return d.titlePrefix ? `${d.titlePrefix} - ${title}` : title;
+        }
+        
         window.updateWorkItemDescription = async function() {
             // Check if in read-write mode (edit is only allowed in read-write mode)
             const hasWritePermission = localStorage.getItem('tokenHasWriteCapability') === 'true';
@@ -5931,7 +5964,7 @@
                 return;
             }
             
-            const title = d.title.trim();
+            const title = detailFullTitle();
             if (!title) {
                 showNotification('Title cannot be empty', 'error');
                 return;
@@ -6389,6 +6422,11 @@
                 fields: {},
                 relations: [],
                 title: '',
+                // The title editor splits into this prefix select + the free text kept in `title`
+                // (see openWorkItemDetailModal() and detailFullTitle()). titlePrefixOptions holds
+                // the choices offered for the current item's type/product.
+                titlePrefix: '',
+                titlePrefixOptions: [],
                 // Rendered into the contenteditable once per open, never bound to it
                 descriptionHtml: '',
                 tasks: [],
@@ -7020,27 +7058,27 @@
                 shortDate(value) { return formatRelativeDate(value).text || value; },
                 editState() {
                     if (!this.store.canWrite) return;
-                    openStatusChangeModal(this.d.id, this.type, this.state, this.d.title);
+                    openStatusChangeModal(this.d.id, this.type, this.state, detailFullTitle());
                 },
                 editPriority() {
                     if (!this.store.canWrite) return;
-                    openPriorityChangeModal(this.d.id, this.type, String(this.priority), this.d.title);
+                    openPriorityChangeModal(this.d.id, this.type, String(this.priority), detailFullTitle());
                 },
                 editSeverity() {
                     if (!this.store.canWrite) return;
-                    openSeverityChangeModal(this.d.id, this.type, String(this.severity), this.d.title);
+                    openSeverityChangeModal(this.d.id, this.type, String(this.severity), detailFullTitle());
                 },
                 editTshirt() {
                     if (!this.store.canWrite) return;
-                    openTshirtChangeModal(this.d.id, this.type, this.tshirtLabel, this.d.title, getTshirtFieldKey(this.fields) || '');
+                    openTshirtChangeModal(this.d.id, this.type, this.tshirtLabel, detailFullTitle(), getTshirtFieldKey(this.fields) || '');
                 },
                 editPatch() {
                     if (!this.store.canWrite) return;
-                    openChangePatchModal(this.d.id, this.d.title);
+                    openChangePatchModal(this.d.id, detailFullTitle());
                 },
                 editAssignee() {
                     if (!this.store.canWrite) return;
-                    openAssignedToChangeModal(this.d.id, this.type, this.assignedTo, this.d.title);
+                    openAssignedToChangeModal(this.d.id, this.type, this.assignedTo, detailFullTitle());
                 }
             }
         }, '#workItemDetailApp');
