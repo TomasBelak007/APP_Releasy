@@ -79,20 +79,15 @@
             width: auto;
             transition: opacity 0.3s ease;
         }
-        .controls-panel {
+        .controls-panel, .content-panel {
             background-color: var(--bg-panel);
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px var(--shadow-color);
-            margin-bottom: 20px;
             transition: background-color 0.3s ease, box-shadow 0.3s ease;
         }
-        .content-panel {
-            background-color: var(--bg-panel);
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px var(--shadow-color);
-            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+        .controls-panel {
+            margin-bottom: 20px;
         }
 
         /* ===== Release Headers & Hierarchy ===== */
@@ -130,7 +125,7 @@
         }
         .work-item:hover {
             background-color: var(--hover-bg);
-            border-left: 4px solid #0d6efd;
+            border-left: 4px solid var(--color-resolved);
             transform: translateX(2px);
             box-shadow: 0 2px 8px var(--shadow-color);
         }
@@ -160,11 +155,11 @@
             opacity: 0.6;
         }
         .hide-toggle-btn:hover {
-            color: #dc3545;
+            color: var(--color-critical);
             opacity: 1;
         }
         .hide-toggle-btn.hidden {
-            color: #dc3545;
+            color: var(--color-critical);
         }
         .hide-toggle-btn i {
             pointer-events: none;
@@ -178,7 +173,7 @@
             font-size: 0.7em;
             padding: 2px 4px;
             margin-left: 8px;
-            color: #28a745;
+            color: var(--color-closed);
             transition: all 0.2s;
             opacity: 0.7;
         }
@@ -242,8 +237,8 @@
             box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.1);
         }
         .tab-button.active {
-            color: #0d6efd;
-            border-bottom-color: #0d6efd;
+            color: var(--color-resolved);
+            border-bottom-color: var(--color-resolved);
             background-color: var(--bg-panel);
             border-bottom-width: 3px;
             font-weight: 500;
@@ -402,7 +397,7 @@
             transform: scale(1.1);
         }
         .theme-btn.active {
-            background-color: #0d6efd;
+            background-color: var(--color-resolved);
             color: white;
         }
         
@@ -413,7 +408,7 @@
             right: 20px;
             width: 40px;
             height: 40px;
-            background-color: #0d6efd;
+            background-color: var(--color-resolved);
             color: white;
             border-radius: 50%;
             display: flex;
@@ -472,7 +467,7 @@
         }
         .permission-badge.read-write {
             background-color: rgba(40, 167, 69, 0.15);
-            color: #28a745;
+            color: var(--color-closed);
             border: 1px solid rgba(40, 167, 69, 0.3);
         }
         .permission-badge i {
@@ -480,7 +475,7 @@
         }
         .permission-badge.checking {
             background-color: rgba(23, 162, 184, 0.15);
-            color: #17a2b8;
+            color: var(--color-active);
             border: 1px solid rgba(23, 162, 184, 0.3);
             animation: pulse 1.5s ease-in-out infinite;
         }
@@ -511,7 +506,7 @@
             position: absolute;
             top: -4px;
             right: -4px;
-            background-color: #fd7e14;
+            background-color: var(--color-high);
             width: 10px;
             height: 10px;
             border-radius: 50%;
@@ -536,19 +531,19 @@
         }
         
         #filterBtn {
-            border-color: #0dcaf0;
-            color: #0dcaf0;
+            border-color: var(--color-low);
+            color: var(--color-low);
         }
         
         #filterBtn:hover {
             background-color: rgba(13, 202, 240, 0.1);
-            border-color: #0dcaf0;
-            color: #0dcaf0;
+            border-color: var(--color-low);
+            color: var(--color-low);
         }
         
         #filterBtn.active {
-            background-color: #0dcaf0;
-            border-color: #0dcaf0;
+            background-color: var(--color-low);
+            border-color: var(--color-low);
             color: white;
         }
         
@@ -592,7 +587,7 @@
         }
         .form-control:focus, .form-select:focus {
             background-color: var(--bg-secondary);
-            border-color: #0d6efd;
+            border-color: var(--color-resolved);
             color: var(--text-primary);
             box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
         }
@@ -619,8 +614,8 @@
             margin-bottom: 0.5rem;
         }
         .form-check-input:checked {
-            background-color: #0d6efd;
-            border-color: #0d6efd;
+            background-color: var(--color-resolved);
+            border-color: var(--color-resolved);
         }
         .form-check-label {
             margin-left: 0.5rem;
@@ -668,11 +663,11 @@
         }
         .grid-search-input:focus {
             outline: none;
-            border-color: #0d6efd;
+            border-color: var(--color-resolved);
             box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
         }
         .grid-search-input.active {
-            border-color: #0d6efd;
+            border-color: var(--color-resolved);
         }
         .grid-search-clear {
             position: absolute;
@@ -743,7 +738,7 @@
             gap: 8px;
         }
         .powered-by a {
-            color: #0d6efd;
+            color: var(--color-resolved);
             text-decoration: none;
             font-weight: 600;
             transition: color 0.2s ease;
@@ -789,11 +784,11 @@
         
         .help-nav-link:hover {
             background-color: rgba(13, 110, 253, 0.1);
-            color: #0d6efd;
+            color: var(--color-resolved);
         }
         
         .help-nav-link.active {
-            background-color: #0d6efd;
+            background-color: var(--color-resolved);
             color: white;
         }
         
@@ -848,7 +843,7 @@
         }
         
         .help-content h4 {
-            color: #0d6efd;
+            color: var(--color-resolved);
             margin-top: 0;
             margin-bottom: 15px;
             font-size: 1.5em;
@@ -872,11 +867,11 @@
             padding: 2px 6px;
             border-radius: 3px;
             font-family: monospace;
-            color: #dc3545;
+            color: var(--color-critical);
         }
         .help-content .note {
             background-color: rgba(255, 193, 7, 0.2);
-            border-left: 4px solid #ffc107;
+            border-left: 4px solid var(--color-medium);
             padding: 10px;
             margin: 10px 0;
             border-radius: 4px;
@@ -907,24 +902,7 @@
             transform: translateY(0);
         }
         
-        .assigned-to-edit-icon {
-            position: absolute;
-            top: -4px;
-            right: -4px;
-            background-color: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 50%;
-            width: 16px;
-            height: 16px;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.6em;
-            color: var(--text-primary);
-            z-index: 1000;
-            pointer-events: none;
-        }
-        
+        /* .assigned-to-edit-icon shared declaration lives with the other *-edit-icon rules */
         .assigned-to-badge-wrapper:hover .assigned-to-edit-icon {
             display: flex;
         }
@@ -1000,16 +978,16 @@
         .loader-circle-1 {
             width: 100px;
             height: 100px;
-            border-top-color: #0d6efd;
-            border-right-color: #0d6efd;
+            border-top-color: var(--color-resolved);
+            border-right-color: var(--color-resolved);
             animation-duration: 1.5s;
         }
         
         .loader-circle-2 {
             width: 70px;
             height: 70px;
-            border-top-color: #0dcaf0;
-            border-right-color: #0dcaf0;
+            border-top-color: var(--color-low);
+            border-right-color: var(--color-low);
             animation-duration: 2s;
             animation-direction: reverse;
         }
@@ -1048,7 +1026,7 @@
             font-size: 1.3em;
             padding: 15px 10px;
             background-color: var(--bg-secondary);
-            border-left: 4px solid #0d6efd;
+            border-left: 4px solid var(--color-resolved);
             transition: background-color 0.3s ease;
         }
         .level-0 .release-header-content {
@@ -1063,16 +1041,6 @@
             background-color: var(--bg-secondary);
             border-left: 4px solid #198754;
             transition: background-color 0.3s ease;
-        }
-        .level-2 {
-            background-color: var(--bg-secondary);
-            border-left: 4px solid #198754;
-            transition: background-color 0.3s ease;
-        }
-        .level-3 {
-            background-color: var(--bg-panel);
-            transition: background-color 0.3s ease;
-            border-left: 4px solid #ffc107;
         }
         .release-header-content {
             display: flex;
@@ -1469,15 +1437,15 @@
             min-width: 20px;
             text-align: center;
         }
-        .priority-1 { background-color: var(--color-critical); color: white; }
-        .priority-2 { background-color: var(--color-high); color: white; }
-        .priority-3 { background-color: var(--color-medium); color: black; }
-        .priority-4 { background-color: var(--color-low); color: black; }
+        .priority-1, .severity-1 { background-color: var(--color-critical); color: white; }
+        .priority-2, .severity-2 { background-color: var(--color-high); color: white; }
+        .priority-3, .severity-3 { background-color: var(--color-medium); color: black; }
+        .priority-4, .severity-4 { background-color: var(--color-low); color: black; }
         .priority-badge:not([class*="priority-"]) { 
             background-color: var(--border-color); 
             color: var(--text-secondary); 
         }
-        .severity-badge {
+        .severity-badge, .tshirt-badge {
             display: inline-block;
             padding: 2px 6px;
             border-radius: 3px;
@@ -1488,28 +1456,13 @@
             text-align: center;
             margin-left: 4px;
         }
-        .severity-1 { background-color: var(--color-critical); color: white; }
-        .severity-2 { background-color: var(--color-high); color: white; }
-        .severity-3 { background-color: var(--color-medium); color: black; }
-        .severity-4 { background-color: var(--color-low); color: black; }
         .severity-badge:not([class*="severity-"]) {
             background-color: var(--border-color);
             color: var(--text-secondary);
         }
-        .tshirt-badge {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 0.75em;
-            font-weight: 700;
-            white-space: nowrap;
-            min-width: 20px;
-            text-align: center;
-            margin-left: 4px;
-        }
-        .tshirt-s { background-color: #0d6efd; color: white; }
-        .tshirt-m { background-color: #fd7e14; color: white; }
-        .tshirt-l { background-color: #dc3545; color: white; }
+        .tshirt-s { background-color: var(--color-resolved); color: white; }
+        .tshirt-m { background-color: var(--color-high); color: white; }
+        .tshirt-l { background-color: var(--color-critical); color: white; }
         .tshirt-unknown {
             background-color: var(--border-color);
             color: var(--text-secondary);
@@ -1519,142 +1472,10 @@
             color: var(--text-secondary);
         }
         
-        /* Priority Edit Wrapper */
-        .priority-badge-wrapper {
-            position: relative;
-            display: inline-block;
-            cursor: default;
-            transition: all 0.2s;
-            z-index: 1;
-            overflow: visible;
-        }
-        .priority-badge-wrapper.clickable {
-            cursor: pointer;
-        }
-        .priority-badge-wrapper.clickable:hover {
-            transform: translateY(-1px);
-        }
-        .priority-badge-wrapper.clickable:active {
-            transform: translateY(0);
-        }
-        .priority-edit-icon {
-            position: absolute;
-            top: -4px;
-            right: -4px;
-            background-color: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 50%;
-            width: 16px;
-            height: 16px;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.6em;
-            color: var(--text-primary);
-            z-index: 1000;
-            pointer-events: none;
-        }
-        .priority-badge-wrapper.clickable:hover .priority-edit-icon {
-            display: flex;
-        }
-        .priority-badge-wrapper.read-only {
-            cursor: default;
-        }
-        .priority-badge-wrapper.read-only .priority-edit-icon {
-            display: none !important;
-        }
-        
-        /* Severity Edit Wrapper */
-        .severity-badge-wrapper {
-            position: relative;
-            display: inline-block;
-            cursor: default;
-            transition: all 0.2s;
-            z-index: 1;
-            overflow: visible;
-        }
-        .severity-badge-wrapper.clickable {
-            cursor: pointer;
-        }
-        .severity-badge-wrapper.clickable:hover {
-            transform: translateY(-1px);
-        }
-        .severity-badge-wrapper.clickable:active {
-            transform: translateY(0);
-        }
-        .severity-edit-icon {
-            position: absolute;
-            top: -4px;
-            right: -4px;
-            background-color: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 50%;
-            width: 16px;
-            height: 16px;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.6em;
-            color: var(--text-primary);
-            z-index: 1000;
-            pointer-events: none;
-        }
-        .severity-badge-wrapper.clickable:hover .severity-edit-icon {
-            display: flex;
-        }
-        .severity-badge-wrapper.read-only {
-            cursor: default;
-        }
-        .severity-badge-wrapper.read-only .severity-edit-icon {
-            display: none !important;
-        }
-        
-        /* Version (Patch) Edit Wrapper */
-        .version-badge-wrapper {
-            position: relative;
-            display: inline-block;
-            cursor: default;
-            transition: all 0.2s;
-            z-index: 1;
-            overflow: visible;
-        }
-        .version-badge-wrapper.clickable {
-            cursor: pointer;
-        }
-        .version-badge-wrapper.clickable:hover {
-            transform: translateY(-1px);
-        }
-        .version-badge-wrapper.clickable:active {
-            transform: translateY(0);
-        }
-        .version-edit-icon {
-            position: absolute;
-            top: -4px;
-            right: -4px;
-            background-color: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 50%;
-            width: 16px;
-            height: 16px;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.6em;
-            color: var(--text-primary);
-            z-index: 1000;
-            pointer-events: none;
-        }
-        .version-badge-wrapper.clickable:hover .version-edit-icon {
-            display: flex;
-        }
-        .version-badge-wrapper.read-only {
-            cursor: default;
-        }
-        .version-badge-wrapper.read-only .version-edit-icon {
-            display: none !important;
-        }
-        
-        /* T-shirt Size Edit Wrapper */
+        /* Priority / Severity / Version / T-shirt Edit Wrappers - same structure, different class per field */
+        .priority-badge-wrapper,
+        .severity-badge-wrapper,
+        .version-badge-wrapper,
         .tshirt-badge-wrapper {
             position: relative;
             display: inline-block;
@@ -1663,16 +1484,29 @@
             z-index: 1;
             overflow: visible;
         }
+        .priority-badge-wrapper.clickable,
+        .severity-badge-wrapper.clickable,
+        .version-badge-wrapper.clickable,
         .tshirt-badge-wrapper.clickable {
             cursor: pointer;
         }
+        .priority-badge-wrapper.clickable:hover,
+        .severity-badge-wrapper.clickable:hover,
+        .version-badge-wrapper.clickable:hover,
         .tshirt-badge-wrapper.clickable:hover {
             transform: translateY(-1px);
         }
+        .priority-badge-wrapper.clickable:active,
+        .severity-badge-wrapper.clickable:active,
+        .version-badge-wrapper.clickable:active,
         .tshirt-badge-wrapper.clickable:active {
             transform: translateY(0);
         }
-        .tshirt-edit-icon {
+        .priority-edit-icon,
+        .severity-edit-icon,
+        .version-edit-icon,
+        .tshirt-edit-icon,
+        .assigned-to-edit-icon {
             position: absolute;
             top: -4px;
             right: -4px;
@@ -1689,12 +1523,21 @@
             z-index: 1000;
             pointer-events: none;
         }
+        .priority-badge-wrapper.clickable:hover .priority-edit-icon,
+        .severity-badge-wrapper.clickable:hover .severity-edit-icon,
+        .version-badge-wrapper.clickable:hover .version-edit-icon,
         .tshirt-badge-wrapper.clickable:hover .tshirt-edit-icon {
             display: flex;
         }
+        .priority-badge-wrapper.read-only,
+        .severity-badge-wrapper.read-only,
+        .version-badge-wrapper.read-only,
         .tshirt-badge-wrapper.read-only {
             cursor: default;
         }
+        .priority-badge-wrapper.read-only .priority-edit-icon,
+        .severity-badge-wrapper.read-only .severity-edit-icon,
+        .version-badge-wrapper.read-only .version-edit-icon,
         .tshirt-badge-wrapper.read-only .tshirt-edit-icon {
             display: none !important;
         }
@@ -1799,9 +1642,8 @@
             margin-left: 0;
         }
         
-        /* Copy buttons icons - ensure visibility in dark mode */
-        #copyWorkItemTitleBtn i,
-        #copyWorkItemLinkBtn i {
+        /* Copy button icon - ensure visibility in dark mode */
+        #copyWorkItemTitleBtn i {
             color: var(--text-primary);
         }
         
@@ -2138,7 +1980,7 @@
         }
         
         .status-option.current-status {
-            border-color: #28a745;
+            border-color: var(--color-closed);
             background-color: rgba(40, 167, 69, 0.1);
         }
 
@@ -2166,9 +2008,9 @@
             max-width: 400px;
             word-break: break-word;
         }
-        .notification-info { background-color: #17a2b8; }
-        .notification-success { background-color: #28a745; }
-        .notification-error { background-color: #dc3545; }
+        .notification-info { background-color: var(--color-active); }
+        .notification-success { background-color: var(--color-closed); }
+        .notification-error { background-color: var(--color-critical); }
         .notification-enter-active { animation: slideIn 0.3s ease-out; }
         .notification-leave-active { animation: slideOut 0.3s ease-out; }
 
@@ -2185,8 +2027,8 @@
             cursor: pointer;
             transition: all 0.2s ease;
         }
-        .filter-bulk-on { background-color: #28a745; }
-        .filter-bulk-off { background-color: #dc3545; }
+        .filter-bulk-on { background-color: var(--color-closed); }
+        .filter-bulk-off { background-color: var(--color-critical); }
     </style>
 </head>
 <body>
@@ -3121,7 +2963,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-08-15T04:40:52.000Z'
+            updatedAt: '2026-08-15T09:13:47.000Z'
         };
 
         // ===== API Configuration =====
@@ -3272,70 +3114,6 @@
         };
 
         // ===== Helper Functions (Phase 1 Optimizations - Safe Version) =====
-        
-        // ===== DOM Cache Helper =====
-        const DOMCache = {
-            elements: {},
-            
-            /**
-             * Get element by ID with caching
-             * @param {string} id - Element ID
-             * @returns {HTMLElement|null} Cached element or null
-             */
-            get(id) {
-                if (!this.elements[id]) {
-                    const element = document.getElementById(id);
-                    if (element) {
-                        this.elements[id] = element;
-                    }
-                }
-                return this.elements[id] || null;
-            },
-            
-            /**
-             * Query selector with caching (use carefully - DOM changes!)
-             * @param {string} selector - CSS selector
-             * @param {boolean} forceRefresh - Force refresh cache
-             * @returns {HTMLElement|null} Cached element or null
-             */
-            query(selector, forceRefresh = false) {
-                if (forceRefresh || !this.elements[selector]) {
-                    const element = document.querySelector(selector);
-                    if (element) {
-                        this.elements[selector] = element;
-                    }
-                }
-                return this.elements[selector] || null;
-            },
-            
-            /**
-             * Query all elements (not cached - returns live NodeList)
-             * @param {string} selector - CSS selector
-             * @returns {NodeList} Live NodeList
-             */
-            queryAll(selector) {
-                return document.querySelectorAll(selector);
-            },
-            
-            /**
-             * Clear cache for specific key or all cache
-             * @param {string} key - Optional key to clear, or undefined to clear all
-             */
-            clear(key) {
-                if (key) {
-                    delete this.elements[key];
-                } else {
-                    this.elements = {};
-                }
-            },
-            
-            /**
-             * Invalidate cache when DOM changes significantly
-             */
-            invalidate() {
-                this.elements = {};
-            }
-        };
 
         // ===== DevOps API Helper =====
         async function devOpsApiRequest(endpoint, method = 'GET', body = null, options = {}) {
@@ -3410,14 +3188,6 @@
 
         async function devOpsPost(endpoint, body, options = {}) {
             return devOpsApiRequest(endpoint, 'POST', body, options);
-        }
-
-        async function devOpsPatch(endpoint, body, options = {}) {
-            return devOpsApiRequest(endpoint, 'PATCH', body, options);
-        }
-
-        async function devOpsDelete(endpoint, options = {}) {
-            return devOpsApiRequest(endpoint, 'DELETE', null, options);
         }
 
         // ===== PAT Encryption/Decryption =====
@@ -3538,7 +3308,7 @@
         async function requirePAT() {
             const encryptedPat = localStorage.getItem('devops_pat');
             if (!encryptedPat) {
-                alert(ERROR_MESSAGES.NO_PAT);
+                showNotification(ERROR_MESSAGES.NO_PAT, 'error');
                 throw new Error('PAT_REQUIRED');
             }
             const pat = await decryptPAT(encryptedPat);
@@ -3631,22 +3401,7 @@
             return releases;
         }
 
-        function calculateProgress(items) {
-            const states = items.reduce((acc, item) => {
-                acc[item.fields['System.State']] = (acc[item.fields['System.State']] || 0) + 1;
-                return acc;
-            }, {});
-
-            const total = items.length;
-            const completed = (states['Done'] || 0) + (states['Closed'] || 0);
-            return {
-                percentage: (completed / total) * 100,
-                states: states,
-                total: total
-            };
-        }
-
-        // createProgressBar() removed - replaced by the <progress-bar> component.
+        // calculateProgress() and createProgressBar() removed - replaced by the <progress-bar> component.
 
         // ===== Last Reload Time Management =====
         function saveLastReloadTime() {
@@ -3748,41 +3503,41 @@
             await loadChildTasksIntoStore(product);
         }
         
+        // Azure DevOps caps ids per request at ~200; this splits into batches, fetches them in
+        // parallel and flattens the results into one { value: [...] }, same shape as the raw API.
+        async function fetchWorkItemsInBatches(ids, pat, extraParams, warnLabel) {
+            const BATCH_SIZE = 200;
+            const batches = [];
+            for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+                batches.push(ids.slice(i, i + BATCH_SIZE));
+            }
+            
+            const allData = await Promise.all(
+                batches.map(async (batch) => {
+                    const response = await fetch(
+                        `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems?ids=${batch.join(',')}${extraParams ? `&${extraParams}` : ''}&api-version=6.0`,
+                        {
+                            headers: {
+                                'Authorization': `Basic ${btoa(`:${pat}`)}`
+                            }
+                        }
+                    );
+                    
+                    if (!response.ok) {
+                        Logger.warn(`${warnLabel} batch fetch failed with status: ${response.status}`);
+                        return { value: [] };
+                    }
+                    
+                    return response.json();
+                })
+            );
+            
+            return { value: allData.flatMap(d => d.value || []) };
+        }
+        
         async function fetchChildTasksForWorkItems(workItemIds, pat) {
             try {
-                // Azure DevOps has a limit on work items per request (~200)
-                // Split into batches to avoid errors
-                const BATCH_SIZE = 200;
-                const batches = [];
-                for (let i = 0; i < workItemIds.length; i += BATCH_SIZE) {
-                    batches.push(workItemIds.slice(i, i + BATCH_SIZE));
-                }
-                
-                // Fetch all batches in parallel
-                const allData = await Promise.all(
-                    batches.map(async (batch) => {
-                        const response = await fetch(
-                            `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems?ids=${batch.join(',')}&$expand=relations&api-version=6.0`,
-                            {
-                                headers: {
-                                    'Authorization': `Basic ${btoa(`:${pat}`)}`
-                                }
-                            }
-                        );
-                        
-                        if (!response.ok) {
-                            Logger.warn(`Batch fetch failed with status: ${response.status}`);
-                            return { value: [] };
-                        }
-                        
-                        return response.json();
-                    })
-                );
-                
-                // Merge all results
-                const data = {
-                    value: allData.flatMap(d => d.value || [])
-                };
+                const data = await fetchWorkItemsInBatches(workItemIds, pat, '$expand=relations', 'Batch');
                 
                 // Extrahovat child task IDs
                 const childTaskIds = new Set();
@@ -3814,35 +3569,7 @@
                 
                 // Načíst detaily child tasků v batch requestech
                 const childTaskIdsArray = Array.from(childTaskIds);
-                
-                const childTaskBatches = [];
-                for (let i = 0; i < childTaskIdsArray.length; i += BATCH_SIZE) {
-                    childTaskBatches.push(childTaskIdsArray.slice(i, i + BATCH_SIZE));
-                }
-                
-                const allChildTasksData = await Promise.all(
-                    childTaskBatches.map(async (batch) => {
-                        const response = await fetch(
-                            `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems?ids=${batch.join(',')}&api-version=6.0`,
-                            {
-                                headers: {
-                                    'Authorization': `Basic ${btoa(`:${pat}`)}`
-                                }
-                            }
-                        );
-                        
-                        if (!response.ok) {
-                            Logger.warn(`Child tasks batch fetch failed with status: ${response.status}`);
-                            return { value: [] };
-                        }
-                        
-                        return response.json();
-                    })
-                );
-                
-                const childTasksData = {
-                    value: allChildTasksData.flatMap(d => d.value || [])
-                };
+                const childTasksData = await fetchWorkItemsInBatches(childTaskIdsArray, pat, '', 'Child tasks');
                 
                 // Namapovat child tasky na jejich rodiče
                 const result = {};
@@ -4921,7 +4648,7 @@
                 }, `https://dev.azure.com/${config.organization}/${config.project}/_workitems/edit/${createdTask.id}`);
             } catch (error) {
                 Logger.error('Error creating task:', error);
-                alert(`Error creating task: ${error.message}`);
+                showNotification(`Error creating task: ${error.message}`, 'error');
             }
         };
 
@@ -4956,8 +4683,7 @@
         }
         
         window.copyWorkItemFromDetail = async function() {
-            const hasWritePermission = localStorage.getItem('tokenHasWriteCapability') === 'true';
-            if (!hasWritePermission) {
+            if (!store.canWrite) {
                 showNotification('Creating copies is only available in read-write mode', 'error');
                 return;
             }
@@ -5036,7 +4762,7 @@
             const epicID = releaseConfig?.epicID;
             if (!epicID) {
                 Logger.error('EpicID not found for release:', releaseName);
-                alert(ERROR_MESSAGES.NO_EPIC_ID(releaseName));
+                showNotification(ERROR_MESSAGES.NO_EPIC_ID(releaseName), 'error');
                 return;
             }
             
@@ -5102,7 +4828,7 @@
                 }, createdItem._links.html.href);
             } catch (error) {
                 Logger.error('Error creating work item:', error);
-                alert(`❌ Error creating work item:\n\n${error.message}\n\nCheck console (F12) for details.`);
+                showNotification(`Error creating work item: ${error.message}`, 'error');
             }
         };
         
@@ -5121,7 +4847,7 @@
                 const workItemIds = (patchNode?.items || []).map(item => item.id);
                 
                 if (workItemIds.length === 0) {
-                    alert('No work items found for this patch version.');
+                    showNotification('No work items found for this patch version.', 'error');
                     return;
                 }
                 
@@ -5330,7 +5056,7 @@
                 
             } catch (error) {
                 Logger.error('Error exporting PDF:', error);
-                alert('Failed to export PDF. Please try again.');
+                showNotification('Failed to export PDF. Please try again.', 'error');
             }
         };
         
@@ -5438,13 +5164,21 @@
             openValuePicker('status', { id: workItemId, type: workItemType, current: currentState, title });
         };
         
-        // Generic function for PATCH API calls to Azure DevOps
+        // Generic function for PATCH API calls to Azure DevOps.
+        // - `storeValue` lets the in-memory write differ from the PATCH body value (e.g. Assigned
+        //   To PATCHes an email but stores a { displayName, uniqueName } object).
+        // - `applyToStore: false` skips the default store.applyFieldUpdate() call for changes that
+        //   need a different store write (e.g. Patch Version relocates the item instead).
+        // - `errorMessage` may be a string or a function(error) => string, for callers that want
+        //   the caught error's message folded into their own notification text.
         async function updateWorkItemField(workItemId, fieldPath, newValue, options = {}) {
             const {
                 successMessage,
                 errorMessage,
                 onSuccess = null,
-                operation = 'replace'
+                operation = 'replace',
+                storeValue = newValue,
+                applyToStore = true
             } = options;
             
             store.picker.busy = true;
@@ -5475,7 +5209,9 @@
                     throw new Error(`Failed to update: ${response.statusText}${errorText ? ` - ${errorText}` : ''}`);
                 }
                 
-                store.applyFieldUpdate(workItemId, fieldPath, operation === 'remove' ? null : newValue);
+                if (applyToStore) {
+                    store.applyFieldUpdate(workItemId, fieldPath, operation === 'remove' ? null : storeValue);
+                }
                 
                 // Show success message
                 if (successMessage) {
@@ -5489,7 +5225,8 @@
             } catch (error) {
                 Logger.error('Error updating work item:', error);
                 if (errorMessage) {
-                    showNotification(errorMessage, 'error');
+                    const message = typeof errorMessage === 'function' ? errorMessage(error) : errorMessage;
+                    showNotification(message, 'error');
                 }
             } finally {
                 store.picker.busy = false;
@@ -5520,48 +5257,18 @@
         };
         
         async function changeWorkItemAssignedTo(workItemId, assigneeEmail, assigneeDisplay, title) {
-            store.picker.busy = true;
-            
-            try {
-                const pat = await getPAT();
-                const url = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems/${workItemId}?api-version=7.1`;
-                
-                const patchOperation = assigneeEmail ? {
-                    'op': 'replace',
-                    'path': '/fields/System.AssignedTo',
-                    'value': assigneeEmail
-                } : {
-                    'op': 'remove',
-                    'path': '/fields/System.AssignedTo'
-                };
-                
-                const response = await fetch(url, {
-                    method: 'PATCH',
-                    headers: {
-                        'Authorization': 'Basic ' + btoa(':' + pat),
-                        'Content-Type': 'application/json-patch+json'
-                    },
-                    body: JSON.stringify([patchOperation])
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to update assigned to: ${response.statusText}`);
+            await updateWorkItemField(
+                workItemId,
+                '/fields/System.AssignedTo',
+                assigneeEmail,
+                {
+                    operation: assigneeEmail ? 'replace' : 'remove',
+                    storeValue: assigneeDisplay ? { displayName: assigneeDisplay, uniqueName: assigneeEmail } : null,
+                    successMessage: `Assigned to changed to "${assigneeDisplay || 'Unassigned'}" for: ${title}`,
+                    errorMessage: (error) => `Error changing assigned to: ${error.message}`,
+                    onSuccess: closeValuePicker
                 }
-                
-                store.applyFieldUpdate(workItemId, '/fields/System.AssignedTo', assigneeDisplay
-                    ? { displayName: assigneeDisplay, uniqueName: assigneeEmail }
-                    : null);
-                
-                // Show success message
-                showNotification(`Assigned to changed to "${assigneeDisplay || 'Unassigned'}" for: ${title}`, 'success');
-                
-                closeValuePicker();
-            } catch (error) {
-                Logger.error('Error changing assigned to:', error);
-                showNotification(`Error changing assigned to: ${error.message}`, 'error');
-            } finally {
-                store.picker.busy = false;
-            }
+            );
         }
         
         // Pushes onto store.notifications; <transition-group> in #notificationApp handles the
@@ -5597,8 +5304,6 @@
         
         // ===== Severity Change Functions =====
         window.openSeverityChangeModal = function(workItemId, workItemType, currentSeverity, title) {
-            // Check if user has write permission
-            const hasWritePermission = localStorage.getItem('tokenHasWriteCapability') === 'true';
             openValuePicker('severity', { id: workItemId, type: workItemType, current: currentSeverity, title });
         };
         
@@ -5714,44 +5419,24 @@
         }
         
         async function changeWorkItemPatchVersion(workItemId, newPatchVersion, title) {
-            store.picker.busy = true;
-            
-            try {
-                const pat = await getPAT();
-                const url = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems/${workItemId}?api-version=7.1`;
-                
-                const response = await fetch(url, {
-                    method: 'PATCH',
-                    headers: {
-                        'Authorization': 'Basic ' + btoa(':' + pat),
-                        'Content-Type': 'application/json-patch+json'
-                    },
-                    body: JSON.stringify([
-                        {
-                            'op': 'replace',
-                            'path': '/fields/Custom.PlatformRelease',
-                            'value': newPatchVersion
-                        }
-                    ])
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to update patch version: ${response.statusText}`);
+            await updateWorkItemField(
+                workItemId,
+                '/fields/Custom.PlatformRelease',
+                newPatchVersion,
+                {
+                    // Patch version changes move the item to a different major/patch bucket, unlike
+                    // every other field - applyFieldUpdate() alone is not enough because the hierarchy
+                    // grouping is fixed at fetch time. moveWorkItemPatch() relocates it in memory
+                    // instead, so the default store write is skipped here.
+                    applyToStore: false,
+                    successMessage: `Patch version changed to "${newPatchVersion}" for: ${title}`,
+                    errorMessage: (error) => `Error changing patch version: ${error.message}`,
+                    onSuccess: () => {
+                        store.moveWorkItemPatch(workItemId, newPatchVersion);
+                        closeValuePicker();
+                    }
                 }
-                
-                // Relocate the item in memory instead of re-fetching the whole product - we
-                // already know the exact new value, the same way every other field change works.
-                store.moveWorkItemPatch(workItemId, newPatchVersion);
-                
-                showNotification(`Patch version changed to "${newPatchVersion}" for: ${title}`, 'success');
-                
-                closeValuePicker();
-            } catch (error) {
-                Logger.error('Error changing patch version:', error);
-                showNotification(`Error changing patch version: ${error.message}`, 'error');
-            } finally {
-                store.picker.busy = false;
-            }
+            );
         }
         
         async function fetchWorkItemCommentsAll(workItemId, pat) {
@@ -5952,8 +5637,7 @@
         
         window.updateWorkItemDescription = async function() {
             // Check if in read-write mode (edit is only allowed in read-write mode)
-            const hasWritePermission = localStorage.getItem('tokenHasWriteCapability') === 'true';
-            if (!hasWritePermission) {
+            if (!store.canWrite) {
                 showNotification('Editing is only available in read-write mode', 'error');
                 return;
             }

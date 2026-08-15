@@ -28,15 +28,15 @@ Keep this file in sync whenever the structure changes (see [Maintaining this doc
 Line numbers drift, so **navigate by section markers**, which are stable and greppable:
 `rg -n "// ===== " index.html`.
 
-Rough layout (line numbers as of app version 1.0.42, for orientation only):
+Rough layout (line numbers as of app version 1.0.44, for orientation only):
 
 | Range | Content |
 | --- | --- |
 | 1-11 | `<head>`, CDN dependencies |
-| 12-2190 | `<style>` - all CSS, themed via CSS custom properties on `[data-theme]` |
-| 2192-2938 | `<body>` markup - one `<div id="...App">` per Vue root, each with an **in-DOM template** |
-| 2940-3101 | `<script type="text/x-template">` blocks - templates for reusable components |
-| 3103-7212 | The single `<script>` with all logic |
+| 12-2032 | `<style>` - all CSS, themed via CSS custom properties on `[data-theme]` |
+| 2034-2786 | `<body>` markup - one `<div id="...App">` per Vue root, each with an **in-DOM template** |
+| 2788-2949 | `<script type="text/x-template">` blocks - templates for reusable components |
+| 2951-7060 | The single `<script>` with all logic |
 
 Order of `// ===== ... =====` sections inside the script:
 
@@ -413,12 +413,13 @@ modes:
   successful create also closes the item that was copied.
 - **`guide.html` is only loaded from disk on `127.0.0.1`**; elsewhere it comes from the
   provisioning endpoint. Opening the file over `file://` blocks the local `fetch`.
-- **Dead code**, defined but never called: `calculateProgress()`, `DOMCache`, `devOpsPatch()`,
-  `devOpsDelete()`. Do not assume they are wired.
 - Many comments describe the **removed** imperative helpers (`filterWorkItems()`,
   `updateHierarchyVisibility()`, `updateEditVisibility()`, ...) as migration notes. They are history,
   not code that exists.
-- `alert()` is still used for create failures, while everything else uses `showNotification()`.
+- `changeWorkItemAssignedTo()` and `changeWorkItemPatchVersion()` go through `updateWorkItemField()`
+  like every other field change, via its `storeValue` (store write differs from the PATCH body
+  value) and `applyToStore: false` (Patch Version relocates the item with `moveWorkItemPatch()`
+  instead) options - do not re-inline their own `fetch()` calls.
 
 ## Where to change what
 
