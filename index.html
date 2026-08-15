@@ -7,8 +7,6 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <style>
         /* ===== CSS Variables ===== */
         :root {
@@ -2882,8 +2880,8 @@
                     <button class="hide-toggle-btn" title="Hide element" @click.stop="store.toggleHidden('patch', node.patchId)">
                         <i class="fa-solid fa-eye-slash"></i>
                     </button>
-                    <button class="hide-toggle-btn" title="Export to PDF" style="margin-left: 8px;" @click.stop="exportPdf">
-                        <i class="fa-solid fa-file-pdf"></i>
+                    <button class="hide-toggle-btn" title="Export to Markdown" style="margin-left: 8px;" @click.stop="exportMarkdown">
+                        <i class="fa-brands fa-markdown"></i>
                     </button>
                     <button v-if="pipeline" class="hide-toggle-btn" title="Build Changes" style="margin-left: 8px;" @click.stop="buildChanges">
                         <i class="fa-solid fa-code-branch"></i>
@@ -2963,7 +2961,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-08-15T09:13:47.000Z'
+            updatedAt: '2026-08-15T09:27:32.000Z'
         };
 
         // ===== API Configuration =====
@@ -4836,8 +4834,8 @@
         // hidden-versions modal. Note the original had to call loadData() - a full round trip to
         // Azure DevOps - just to un-hide a version; the Vue one re-renders from data in memory.
         
-        // ===== PDF Export =====
-        window.exportPatchToPDF = async function(product, releaseName, major, patch, patchId) {
+        // ===== Markdown Export =====
+        window.exportPatchToMarkdown = async function(product, releaseName, major, patch, patchId) {
             try {
                 // The same filtered tree the grid renders, so the export matches what is on screen
                 const patchNode = store.tree
@@ -4889,18 +4887,6 @@
                     return collapsed.replace(/(?:\b\p{L}\b\s+){5,}\b\p{L}\b/gu, (match) => match.replace(/\s+/g, ''));
                 };
                 
-                const normalizePdfText = (text) => {
-                    if (!text) return '';
-                    return text
-                        .normalize('NFD')
-                        .replace(/\p{Diacritic}+/gu, '');
-                };
-                
-                const softWrapLongWords = (text, maxLen = 25) => {
-                    if (!text) return '';
-                    return String(text).replace(new RegExp(`(\\S{${maxLen}})(\\S)`, 'g'), '$1 $2');
-                };
-                
                 const workItems = workItemIds.map(id => {
                     const item = workItemsById.get(id);
                     if (!item) return null;
@@ -4913,12 +4899,12 @@
                     const descriptionHtml = type === 'Bug'
                         ? (fields['Microsoft.VSTS.TCM.ReproSteps'] || fields['System.Description'] || '')
                         : (fields['System.Description'] || '');
-                    const description = normalizePdfText(htmlToText(descriptionHtml));
+                    const description = htmlToText(descriptionHtml);
                     
                     return {
                         id,
                         type,
-                        title: normalizePdfText(title),
+                        title,
                         description,
                         priority,
                         tshirt: type === 'Feature' ? tshirt : '',
@@ -4926,126 +4912,47 @@
                     };
                 }).filter(Boolean);
                 
-                // Vytvořit PDF v landscape orientaci pro více prostoru
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF('landscape');
-                doc.setFont('helvetica', 'normal');
-                doc.setCharSpace(0);
-                doc.setLineHeightFactor(1.2);
-                
-                // Přidat jednoduchý header
-                const pageWidth = doc.internal.pageSize.width;
-                const centerX = pageWidth / 2;
-                
-                doc.setFontSize(16);
-                doc.setTextColor(0, 0, 0);
-                doc.text('Release Overview', centerX, 16, { align: 'center' });
-                doc.setFontSize(11);
-                doc.text(`${product} - ${releaseName}-${major}.${patch}`, centerX, 24, { align: 'center' });
-                
-                // Přidat tabulku s work items (bez ikon a bez statusu)
-                const marginX = 10;
-                const usableWidth = pageWidth - marginX * 2;
-                let currentY = 30;
-                const pdfPageHeight = doc.internal.pageSize.height;
-                const footerReserve = 12;
-                const lineHeight = 4;
-                const minHeaderHeight = 12;
+                // Sestavit Markdown dokument
+                const lines = [];
+                lines.push('# Release Overview');
+                lines.push('');
+                lines.push(`**${product} - ${releaseName}-${major}.${patch}**`);
+                lines.push('');
+                lines.push('---');
                 
                 workItems.forEach((item) => {
-                    if (currentY + minHeaderHeight > pdfPageHeight - footerReserve) {
-                        doc.addPage();
-                        currentY = 20;
-                    }
-                    const headerRow = [[
-                        item.id,
-                        item.type,
-                        item.title,
-                        item.priority || '',
-                        item.tshirt || '',
-                        item.severity || ''
-                    ]];
-                    
-                    doc.autoTable({
-                        startY: currentY,
-                        head: [['ID', 'Type', 'Title', 'Priority', 'T-shirt', 'Severity']],
-                        body: headerRow,
-                        theme: 'grid',
-                        margin: { left: marginX, right: marginX },
-                        tableWidth: usableWidth,
-                        headStyles: {
-                            fillColor: [240, 240, 240],
-                            textColor: [0, 0, 0],
-                            fontSize: 9,
-                            fontStyle: 'bold',
-                            halign: 'left'
-                        },
-                        bodyStyles: {
-                            fontSize: 8,
-                            cellPadding: 2,
-                            textColor: [0, 0, 0],
-                            overflow: 'linebreak'
-                        },
-                        columnStyles: {
-                            0: { cellWidth: 12 }, // ID
-                            1: { cellWidth: 18 }, // Type
-                            2: { cellWidth: usableWidth - (12 + 18 + 14 + 16 + 14) }, // Title
-                            3: { cellWidth: 14 }, // Priority
-                            4: { cellWidth: 16 }, // T-shirt
-                            5: { cellWidth: 14 }  // Severity
-                        }
-                    });
-                    
-                    const descriptionText = item.description ? item.description : '-';
-                    const wrappedDescription = softWrapLongWords(descriptionText, 25);
-                    const descLines = doc.splitTextToSize(wrappedDescription, usableWidth - 4);
-                    const boxHeight = 10 + (descLines.length * lineHeight);
-                    let boxY = doc.lastAutoTable.finalY + 2;
-                    
-                    if (boxY + boxHeight > pdfPageHeight - footerReserve) {
-                        doc.addPage();
-                        boxY = 20;
-                    }
-                    
-                    doc.setDrawColor(220, 220, 220);
-                    doc.setFillColor(248, 249, 250);
-                    doc.rect(marginX, boxY, usableWidth, boxHeight, 'FD');
-                    doc.setFont('helvetica', 'normal');
-                    doc.setCharSpace(0);
-                    doc.setFontSize(8);
-                    doc.setTextColor(0, 0, 0);
-                    doc.text('Description:', marginX + 2, boxY + 5);
-                    doc.text(descLines, marginX + 2, boxY + 10, { maxWidth: usableWidth - 4, lineHeightFactor: 1.2 });
-                    
-                    currentY = boxY + boxHeight + 6;
+                    lines.push('');
+                    lines.push(`## #${item.id} - ${item.type}: ${item.title}`);
+                    lines.push('');
+                    const meta = [`**Priority:** ${item.priority || '-'}`];
+                    if (item.type === 'Feature') meta.push(`**T-shirt:** ${item.tshirt || '-'}`);
+                    if (item.type === 'Bug') meta.push(`**Severity:** ${item.severity || '-'}`);
+                    lines.push(meta.join(' | '));
+                    lines.push('');
+                    lines.push('**Description:**');
+                    lines.push('');
+                    lines.push(item.description || '-');
+                    lines.push('');
+                    lines.push('---');
                 });
                 
-                // Footer
-                const pageCount = doc.internal.getNumberOfPages();
-                for (let i = 1; i <= pageCount; i++) {
-                    doc.setPage(i);
-                    doc.setFontSize(8);
-                    doc.setTextColor(100, 100, 100);
-                    const exportDate = new Date().toLocaleDateString('cs-CZ', { 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
-                    doc.text(`Exported: ${exportDate}`, 15, pdfPageHeight - 10);
-                    doc.text(`© 2025 Tomas Belak | Powered by Integray`, centerX, pdfPageHeight - 10, { align: 'center' });
-                    doc.text(`Page ${i} of ${pageCount}`, pageWidth - 15, pdfPageHeight - 10, { align: 'right' });
-                }
+                const exportDate = new Date().toLocaleDateString('cs-CZ', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                lines.push('');
+                lines.push(`*Exported: ${exportDate}*`);
+                lines.push('*© 2025 Tomas Belak | Powered by Integray*');
                 
-                // Otevřít PDF v novém okně
-                // Poznámka: Pro správný název při stahování z prohlížeče použijte Ctrl+S nebo tlačítko Save
-                // a přejmenujte soubor na požadovaný název
-                const filename = `${product}_${releaseName}-${major}.${patch}_${new Date().toISOString().split('T')[0]}.pdf`;
+                const markdown = lines.join('\n');
+                const filename = `${product}_${releaseName}-${major}.${patch}_${new Date().toISOString().split('T')[0]}.md`;
                 
                 // Force download with correct filename
-                const pdfBlob = doc.output('blob');
-                const downloadUrl = URL.createObjectURL(pdfBlob);
+                const markdownBlob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+                const downloadUrl = URL.createObjectURL(markdownBlob);
                 const link = document.createElement('a');
                 link.href = downloadUrl;
                 link.download = filename;
@@ -5055,8 +4962,8 @@
                 URL.revokeObjectURL(downloadUrl);
                 
             } catch (error) {
-                Logger.error('Error exporting PDF:', error);
-                showNotification('Failed to export PDF. Please try again.', 'error');
+                Logger.error('Error exporting Markdown:', error);
+                showNotification('Failed to export Markdown. Please try again.', 'error');
             }
         };
         
@@ -6637,9 +6544,9 @@
                 }
             },
             methods: {
-                exportPdf() {
+                exportMarkdown() {
                     const n = this.node;
-                    exportPatchToPDF(n.product, n.release, n.major, n.patch, n.patchId);
+                    exportPatchToMarkdown(n.product, n.release, n.major, n.patch, n.patchId);
                 },
                 buildChanges() {
                     const n = this.node;

@@ -16,7 +16,7 @@ Azure DevOps Release Overview Application
 - 👁️ **Detail work itemu** - Zobrazení detailních informací včetně popisu a komentářů
 - 📋 **Kopírování** - Zkopírování názvu nebo odkazu na work item do schránky
 - 🔀 **Build Changes** - Přehled změn v buildu pro patch verze s namapovanou pipeline
-- 📄 **Export do PDF** - Export patch verzí do PDF dokumentu
+- 📄 **Export do Markdown** - Export patch verzí do Markdown dokumentu
 - 🎨 **Témata** - Světlý režim, tmavý režim a automatický režim podle nastavení systému
 - 🔄 **Reload dat** - Aktualizace dat z Azure DevOps včetně informace o posledním načtení
 - 👁️ **Skrývání verzí** - Možnost skrýt major nebo patch verze pro lepší přehled
@@ -36,7 +36,7 @@ Všechny read-only funkce plus:
 ## Požadavky
 
 - Moderní webový prohlížeč (Chrome, Firefox, Edge, Safari)
-- Připojení k internetu - knihovny (Vue, Bootstrap, Font Awesome, jsPDF) se načítají z CDN
+- Připojení k internetu - knihovny (Vue, Bootstrap, Font Awesome) se načítají z CDN
 - Azure DevOps účet s přístupem k projektu
 - Personal Access Token (PAT) s příslušnými oprávněními:
   - **Read-Only režim**: `Work Items: Read`
@@ -103,7 +103,6 @@ APP_Releasy/
   kompilátorem, takže aplikace zůstává jediný soubor bez build stepu)
 - **Bootstrap 5.3.0** - UI komponenty a grid systém
 - **Font Awesome 6.5.0** - Ikony
-- **jsPDF 2.5.1 + AutoTable 3.8.2** - Generování PDF dokumentů
 - **Web Crypto API** - Šifrování Personal Access Tokenu (AES-GCM) před uložením do localStorage
 - **Azure DevOps REST API** - Komunikace s Azure DevOps
 

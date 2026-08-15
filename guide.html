@@ -37,8 +37,8 @@
                             <a href="#help-filter" class="help-nav-link" onclick="showHelpSection('help-filter'); return false;">
                                 <i class="fa-solid fa-filter"></i> Filter Work Items
                             </a>
-                            <a href="#help-pdf" class="help-nav-link" onclick="showHelpSection('help-pdf'); return false;">
-                                <i class="fa-solid fa-file-pdf"></i> Export to PDF
+                            <a href="#help-markdown" class="help-nav-link" onclick="showHelpSection('help-markdown'); return false;">
+                                <i class="fa-brands fa-markdown"></i> Export to Markdown
                             </a>
                         </div>
 
@@ -116,7 +116,7 @@
                         <h4><i class="fa-solid fa-shield-halved"></i> Read-Only vs Read-Write Mode</h4>
                         <p>The application supports two permission modes, indicated by a badge next to the Last reload info:</p>
                         <ul>
-                            <li><i class="fa-solid fa-eye"></i> <strong>Read-Only</strong> - View work items, export PDFs, but cannot create new work items or view child tasks</li>
+                            <li><i class="fa-solid fa-eye"></i> <strong>Read-Only</strong> - View work items, export Markdown files, but cannot create new work items or view child tasks</li>
                             <li><i class="fa-solid fa-pen-to-square"></i> <strong>Read-Write</strong> - All read-only features plus:
                                 <ul>
                                     <li>Ability to create new work items using the <i class="fa-solid fa-plus"></i> button</li>
@@ -303,14 +303,14 @@
                         </div>
                     </div>
 
-                    <!-- PDF Export Section -->
-                    <div id="help-pdf" class="help-section">
-                        <h4><i class="fa-solid fa-file-pdf"></i> Export to PDF</h4>
+                    <!-- Markdown Export Section -->
+                    <div id="help-markdown" class="help-section">
+                        <h4><i class="fa-brands fa-markdown"></i> Export to Markdown</h4>
                         <p>Export patch version details into a clean, text-only Release Overview:</p>
                         <ul>
-                            <li>Hover over any patch version header to see the <i class="fa-solid fa-file-pdf" style="font-size: 0.8em; color: #6c757d;"></i> icon</li>
-                            <li>Click the icon to download the PDF (filename includes product + version + date)</li>
-                            <li>PDF respects current filters and hidden versions</li>
+                            <li>Hover over any patch version header to see the <i class="fa-brands fa-markdown" style="font-size: 0.8em; color: #6c757d;"></i> icon</li>
+                            <li>Click the icon to download the Markdown file (filename includes product + version + date)</li>
+                            <li>Export respects current filters and hidden versions</li>
                             <li>Includes: title, description, priority, T-shirt size (Features), severity (Bugs)</li>
                             <li>No icons or status fields — optimized for AI release notes generation</li>
                         </ul>
@@ -376,7 +376,7 @@
                     <ul style="margin: 8px 0 0 0;">
                         <li>Your PAT must have <code>Work Items: Read & Write</code> scope</li>
                         <li>You must select <strong>Read-Write</strong> permission when entering your PAT</li>
-                        <li>The <i class="fa-solid fa-plus"></i> button will appear next to PDF export on patch versions</li>
+                        <li>The <i class="fa-solid fa-plus"></i> button will appear next to Markdown export on patch versions</li>
                     </ul>
                 </div>
 

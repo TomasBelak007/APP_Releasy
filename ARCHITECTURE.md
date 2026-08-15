@@ -32,11 +32,11 @@ Rough layout (line numbers as of app version 1.0.44, for orientation only):
 
 | Range | Content |
 | --- | --- |
-| 1-11 | `<head>`, CDN dependencies |
-| 12-2032 | `<style>` - all CSS, themed via CSS custom properties on `[data-theme]` |
-| 2034-2786 | `<body>` markup - one `<div id="...App">` per Vue root, each with an **in-DOM template** |
-| 2788-2949 | `<script type="text/x-template">` blocks - templates for reusable components |
-| 2951-7060 | The single `<script>` with all logic |
+| 1-9 | `<head>`, CDN dependencies |
+| 10-2030 | `<style>` - all CSS, themed via CSS custom properties on `[data-theme]` |
+| 2032-2786 | `<body>` markup - one `<div id="...App">` per Vue root, each with an **in-DOM template** |
+| 2786-2949 | `<script type="text/x-template">` blocks - templates for reusable components |
+| 2949-6967 | The single `<script>` with all logic |
 
 Order of `// ===== ... =====` sections inside the script:
 
@@ -49,7 +49,7 @@ Order of `// ===== ... =====` sections inside the script:
 5. `Priority & Severity Handling`, `Work Item Rendering`, `Sorting Functions`
 6. `PAT Modal Management`, `Azure DevOps API Integration`, `Token Permissions Check`
 7. `Modal Functions` ... `Work Item Created Success modal` - modal open/close/submit functions
-8. `PDF Export`, `Theme Management`
+8. `Markdown Export`, `Theme Management`
 9. `Status Change Feature`, `Value picker`, and the per-field `... Change Functions`
 10. `Work Item Detail (Lazy Load)`, `Work Item Link Functions`
 11. `VUE LAYER` -> `Store`, `Derived state`, `Persistence`, `Components`, then one section per
@@ -220,7 +220,7 @@ Defined in `VUE LAYER > Components`, templates from `<script type="text/x-templa
 | `ProgressBar` | `tpl-progress-bar` | `items` | Segments per state in `PROGRESS_ORDER`, colors from `STATE_COLORS` |
 | `PriorityCell` | `tpl-priority-cell` | `item` | Priority / severity (Bug) / t-shirt (Feature) badges, each opening its picker |
 | `WorkItemRow` | `tpl-work-item-row` | `item`, `isChild`, `parentId` | Icon by type, clickable state/assignee badges, opens detail |
-| `PatchSection` | `tpl-patch-section` | `node` | A patch: header, progress bar, PDF, Build Changes, create; `rows` interleaves parents with their child tasks as siblings |
+| `PatchSection` | `tpl-patch-section` | `node` | A patch: header, progress bar, Markdown export, Build Changes, create; `rows` interleaves parents with their child tasks as siblings |
 | grid root | `tpl-releasy-grid` | - | Product tabs + releases + majors, mounted on `#content` |
 
 ## Flows: what calls what
@@ -316,9 +316,10 @@ assigned it. `copyWorkItemFromDetail()` prefills the same form and sets
 `store.childTasks[parentId]`, and if the detail modal for that parent is open, it is also appended
 to `store.detail.tasks` directly (no re-fetch) -> success modal.
 
-**PDF export** - `exportPatchToPDF(product, release, major, patch, patchId)` finds the patch node in
-`store.tree` (so it exports exactly what is visible), re-fetches those ids with `$expand=fields`,
-and renders with jsPDF + AutoTable.
+**Markdown export** - `exportPatchToMarkdown(product, release, major, patch, patchId)` finds the
+patch node in `store.tree` (so it exports exactly what is visible), re-fetches those ids with
+`$expand=fields`, and builds a `.md` file (heading per work item, priority/t-shirt/severity line,
+description) downloaded as a `Blob`.
 
 **Build Changes** - the `PatchSection` button (only when the product has a pipeline) calls
 `openBuildChangesModal(product, release, major, patch, pipeline)`, which derives the branch as
@@ -349,7 +350,7 @@ be registered here.
 | Purpose | Call |
 | --- | --- |
 | Hierarchy query | `POST /wit/wiql?api-version=6.0` - Feature/Bug, `Custom.PlatformRelease CONTAINS '<release>-'`, not `Removed`, `Closed` only within `@startOfDay('-180d')` |
-| Work item batch | `GET /wit/workitems?ids=...&$expand=fields&api-version=6.0` (PDF export uses 7.1) |
+| Work item batch | `GET /wit/workitems?ids=...&$expand=fields&api-version=6.0` (Markdown export uses 7.1) |
 | Detail | `GET /wit/workitems/{id}?$expand=Relations&api-version=7.1` |
 | Child tasks | `GET /wit/workitems?ids=...&$expand=relations&api-version=6.0`, batched by 200 |
 | Comments | `GET /wit/workItems/{id}/comments` (paged, see `fetchWorkItemCommentsAll`) |
@@ -435,7 +436,7 @@ modes:
 | Add a new "change X" modal | a new entry in `PICKER_KINDS` (`build` + `apply`) - no new markup |
 | Add a new modal | markup root in `<body>`, store slice, `mountApp`, `MODAL_STACK` entry |
 | Change a filter rule | `itemPasses()` / `store.tree` |
-| Change the PDF layout | `exportPatchToPDF()` |
+| Change the Markdown layout | `exportPatchToMarkdown()` |
 | Change theming | CSS custom properties under `[data-theme]`, `THEMES`, `LOGO_URLS` |
 | Release a version | `APP_RELEASE.version` + `updatedAt` |
 
