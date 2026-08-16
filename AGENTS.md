@@ -45,6 +45,20 @@ There are no automated tests. After editing:
 3. Check the console: it must stay clean (the production Vue build hides warnings, so a broken
    render shows up as missing UI, not as an error).
 
+## Testing against the real Azure DevOps instance
+
+A write-scoped PAT is kept in `dev.env` (git-ignored - never commit it, never print its value to
+the user or in a commit/PR) for testing against the real `smartermdm/Board` project when browser
+smoke-testing alone cannot confirm something (API response shape, format quirks, etc.).
+
+- **Never write to, edit, or delete an existing work item** - not a field, not a comment, not an
+  attachment. Read-only requests (`GET`) against existing items are fine.
+- If a test needs to create/update/delete something, **create your own throwaway work item first**,
+  run the test against that, then delete it (`DELETE .../_apis/wit/workitems/{id}`) before ending
+  the task. Never leave test items behind in the user's backlog.
+- When in doubt whether an action would touch existing data, don't - ask the user or fall back to
+  a browser/API check that only reads.
+
 ## Documentation duties
 
 - Structural changes (Vue root, component, store slice, persisted key, call chain, API endpoint,

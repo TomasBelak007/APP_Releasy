@@ -7,6 +7,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@18.0.9/lib/marked.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/turndown@7.2.4/dist/turndown.js"></script>
     <style>
         /* ===== CSS Variables ===== */
         :root {
@@ -2357,12 +2359,25 @@
                     </div>
                 </div>
                 <div style="margin-top: 16px;">
-                    <label class="form-label" style="color: var(--text-primary); font-weight: 600;">
-                        <i class="fa-solid fa-align-left"></i> Description
-                    </label>
-                    <html-editor ref="editor" editor-id="workItemDetailDescription" toolbar-id="workItemDetailMdToolbar"
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 4px;">
+                        <label class="form-label" style="color: var(--text-primary); font-weight: 600; margin-bottom: 0;">
+                            <i class="fa-solid fa-align-left"></i> Description
+                        </label>
+                        <div v-if="store.canWrite" class="btn-group btn-group-sm" role="group" aria-label="Description format"
+                             :title="d.descriptionFormatLocked ? 'Already saved as Markdown in Azure DevOps - cannot convert back to HTML' : ''">
+                            <button type="button" class="btn" :class="d.descriptionFormat === 'Html' ? 'btn-primary' : 'btn-light'"
+                                    :disabled="d.descriptionFormatLocked"
+                                    @click="switchDescriptionFormat('Html')" style="border: 1px solid var(--border-color);">HTML</button>
+                            <button type="button" class="btn" :class="d.descriptionFormat === 'Markdown' ? 'btn-primary' : 'btn-light'"
+                                    @click="switchDescriptionFormat('Markdown')" style="border: 1px solid var(--border-color);">Markdown</button>
+                        </div>
+                    </div>
+                    <html-editor v-if="d.descriptionFormat !== 'Markdown'" ref="editor" editor-id="workItemDetailDescription" toolbar-id="workItemDetailMdToolbar"
                                  :html="d.descriptionHtml" :editable="store.canWrite"
                                  @rendered="onDescriptionRendered"></html-editor>
+                    <markdown-editor v-else ref="editor" editor-id="workItemDetailDescriptionMd" toolbar-id="workItemDetailMarkdownToolbar"
+                                 :markdown="d.descriptionHtml" :editable="store.canWrite"
+                                 @rendered="onDescriptionRendered"></markdown-editor>
                 </div>
                 <div id="workItemDetailCommentsContainer">
                     <label class="form-label work-item-detail-comments-label" style="color: var(--text-primary); font-weight: 600;">
@@ -2605,11 +2620,21 @@
 
                         <!-- Description -->
                         <div class="mb-3">
-                            <label for="workItemDescription" class="form-label" style="color: var(--text-primary); font-weight: 600;">
-                                <i class="fa-solid fa-align-left"></i> Description
-                            </label>
-                            <html-editor ref="editor" editor-id="workItemDescription" toolbar-id="workItemMdToolbar"
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 4px;">
+                                <label for="workItemDescription" class="form-label" style="color: var(--text-primary); font-weight: 600; margin-bottom: 0;">
+                                    <i class="fa-solid fa-align-left"></i> Description
+                                </label>
+                                <div class="btn-group btn-group-sm" role="group" aria-label="Description format">
+                                    <button type="button" class="btn" :class="form.descriptionFormat === 'Html' ? 'btn-primary' : 'btn-light'"
+                                            @click="switchFormat('Html')" style="border: 1px solid var(--border-color);">HTML</button>
+                                    <button type="button" class="btn" :class="form.descriptionFormat === 'Markdown' ? 'btn-primary' : 'btn-light'"
+                                            @click="switchFormat('Markdown')" style="border: 1px solid var(--border-color);">Markdown</button>
+                                </div>
+                            </div>
+                            <html-editor v-if="form.descriptionFormat !== 'Markdown'" ref="editor" editor-id="workItemDescription" toolbar-id="workItemMdToolbar"
                                          :html="form.descriptionHtml"></html-editor>
+                            <markdown-editor v-else ref="editor" editor-id="workItemDescriptionMd" toolbar-id="workItemMarkdownToolbar"
+                                         :markdown="form.descriptionHtml"></markdown-editor>
                         </div>
 
                         <!-- Assignee -->
@@ -2743,11 +2768,21 @@
 
                         <!-- Description -->
                         <div class="mb-3">
-                            <label for="taskDescription" class="form-label" style="color: var(--text-primary); font-weight: 600;">
-                                <i class="fa-solid fa-align-left"></i> Description
-                            </label>
-                            <html-editor ref="editor" editor-id="taskDescription" toolbar-id="taskMdToolbar"
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 4px;">
+                                <label for="taskDescription" class="form-label" style="color: var(--text-primary); font-weight: 600; margin-bottom: 0;">
+                                    <i class="fa-solid fa-align-left"></i> Description
+                                </label>
+                                <div class="btn-group btn-group-sm" role="group" aria-label="Description format">
+                                    <button type="button" class="btn" :class="form.descriptionFormat === 'Html' ? 'btn-primary' : 'btn-light'"
+                                            @click="switchFormat('Html')" style="border: 1px solid var(--border-color);">HTML</button>
+                                    <button type="button" class="btn" :class="form.descriptionFormat === 'Markdown' ? 'btn-primary' : 'btn-light'"
+                                            @click="switchFormat('Markdown')" style="border: 1px solid var(--border-color);">Markdown</button>
+                                </div>
+                            </div>
+                            <html-editor v-if="form.descriptionFormat !== 'Markdown'" ref="editor" editor-id="taskDescription" toolbar-id="taskMdToolbar"
                                          min-height="160px" :html="form.descriptionHtml"></html-editor>
+                            <markdown-editor v-else ref="editor" editor-id="taskDescriptionMd" toolbar-id="taskMarkdownToolbar"
+                                         min-height="160px" :markdown="form.descriptionHtml"></markdown-editor>
                         </div>
 
                         <!-- Assignee -->
@@ -2798,6 +2833,42 @@
             <div :id="editorId" ref="editor" class="form-control" :contenteditable="editable"
                  placeholder="Enter description (optional)"
                  :style="{ minHeight: minHeight, backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border-color)', cursor: editable ? '' : 'default' }"></div>
+        </div>
+    </script>
+
+    <!-- Markdown counterpart of tpl-html-editor, for description fields whose
+         multilineFieldsFormat is already "Markdown" in Azure DevOps, and for the Markdown option
+         in the create forms (see MarkdownEditor). Opens in Preview if there is content to show,
+         straight into Edit otherwise; the raw source lives in a <textarea>, uncontrolled the
+         same way. -->
+    <script type="text/x-template" id="tpl-markdown-editor">
+        <div>
+            <div v-show="editable" class="md-toolbar" :id="toolbarId" style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                <button type="button" class="btn btn-sm btn-light" @click="toggleMode"
+                        :title="mode === 'edit' ? 'Preview' : 'Edit'" style="border: 1px solid var(--border-color);">
+                    <i class="fa-solid" :class="mode === 'edit' ? 'fa-eye' : 'fa-pen'"></i> {{ mode === 'edit' ? 'Preview' : 'Edit' }}
+                </button>
+                <!-- v-show (not v-if) so these stay in the DOM while hidden - initializeMarkdownEditor()
+                     binds click listeners once, on the initial (Preview) render, and a v-if here
+                     would remove the buttons from the DOM until the first switch to Edit, by which
+                     time the one-time-bind guard has already fired and nothing would ever attach. -->
+                <span v-show="mode === 'edit'" style="display: flex; gap: 8px; align-items: center;">
+                    <span style="width: 1px; height: 18px; background: var(--border-color); display: inline-block;"></span>
+                    <template v-for="(button, index) in buttons" :key="index">
+                        <span v-if="button.separator" style="width: 1px; height: 18px; background: var(--border-color); display: inline-block;"></span>
+                        <button v-else type="button" class="btn btn-sm btn-light md-btn"
+                                :data-action="button.action" :title="button.title"
+                                style="border: 1px solid var(--border-color);">
+                            <i class="fa-solid" :class="button.icon"></i>
+                        </button>
+                    </template>
+                </span>
+            </div>
+            <textarea v-show="editable && mode === 'edit'" :id="editorId" ref="editor" class="form-control"
+                      placeholder="Enter description in Markdown (optional)" :readonly="!editable"
+                      :style="{ minHeight: minHeight, backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border-color)', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', cursor: editable ? '' : 'default' }"></textarea>
+            <div v-show="!editable || mode !== 'edit'" :id="editorId + '-preview'" ref="preview" class="form-control"
+                 :style="{ minHeight: minHeight, backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border-color)' }"></div>
         </div>
     </script>
 
@@ -2961,7 +3032,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-08-15T09:27:32.000Z'
+            updatedAt: '2026-08-16T19:12:00.000Z'
         };
 
         // ===== API Configuration =====
@@ -4160,6 +4231,11 @@
                 type: prefill?.type === 'Bug' ? 'Bug' : 'Feature',
                 prefix: prefixes[0] || '',
                 title: '',
+                // Defaults to Markdown for a brand-new item; a copy prefill (copyWorkItemFromDetail())
+                // carries over the source item's actual format instead, HTML included
+                descriptionFormat: prefill?.descriptionFormat === 'Html' ? 'Html' : 'Markdown',
+                descriptionHtmlCache: null,
+                descriptionMarkdownCache: null,
                 descriptionHtml: prefill?.description || '',
                 assignee: defaultAssigneeEmail(),
                 priority: '3',
@@ -4502,6 +4578,116 @@
             }
         }
 
+        // ===== Simple Markdown Toolbar (Reusable) =====
+        // Same idea as the HTML toolbar above, but there is no execCommand/contenteditable to lean
+        // on - these splice Markdown syntax directly into a <textarea>'s value at the selection.
+        function replaceMarkdownSelection(textarea, text) {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const value = textarea.value;
+            textarea.value = value.slice(0, start) + text + value.slice(end);
+            const cursor = start + text.length;
+            textarea.focus();
+            textarea.setSelectionRange(cursor, cursor);
+        }
+        
+        function wrapMarkdownSelection(textarea, marker) {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const selected = textarea.value.slice(start, end);
+            replaceMarkdownSelection(textarea, marker + selected + marker);
+            textarea.setSelectionRange(start + marker.length, start + marker.length + selected.length);
+        }
+        
+        function prefixMarkdownLines(textarea, prefix) {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const value = textarea.value;
+            const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+            const nextBreak = value.indexOf('\n', end);
+            const lineEnd = nextBreak === -1 ? value.length : nextBreak;
+            const block = value.slice(lineStart, lineEnd);
+            const prefixed = block.split('\n').map(line => prefix + line).join('\n');
+            textarea.value = value.slice(0, lineStart) + prefixed + value.slice(lineEnd);
+            textarea.focus();
+            textarea.setSelectionRange(lineStart, lineStart + prefixed.length);
+        }
+        
+        function initializeMarkdownEditor(toolbarId, editorId) {
+            const toolbar = document.getElementById(toolbarId);
+            const editor = document.getElementById(editorId);
+            if (!toolbar || !editor) return;
+            
+            // Same one-time-bind guard as initializeHtmlEditor() - see the comment there.
+            if (toolbar.dataset.boundEditor === editorId) return;
+            toolbar.dataset.boundEditor = editorId;
+            
+            toolbar.querySelectorAll('.md-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const action = btn.getAttribute('data-action');
+                    switch (action) {
+                        case 'bold':
+                            wrapMarkdownSelection(editor, '**');
+                            break;
+                        case 'italic':
+                            wrapMarkdownSelection(editor, '_');
+                            break;
+                        case 'h2':
+                            prefixMarkdownLines(editor, '## ');
+                            break;
+                        case 'ul':
+                            prefixMarkdownLines(editor, '- ');
+                            break;
+                        case 'ol':
+                            prefixMarkdownLines(editor, '1. ');
+                            break;
+                        case 'code':
+                            wrapMarkdownSelection(editor, '`');
+                            break;
+                        case 'link': {
+                            let url = prompt('Enter URL:', 'https://');
+                            if (!url) break;
+                            if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+                            const start = editor.selectionStart;
+                            const end = editor.selectionEnd;
+                            const label = editor.value.slice(start, end) || url;
+                            replaceMarkdownSelection(editor, `[${label}](${url})`);
+                            break;
+                        }
+                        default:
+                            break;
+                    }
+                });
+            });
+            
+            // Paste event handler for images - mirrors initializeHtmlEditor()'s, but inserts
+            // Markdown image syntax into the textarea instead of an <img> into the DOM.
+            if (!editor.dataset.pasteHandlerAdded) {
+                editor.dataset.pasteHandlerAdded = 'true';
+                editor.addEventListener('paste', (e) => {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+                    let imageItem = null;
+                    for (let i = 0; i < items.length; i++) {
+                        if (items[i].type.indexOf('image') !== -1) {
+                            imageItem = items[i];
+                            break;
+                        }
+                    }
+                    if (!imageItem) return; // let default paste behavior handle plain text
+                    e.preventDefault();
+                    const file = imageItem.getAsFile();
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        replaceMarkdownSelection(editor, `![](${event.target.result})`);
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+        }
+
         window.openCreateTaskFromWorkItemDetailModal = function() {
             const { id, title } = store.detail;
             if (!id) return;
@@ -4518,6 +4704,9 @@
                 prefix: titlePrefixesTask[0],
                 // Without a prefill the task inherits its parent's title as a starting point
                 title: prefill?.title ? '' : String(parentTitle || '').trim(),
+                descriptionFormat: prefill?.descriptionFormat === 'Html' ? 'Html' : 'Markdown',
+                descriptionHtmlCache: null,
+                descriptionMarkdownCache: null,
                 descriptionHtml: prefill?.description || '',
                 assignee: defaultAssigneeEmail()
             });
@@ -4562,10 +4751,13 @@
             store.closeDetailAfterCreate = false;
         };
 
-        // POST a JSON Patch document to Azure DevOps and surface the API's own message on failure
+        // POST a JSON Patch document to Azure DevOps and surface the API's own message on failure.
+        // Must use api-version 7.1: the /multilineFieldsFormat/<field> op (Markdown descriptions,
+        // see createWorkItem()/createChildTask()) is silently ignored by older API versions - the
+        // item still gets created, it just stays HTML instead of Markdown.
         async function createWorkItemViaApi(type, operations, pat) {
             const response = await fetch(
-                `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems/$${type}?api-version=6.0`,
+                `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems/$${type}?api-version=7.1`,
                 {
                     method: 'POST',
                     headers: {
@@ -4599,14 +4791,18 @@
                 return;
             }
             
+            const isMarkdown = form.descriptionFormat === 'Markdown';
             const title = `${form.prefix} - ${form.title.trim()}`;
-            const description = readEditorHtml('taskDescription');
+            const description = isMarkdown ? readMarkdownEditorText('taskDescriptionMd') : readEditorHtml('taskDescription');
             
             const operations = [
                 { op: 'add', path: '/fields/System.Title', value: title }
             ];
             if (description) {
                 operations.push({ op: 'add', path: '/fields/System.Description', value: description });
+                if (isMarkdown) {
+                    operations.push({ op: 'add', path: '/multilineFieldsFormat/System.Description', value: 'Markdown' });
+                }
             }
             if (form.assignee) {
                 operations.push({ op: 'add', path: '/fields/System.AssignedTo', value: form.assignee });
@@ -4705,9 +4901,14 @@
                 return;
             }
             
+            // Copy whichever format the source item is actually in, reading back from whichever
+            // editor is mounted (see the detail modal's html-editor/markdown-editor v-if/v-else) -
+            // the new form then opens straight into the matching editor via descriptionFormat below.
+            const isMarkdown = detailData.descriptionFormat === 'Markdown';
             const prefill = {
                 title: fullTitle,
-                description: readDetailDescriptionHtml(),
+                description: isMarkdown ? readDetailDescriptionMarkdown() : readDetailDescriptionHtml(),
+                descriptionFormat: detailData.descriptionFormat,
                 assigneeEmail: fields['System.AssignedTo']?.uniqueName || ''
             };
             
@@ -4765,8 +4966,9 @@
             }
             
             const isBug = form.type === 'Bug';
+            const isMarkdown = form.descriptionFormat === 'Markdown';
             const title = `${form.prefix} - ${form.title.trim()}`;
-            const description = readEditorHtml('workItemDescription');
+            const description = isMarkdown ? readMarkdownEditorText('workItemDescriptionMd') : readEditorHtml('workItemDescription');
             const platformRelease = `${releaseName}-${major}.${patch}`;
             const severityLabel = isBug
                 ? (RATING_LEVELS.find(level => level.value === form.severity) || RATING_LEVELS[2]).label
@@ -4789,11 +4991,14 @@
             
             if (description) {
                 // Bugs keep their description in repro steps
-                operations.push({
-                    op: 'add',
-                    path: isBug ? '/fields/Microsoft.VSTS.TCM.ReproSteps' : '/fields/System.Description',
-                    value: description
-                });
+                const descriptionField = isBug ? 'Microsoft.VSTS.TCM.ReproSteps' : 'System.Description';
+                operations.push({ op: 'add', path: `/fields/${descriptionField}`, value: description });
+                // New item, no existing content to lose - safe to set the format explicitly on
+                // create (unlike the detail modal, this is not the one-way HTML->Markdown
+                // conversion the app otherwise refuses to trigger on an existing item).
+                if (isMarkdown) {
+                    operations.push({ op: 'add', path: `/multilineFieldsFormat/${descriptionField}`, value: 'Markdown' });
+                }
             }
             if (form.assignee) {
                 operations.push({ op: 'add', path: '/fields/System.AssignedTo', value: form.assignee });
@@ -5403,6 +5608,79 @@
             return readEditorHtml('workItemDetailDescription');
         }
         
+        // Markdown counterpart - the textarea's raw value is the Markdown source, uncontrolled
+        // just like readEditorHtml()/readDetailDescriptionHtml() above.
+        function readMarkdownEditorText(editorId) {
+            const editor = document.getElementById(editorId);
+            return editor ? editor.value.trim() : '';
+        }
+        
+        function readDetailDescriptionMarkdown() {
+            return readMarkdownEditorText('workItemDetailDescriptionMd');
+        }
+        
+        // Images already displayed via replaceImagesWithAuthenticatedBlobs() have a session-only
+        // `blob:` URL in `src`, with the real Azure DevOps attachment URL stashed in
+        // `data-devops-url` (restored on save by processImagesForDevOps()). Turndown reads `src`
+        // directly, so without this it would bake the throwaway blob: URL into the Markdown -
+        // restore the real URL first so the generated `![]()` link is one that will still resolve
+        // after this tab is closed.
+        function restoreDevOpsImageUrls(html) {
+            if (!html || !html.includes('<img')) return html;
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            tempDiv.querySelectorAll('img[data-devops-url]').forEach(img => {
+                img.setAttribute('src', img.getAttribute('data-devops-url'));
+                img.removeAttribute('data-devops-url');
+            });
+            return tempDiv.innerHTML;
+        }
+        
+        // Real content conversion for the format toggle (detail modal + create forms) - not the
+        // passive "detect and adapt to whatever the item already has" path. Html -> Markdown runs
+        // through Turndown; Markdown -> Html (only reachable before a field is locked/saved, i.e.
+        // the user toggling back and forth pre-save) runs through marked, so switching keeps the
+        // content readable in whichever editor is now mounted instead of dumping raw source text
+        // into the wrong one.
+        function convertDescriptionContent(content, fromFormat, toFormat) {
+            if (!content || fromFormat === toFormat) return content;
+            try {
+                return toFormat === 'Markdown'
+                    ? new TurndownService().turndown(restoreDevOpsImageUrls(content))
+                    : marked.parse(content);
+            } catch (e) {
+                Logger.error('Description format conversion failed:', e);
+                return content;
+            }
+        }
+        
+        // Shared by the detail modal (switchDescriptionFormat()) and both create forms - all three
+        // format toggles have the same uncontrolled-editor read-back-then-cache-then-switch shape,
+        // just against a different reactive object (store.detail / store.createWorkItem /
+        // store.createTask), all of which expose the same descriptionFormat/descriptionHtml/
+        // descriptionHtmlCache/descriptionMarkdownCache fields.
+        //
+        // Every switch snapshots whatever is currently in the editor being left into that format's
+        // cache slot first. Switching INTO a format that already has a cached snapshot (typically
+        // because the user was just there and is now flipping back) restores it verbatim instead of
+        // re-running the lossy HTML<->Markdown conversion - so toggling Html -> Markdown -> Html
+        // with no edits gives back the exact original HTML, and any edits made while in either
+        // format survive further toggling instead of being discarded by a fresh conversion.
+        function switchFormDescriptionFormat(target, format, htmlEditorId, markdownEditorId) {
+            if (target.descriptionFormat === format) return;
+            const leavingContent = target.descriptionFormat === 'Markdown'
+                ? readMarkdownEditorText(markdownEditorId)
+                : readEditorHtml(htmlEditorId);
+            if (target.descriptionFormat === 'Markdown') {
+                target.descriptionMarkdownCache = leavingContent;
+            } else {
+                target.descriptionHtmlCache = leavingContent;
+            }
+            const cached = format === 'Markdown' ? target.descriptionMarkdownCache : target.descriptionHtmlCache;
+            target.descriptionHtml = cached != null ? cached : convertDescriptionContent(leavingContent, target.descriptionFormat, format);
+            target.descriptionFormat = format;
+        }
+        
         window.openInDevOps = function(workItemId) {
             const url = `https://dev.azure.com/${config.organization}/${config.project}/_workitems/edit/${workItemId}`;
             window.open(url, '_blank', 'noopener,noreferrer');
@@ -5424,6 +5702,11 @@
             d.titlePrefix = '';
             d.titlePrefixOptions = [];
             d.descriptionHtml = '';
+            d.descriptionFormat = 'Html';
+            d.descriptionFormatLocked = false;
+            d.descriptionHtmlCache = null;
+            d.descriptionMarkdownCache = null;
+            d.descriptionFieldPath = 'System.Description';
             d.tasks = [];
             d.tasksError = '';
             d.tasksLoading = true;
@@ -5460,9 +5743,20 @@
                 d.title = suffix;
                 
                 // Prefer ReproSteps for Bug if present, else System.Description
-                d.descriptionHtml = fields['Microsoft.VSTS.TCM.ReproSteps']
-                    || fields['System.Description']
-                    || '<em>No description</em>';
+                const reproStepsPath = 'Microsoft.VSTS.TCM.ReproSteps';
+                const descriptionPath = 'System.Description';
+                const descriptionFieldPath = (type === 'Bug' && fields[reproStepsPath]) ? reproStepsPath : descriptionPath;
+                d.descriptionFieldPath = descriptionFieldPath;
+                d.descriptionHtml = fields[descriptionFieldPath] || '<em>No description</em>';
+                // multilineFieldsFormat is only present when the request has no `fields=` projection
+                // (ours doesn't); check the format of whichever field actually supplied the content.
+                // Azure DevOps returns the value lower-cased ("markdown"/"html"), so compare
+                // case-insensitively rather than against the capitalized 'Markdown' literal.
+                const serverFormat = String(data.multilineFieldsFormat?.[descriptionFieldPath] || '').toLowerCase();
+                d.descriptionFormat = serverFormat === 'markdown' ? 'Markdown' : 'Html';
+                // Once Azure DevOps has a field saved as Markdown it can never go back to HTML - lock
+                // the toggle so the user can only convert Html -> Markdown, never the other way.
+                d.descriptionFormatLocked = d.descriptionFormat === 'Markdown';
                 
                 loadWorkItemDetailTasks(workItemId, type, pat);
             } catch (err) {
@@ -5562,7 +5856,8 @@
                 return;
             }
             
-            let description = readDetailDescriptionHtml();
+            const isMarkdown = d.descriptionFormat === 'Markdown';
+            let description = isMarkdown ? readDetailDescriptionMarkdown() : readDetailDescriptionHtml();
             const workItemType = d.fields['System.WorkItemType'] || '';
             
             d.loading = true;
@@ -5571,7 +5866,9 @@
                 const pat = await getPAT();
                 
                 // Process images: convert data:image URLs to DevOps attachments
-                description = await processImagesForDevOps(description, pat);
+                description = isMarkdown
+                    ? await processImagesForDevOpsMarkdown(description, pat)
+                    : await processImagesForDevOps(description, pat);
                 
                 const url = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems/${workItemId}?api-version=7.1`;
                 
@@ -5584,16 +5881,33 @@
                     }
                 ];
                 
-                // Use ReproSteps for Bug, System.Description for others
-                const fieldPath = workItemType === 'Bug' 
-                    ? '/fields/Microsoft.VSTS.TCM.ReproSteps'
-                    : '/fields/System.Description';
+                // Use ReproSteps for Bug, System.Description for others. The Markdown branch reuses
+                // whichever field was actually detected/displayed (d.descriptionFieldPath, set by
+                // openWorkItemDetailModal()) instead of recomputing it from the type, so the saved
+                // format-assertion op below always targets the same field the content came from.
+                const fieldPath = isMarkdown
+                    ? `/fields/${d.descriptionFieldPath}`
+                    : (workItemType === 'Bug' ? '/fields/Microsoft.VSTS.TCM.ReproSteps' : '/fields/System.Description');
                 
                 operations.push({
                     'op': 'replace',
                     'path': fieldPath,
                     'value': description || ''
                 });
+                
+                // Markdown format is one-way and sticky in Azure DevOps (a field already saved as
+                // Markdown can never revert to HTML). This op is what actually performs the
+                // conversion the first time the user saves after switchDescriptionFormat() (see
+                // there for the content conversion via Turndown); on every later save it just
+                // re-asserts the format alongside the field's own content change, as insurance
+                // against it ever silently reverting (a known Azure DevOps quirk).
+                if (isMarkdown) {
+                    operations.push({
+                        'op': 'add',
+                        'path': `/multilineFieldsFormat/${d.descriptionFieldPath}`,
+                        'value': 'Markdown'
+                    });
+                }
                 
                 const response = await fetch(url, {
                     method: 'PATCH',
@@ -5703,6 +6017,47 @@
             }
         }
         
+        // Decodes a data:image/... URL and uploads it as a DevOps attachment, returning the
+        // attachment URL (or null on failure) - shared by the HTML and Markdown image processors.
+        async function uploadImageAttachment(dataUrl, pat) {
+            const matches = dataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+            if (!matches) return null;
+            
+            const mimeType = matches[1];
+            const base64Data = matches[2];
+            
+            const byteCharacters = atob(base64Data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: `image/${mimeType}` });
+            
+            const timestamp = Date.now();
+            const random = Math.random().toString(36).substring(2, 9);
+            const extension = mimeType === 'png' ? 'png' : mimeType === 'jpeg' || mimeType === 'jpg' ? 'jpg' : 'png';
+            const fileName = `image_${timestamp}_${random}.${extension}`;
+            
+            const uploadUrl = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}&api-version=6.0`;
+            const uploadResponse = await fetch(uploadUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Basic ' + btoa(':' + pat),
+                    'Content-Type': 'application/octet-stream'
+                },
+                body: blob
+            });
+            
+            if (!uploadResponse.ok) {
+                Logger.warn('Failed to upload image attachment:', uploadResponse.statusText);
+                return null;
+            }
+            
+            const attachmentData = await uploadResponse.json();
+            return attachmentData.url;
+        }
+        
         // Process images in HTML: convert data:image URLs to DevOps attachments
         // Preserves existing DevOps attachment URLs (from data-devops-url attribute or blob URLs)
         async function processImagesForDevOps(html, pat) {
@@ -5744,49 +6099,8 @@
                 }
                 
                 try {
-                    // Extract base64 data and mime type
-                    const matches = src.match(/^data:image\/(\w+);base64,(.+)$/);
-                    if (!matches) continue;
-                    
-                    const mimeType = matches[1];
-                    const base64Data = matches[2];
-                    
-                    // Convert base64 to blob
-                    const byteCharacters = atob(base64Data);
-                    const byteNumbers = new Array(byteCharacters.length);
-                    for (let i = 0; i < byteCharacters.length; i++) {
-                        byteNumbers[i] = byteCharacters.charCodeAt(i);
-                    }
-                    const byteArray = new Uint8Array(byteNumbers);
-                    const blob = new Blob([byteArray], { type: `image/${mimeType}` });
-                    
-                    // Generate unique filename
-                    const timestamp = Date.now();
-                    const random = Math.random().toString(36).substring(2, 9);
-                    const extension = mimeType === 'png' ? 'png' : mimeType === 'jpeg' || mimeType === 'jpg' ? 'jpg' : 'png';
-                    const fileName = `image_${timestamp}_${random}.${extension}`;
-                    
-                    // Upload attachment to DevOps
-                    const uploadUrl = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}&api-version=6.0`;
-                    const uploadResponse = await fetch(uploadUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': 'Basic ' + btoa(':' + pat),
-                            'Content-Type': 'application/octet-stream'
-                        },
-                        body: blob
-                    });
-                    
-                    if (!uploadResponse.ok) {
-                        Logger.warn('Failed to upload image attachment:', uploadResponse.statusText);
-                        continue;
-                    }
-                    
-                    const attachmentData = await uploadResponse.json();
-                    const attachmentUrl = attachmentData.url;
-                    
-                    // Replace data: URL with DevOps attachment URL
-                    img.setAttribute('src', attachmentUrl);
+                    const attachmentUrl = await uploadImageAttachment(src, pat);
+                    if (attachmentUrl) img.setAttribute('src', attachmentUrl);
                 } catch (error) {
                     Logger.warn('Error processing image:', error);
                     // Continue with other images even if one fails
@@ -5794,6 +6108,37 @@
             }
             
             return tempDiv.innerHTML;
+        }
+        
+        // Markdown counterpart of processImagesForDevOps(): the raw text never displays images
+        // inline (there is no DOM to walk), so this only needs the "new pasted image" case - a
+        // `data:image/...` URL inside `![alt](...)` syntax - and uploads/splices each just like the
+        // HTML version. Existing `![...](https://dev.azure.com/.../_apis/wit/attachments/...)`
+        // links are untouched because the regex only matches data: URLs; there is no data-devops-url
+        // round trip to undo since the textarea's raw source never gets swapped to a blob URL.
+        async function processImagesForDevOpsMarkdown(markdown, pat) {
+            if (!markdown) return markdown;
+            const imageRegex = /!\[([^\]]*)\]\((data:image\/[^)]+)\)/g;
+            const matches = Array.from(markdown.matchAll(imageRegex));
+            if (!matches.length) return markdown;
+            
+            // Dedupe - the same pasted image can appear more than once in the text
+            const uniqueDataUrls = [...new Set(matches.map(m => m[2]))];
+            const uploadedUrls = new Map();
+            for (const dataUrl of uniqueDataUrls) {
+                try {
+                    const attachmentUrl = await uploadImageAttachment(dataUrl, pat);
+                    if (attachmentUrl) uploadedUrls.set(dataUrl, attachmentUrl);
+                } catch (error) {
+                    Logger.warn('Error processing Markdown image:', error);
+                }
+            }
+            if (!uploadedUrls.size) return markdown;
+            
+            return markdown.replace(imageRegex, (full, alt, dataUrl) => {
+                const attachmentUrl = uploadedUrls.get(dataUrl);
+                return attachmentUrl ? `![${alt}](${attachmentUrl})` : full;
+            });
         }
         
         // Replace <img> sources inside a container with blob URLs fetched using PAT (needed for DevOps attachments)
@@ -6000,11 +6345,21 @@
             buildChanges: { open: false, loading: false, meta: '', changes: [] },
             createWorkItem: {
                 open: false, context: {}, prefixes: [], type: 'Feature', prefix: '', title: '',
+                // 'Html' or 'Markdown' (default) - user-chosen for a new item, see the format
+                // toggle next to the Description field; unlike the detail modal this is not
+                // detected, since there is nothing in Azure DevOps yet to detect it from
+                descriptionFormat: 'Markdown',
+                // Per-format snapshots so switchFormDescriptionFormat() can restore what was there
+                // before instead of re-converting (see its own comment) - reset on every open
+                descriptionHtmlCache: null,
+                descriptionMarkdownCache: null,
                 descriptionHtml: '', assignee: '', priority: '3', severity: '3', tshirtSize: 'M'
             },
             createTask: {
                 open: false, parentId: null, parentTitle: '',
-                prefix: '', title: '', descriptionHtml: '', assignee: ''
+                prefix: '', title: '', descriptionFormat: 'Markdown',
+                descriptionHtmlCache: null, descriptionMarkdownCache: null,
+                descriptionHtml: '', assignee: ''
             },
             detail: {
                 open: false,
@@ -6021,6 +6376,22 @@
                 titlePrefixOptions: [],
                 // Rendered into the contenteditable once per open, never bound to it
                 descriptionHtml: '',
+                // 'Html' (contenteditable HtmlEditor) or 'Markdown' (textarea MarkdownEditor) -
+                // detected from the work item's multilineFieldsFormat, see openWorkItemDetailModal().
+                // The user can switch Html -> Markdown before saving (one-way conversion, mirrors
+                // Azure DevOps itself); descriptionFormatLocked below prevents going back.
+                descriptionFormat: 'Html',
+                // True once the field is already Markdown on the server - Markdown -> Html is
+                // impossible in Azure DevOps, so the toggle disables the HTML option entirely.
+                descriptionFormatLocked: false,
+                // Per-format snapshots so switchFormDescriptionFormat() can restore what was there
+                // before instead of re-converting (see its own comment) - reset on every open
+                descriptionHtmlCache: null,
+                descriptionMarkdownCache: null,
+                // The field descriptionHtml actually came from ('System.Description' or
+                // 'Microsoft.VSTS.TCM.ReproSteps' for a Bug) - only consulted by
+                // updateWorkItemDescription() on the Markdown branch, see the comment there
+                descriptionFieldPath: 'System.Description',
                 tasks: [],
                 tasksLoading: false,
                 tasksError: '',
@@ -6396,6 +6767,85 @@
             }
         };
 
+        const MARKDOWN_TOOLBAR_BUTTONS = [
+            { action: 'bold', icon: 'fa-bold', title: 'Bold' },
+            { action: 'italic', icon: 'fa-italic', title: 'Italic' },
+            { separator: true },
+            { action: 'h2', icon: 'fa-heading', title: 'Heading' },
+            { action: 'ul', icon: 'fa-list-ul', title: 'Bulleted list' },
+            { action: 'ol', icon: 'fa-list-ol', title: 'Numbered list' },
+            { action: 'code', icon: 'fa-code', title: 'Inline code' },
+            { action: 'link', icon: 'fa-link', title: 'Link' }
+        ];
+
+        // Markdown counterpart of HtmlEditor, for description fields whose multilineFieldsFormat is
+        // already "Markdown" (see openWorkItemDetailModal()), for a field the user just converted
+        // to Markdown via the detail modal's format toggle (switchDescriptionFormat()), and for the
+        // Markdown option in the create forms' format toggle. Opens in Preview if there is content,
+        // straight into Edit if the field is empty (nothing to preview yet); edit mode is a plain
+        // <textarea> holding the raw Markdown source - both uncontrolled the same way as HtmlEditor.
+        const MarkdownEditor = {
+            name: 'MarkdownEditor',
+            template: document.getElementById('tpl-markdown-editor').innerHTML,
+            props: {
+                editorId: { type: String, required: true },
+                toolbarId: { type: String, required: true },
+                markdown: { type: String, default: '' },
+                editable: { type: Boolean, default: true },
+                minHeight: { type: String, default: '140px' }
+            },
+            emits: ['rendered'],
+            data() {
+                return { mode: 'preview' };
+            },
+            computed: {
+                buttons: () => MARKDOWN_TOOLBAR_BUTTONS
+            },
+            watch: {
+                markdown: 'render',
+                editable: 'bindToolbar'
+            },
+            mounted() { this.render(); },
+            methods: {
+                render() {
+                    const editor = this.$refs.editor;
+                    if (!editor) return;
+                    editor.value = this.markdown || '';
+                    // Straight to Edit for a genuinely empty field (e.g. a brand-new item) -
+                    // Preview would just show the placeholder text with nothing to click into
+                    this.mode = (this.markdown || '').trim() ? 'preview' : 'edit';
+                    this.renderPreview(this.markdown);
+                    this.bindToolbar();
+                },
+                // Re-run whenever the preview needs fresh content: on render() (from the markdown
+                // prop) and when toggling from Edit back to Preview (from the live textarea value,
+                // since edits are uncontrolled and never flow back into the prop).
+                renderPreview(sourceText) {
+                    const preview = this.$refs.preview;
+                    if (!preview) return;
+                    preview.innerHTML = sourceText ? marked.parse(sourceText) : '<em>No description</em>';
+                    this.$emit('rendered', preview);
+                },
+                toggleMode() {
+                    if (this.mode === 'edit') {
+                        this.renderPreview(this.$refs.editor?.value || '');
+                        this.mode = 'preview';
+                    } else {
+                        this.mode = 'edit';
+                        this.$nextTick(() => this.$refs.editor?.focus());
+                    }
+                },
+                bindToolbar() {
+                    if (!this.editable) return;
+                    try {
+                        initializeMarkdownEditor(this.toolbarId, this.editorId);
+                    } catch (e) {
+                        Logger.warn(`Failed to initialize Markdown toolbar (${this.editorId}):`, e);
+                    }
+                }
+            }
+        };
+
         const ProgressBar = {
             name: 'ProgressBar',
             template: document.getElementById('tpl-progress-bar').innerHTML,
@@ -6598,7 +7048,7 @@
 
         // ===== Work Item Detail modal =====
         mountApp({
-            components: { HtmlEditor },
+            components: { HtmlEditor, MarkdownEditor },
             computed: {
                 store: () => store,
                 d: () => store.detail,
@@ -6643,6 +7093,13 @@
                 openCreateTaskFromWorkItemDetailModal,
                 copyWorkItemFromDetail,
                 openInDevOps,
+                // Html -> Markdown can never revert once the field is locked (see
+                // descriptionFormatLocked); switchFormDescriptionFormat() does the actual
+                // read-back/convert/switch, shared with both create forms' toggle.
+                switchDescriptionFormat(format) {
+                    if (format === 'Html' && this.d.descriptionFormatLocked) return;
+                    switchFormDescriptionFormat(this.d, format, 'workItemDetailDescription', 'workItemDetailDescriptionMd');
+                },
                 copyTitle: copyWorkItemTitle,
                 copyLink: copyWorkItemLink,
                 save: updateWorkItemDescription,
@@ -6899,7 +7356,7 @@
 
         // ===== Create work item modal =====
         mountApp({
-            components: { HtmlEditor },
+            components: { HtmlEditor, MarkdownEditor },
             computed: {
                 form: () => store.createWorkItem,
                 assignees: () => assignees,
@@ -6914,13 +7371,14 @@
             },
             methods: {
                 submit: createWorkItem,
-                close: closeCreateWorkItemModal
+                close: closeCreateWorkItemModal,
+                switchFormat(format) { switchFormDescriptionFormat(this.form, format, 'workItemDescription', 'workItemDescriptionMd'); }
             }
         }, '#createWorkItemApp');
 
         // ===== Create child task modal =====
         mountApp({
-            components: { HtmlEditor },
+            components: { HtmlEditor, MarkdownEditor },
             computed: {
                 form: () => store.createTask,
                 assignees: () => assignees,
@@ -6932,7 +7390,8 @@
             },
             methods: {
                 submit: createChildTask,
-                close: closeCreateTaskModal
+                close: closeCreateTaskModal,
+                switchFormat(format) { switchFormDescriptionFormat(this.form, format, 'taskDescription', 'taskDescriptionMd'); }
             }
         }, '#createTaskApp');
 

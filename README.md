@@ -23,9 +23,17 @@ Azure DevOps Release Overview Application
 
 ### Read-Write funkce (rozšířený režim)
 Všechny read-only funkce plus:
-- ➕ **Vytváření work items** - Vytváření nových Features a Bugs
-- 📝 **Vytváření child tasks** - Vytváření podřízených úkolů
-- ✏️ **Úprava work items** - Editace názvu a popisu work itemů
+- ➕ **Vytváření work items** - Vytváření nových Features a Bugs; u popisu lze přepínačem zvolit,
+  zda se má zapsat jako HTML (výchozí grafický editor) nebo jako Markdown
+- 📝 **Vytváření child tasks** - Vytváření podřízených úkolů; stejný přepínač formátu popisu jako u
+  Features/Bugs
+- ✏️ **Úprava work items** - Editace názvu a popisu work itemů; popis podporuje jak formát HTML
+  (výchozí grafický editor), tak Markdown - aplikace automaticky pozná, v jakém formátu je popis
+  daného work itemu uložený v Azure DevOps, a nabídne odpovídající editor. U popisu ve formátu HTML
+  lze přepínačem převést na Markdown - obsah se skutečně převede do Markdown syntaxe (přes knihovnu
+  Turndown), aby se v editoru nezobrazoval syrový HTML kód. Opačný směr (Markdown → HTML) není
+  možný, Azure DevOps to nedovoluje - přepínač na HTML je proto po uložení/detekci Markdownu
+  zablokovaný
 - 🔄 **Změna statusu** - Rychlá změna statusu work itemů
 - 🏷️ **Změna priority** - Úprava priority work items
 - ⚠️ **Změna severity** - Úprava severity u Bugů
@@ -36,7 +44,8 @@ Všechny read-only funkce plus:
 ## Požadavky
 
 - Moderní webový prohlížeč (Chrome, Firefox, Edge, Safari)
-- Připojení k internetu - knihovny (Vue, Bootstrap, Font Awesome) se načítají z CDN
+- Připojení k internetu - knihovny (Vue, Bootstrap, Font Awesome, marked.js, Turndown) se načítají
+  z CDN
 - Azure DevOps účet s přístupem k projektu
 - Personal Access Token (PAT) s příslušnými oprávněními:
   - **Read-Only režim**: `Work Items: Read`
@@ -92,6 +101,7 @@ APP_Releasy/
 ├── logo_light.png      # Logo pro světlý režim
 ├── ARCHITECTURE.md     # Technická mapa aplikace (pro vývoj a AI asistenty)
 ├── AGENTS.md           # Pravidla a vstupní bod pro AI asistenty
+├── dev.env             # PAT pro lokální testování (v .gitignore, nikdy se necommituje)
 └── README.md           # Tento soubor
 ```
 
@@ -103,6 +113,10 @@ APP_Releasy/
   kompilátorem, takže aplikace zůstává jediný soubor bez build stepu)
 - **Bootstrap 5.3.0** - UI komponenty a grid systém
 - **Font Awesome 6.5.0** - Ikony
+- **marked.js 18.0.9** - Vykreslení Markdown popisu work itemu do náhledu (pouze pro popisy, které
+  jsou v Azure DevOps uložené ve formátu Markdown)
+- **Turndown 7.2.4** - Převod HTML popisu na Markdown syntaxi při přepnutí formátu popisu z HTML na
+  Markdown (v detailu work itemu i v zakládacích formulářích)
 - **Web Crypto API** - Šifrování Personal Access Tokenu (AES-GCM) před uložením do localStorage
 - **Azure DevOps REST API** - Komunikace s Azure DevOps
 
@@ -114,8 +128,10 @@ Aplikace je postavená na Vue 3, ale zůstává jediným HTML souborem - žádn�
   sekce, skryté verze, téma, stav všech modalů) je jeden reaktivní objekt. Odvozená data jako
   filtrovaný strom work itemů jsou computed properties.
 - **Komponenty** - Šablony jsou definované jako `<script type="text/x-template">` bloky:
-  `ReleasyGrid`, `PatchSection`, `WorkItemRow`, `ProgressBar`, `PriorityCell` a `HtmlEditor`
-  (sdílený editor popisu pro detail i zakládací formuláře).
+  `ReleasyGrid`, `PatchSection`, `WorkItemRow`, `ProgressBar`, `PriorityCell`, `HtmlEditor`
+  (sdílený editor popisu pro detail i zakládací formuláře) a `MarkdownEditor` (obdoba `HtmlEditor`
+  pro Markdown popisy) - v detailu work itemu se volí automaticky podle formátu uloženého v Azure
+  DevOps, v zakládacích formulářích (Feature/Bug/Task) si formát vybírá uživatel přepínačem.
 - **Vue aplikace** - Vue je připojené na několik nezávislých kořenů (grid, toolbar, filtry,
   notifikace, přepínač témat, hlavička, footer a jednotlivé modaly).
 - **Generický picker** - Změna statusu, priority, severity, assignee a patch verze používá jednu

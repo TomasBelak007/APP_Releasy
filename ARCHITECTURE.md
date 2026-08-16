@@ -32,11 +32,11 @@ Rough layout (line numbers as of app version 1.0.44, for orientation only):
 
 | Range | Content |
 | --- | --- |
-| 1-9 | `<head>`, CDN dependencies |
-| 10-2030 | `<style>` - all CSS, themed via CSS custom properties on `[data-theme]` |
-| 2032-2786 | `<body>` markup - one `<div id="...App">` per Vue root, each with an **in-DOM template** |
-| 2786-2949 | `<script type="text/x-template">` blocks - templates for reusable components |
-| 2949-6967 | The single `<script>` with all logic |
+| 1-10 | `<head>`, CDN dependencies |
+| 11-2031 | `<style>` - all CSS, themed via CSS custom properties on `[data-theme]` |
+| 2033-2790 | `<body>` markup - one `<div id="...App">` per Vue root, each with an **in-DOM template** |
+| 2790-2984 | `<script type="text/x-template">` blocks - templates for reusable components |
+| 2984-7262 | The single `<script>` with all logic |
 
 Order of `// ===== ... =====` sections inside the script:
 
@@ -202,13 +202,13 @@ the root element** in `<body>`; only the components below use `x-template`.
 | `#filterApp` | Filter modal (assignee + status checkboxes) | `store.setFilters()`, no reload |
 | `#hiddenVersionsApp` | Unhide modal | `store.unhide()`, no reload |
 | `#valuePickerApp` | **All six "change X" modals** | `PICKER_KINDS[kind]` |
-| `#workItemDetailApp` | Work item detail | Meta badges, `<html-editor>`, tasks, comments; title splits into a prefix `<select>` + text (options from `d.titlePrefixOptions`), see [Detail modal](#flows-what-calls-what) |
+| `#workItemDetailApp` | Work item detail | Meta badges, `<html-editor>`/`<markdown-editor>` (picked by `d.descriptionFormat`, with an HTML->Markdown conversion toggle when `store.canWrite`, disabled once already Markdown - `d.descriptionFormatLocked`), tasks, comments; title splits into a prefix `<select>` + text (options from `d.titlePrefixOptions`), see [Detail modal](#flows-what-calls-what) |
 | `#patApp` | PAT modal | `savePAT`, autofocus on open |
 | `#helpApp` | Help modal, `v-html` of the fetched guide | `showHelpSection('help-pat')` after render |
 | `#workItemCreatedApp` | Success modal after create | Close just hides it - the new item was already inserted into the store when it was created |
 | `#buildChangesApp` | Build Changes list | |
-| `#createWorkItemApp` | Create Feature/Bug form | `<html-editor>`, `RATING_LEVELS` |
-| `#createTaskApp` | Create child Task form | `<html-editor>` |
+| `#createWorkItemApp` | Create Feature/Bug form | `<html-editor>`/`<markdown-editor>` (user-picked via `form.descriptionFormat`), `RATING_LEVELS` |
+| `#createTaskApp` | Create child Task form | `<html-editor>`/`<markdown-editor>` (user-picked via `form.descriptionFormat`) |
 
 ## Components
 
@@ -217,6 +217,7 @@ Defined in `VUE LAYER > Components`, templates from `<script type="text/x-templa
 | Component | Template id | Props | Notes |
 | --- | --- | --- | --- |
 | `HtmlEditor` | `tpl-html-editor` | `editorId`, `toolbarId`, `html`, `editable`, `minHeight` | Toolbar from `MD_TOOLBAR_BUTTONS`; **uncontrolled** - `html` is pushed in on change, content is read back with `readEditorHtml(editorId)`; emits `rendered` |
+| `MarkdownEditor` | `tpl-markdown-editor` | `editorId`, `toolbarId`, `markdown`, `editable`, `minHeight` | Markdown counterpart of `HtmlEditor`. In the detail modal it is used when `d.descriptionFormat === 'Markdown'`, either detected from the server or chosen via the format toggle's HTML->Markdown conversion (see [Detail modal](#flows-what-calls-what)); in both create forms it is used when the user picks Markdown in the format toggle (`form.descriptionFormat`). Edit/Preview toggle - opens in Preview if there is content, straight into Edit if the field is empty (`render()`); edit mode is a plain `<textarea>` (Markdown source, toolbar from `MARKDOWN_TOOLBAR_BUTTONS`), preview mode renders `marked.parse()` output into a `v-html` div; **uncontrolled** like `HtmlEditor` - content read back with `readMarkdownEditorText(editorId)`; emits `rendered` (with the preview container, so image auth fix-up runs the same way) |
 | `ProgressBar` | `tpl-progress-bar` | `items` | Segments per state in `PROGRESS_ORDER`, colors from `STATE_COLORS` |
 | `PriorityCell` | `tpl-priority-cell` | `item` | Priority / severity (Bug) / t-shirt (Feature) badges, each opening its picker |
 | `WorkItemRow` | `tpl-work-item-row` | `item`, `isChild`, `parentId` | Icon by type, clickable state/assignee badges, opens detail |
@@ -283,6 +284,44 @@ that needs the item's actual title (the `System.Title` PATCH, `copyWorkItemFromD
 prefill, the picker headings for state/assignee/priority/severity/t-shirt/patch) reads
 `detailFullTitle()`, which rejoins `titlePrefix` + `title`.
 
+**Description format** - Azure DevOps lets each large text field (`System.Description`,
+`Microsoft.VSTS.TCM.ReproSteps`, ...) independently be `HTML` (default) or `Markdown`, and the
+choice is one-way (a field saved as Markdown can never revert to HTML). `openWorkItemDetailModal()`
+resolves `d.descriptionFieldPath` (`ReproSteps` for a Bug if it has content, else
+`System.Description`) the same way it always has, then reads that field's format off the work
+item's `multilineFieldsFormat` map into `d.descriptionFormat`. Azure DevOps returns that map's
+values lower-cased (`"markdown"`/`"html"`), so the comparison is case-insensitive; `'Html'` is the
+fallback when the map or that entry is absent, which is every item that behaved this way before
+Markdown support existed. `d.descriptionFormatLocked` mirrors whether the server already says
+Markdown - if so the format toggle disables the `HTML` option outright (matches Azure DevOps' own
+one-way rule). The template picks `<html-editor>` or `<markdown-editor>` on `d.descriptionFormat`;
+when `store.canWrite`, a toggle next to the label lets the user convert an HTML field to Markdown
+before saving. `switchDescriptionFormat()` guards the one-way lock, then delegates to
+`switchFormDescriptionFormat(target, format, htmlEditorId, markdownEditorId)` - shared with both
+create forms' toggle - which reads back whatever is currently in the mounted editor (both editors
+are uncontrolled) and snapshots it into `descriptionHtmlCache`/`descriptionMarkdownCache` (whichever
+matches the format being left) before switching. If the format being switched *into* already has a
+cached snapshot - typically because the user was just there - that snapshot is restored verbatim;
+otherwise `convertDescriptionContent()` runs the lossy conversion (Turndown for Html -> Markdown,
+`marked.parse()` for the reverse, only reachable pre-save while the field isn't locked yet). This
+makes toggling non-destructive: flipping Html -> Markdown -> Html with no edits returns the exact
+original HTML instead of a freshly-regenerated (and likely different) one, and edits made in either
+format survive further toggling instead of being silently discarded by a fresh conversion. The
+caches are `null` until first populated and reset on every modal open (`openWorkItemDetailModal()`,
+`openCreateWorkItemModal()`, `openCreateTaskModal()`). Before the Html -> Markdown conversion, `restoreDevOpsImageUrls()` swaps any `<img>`'s `src` back
+from its displayed `blob:` URL to the real attachment URL stashed in `data-devops-url` by
+`replaceImagesWithAuthenticatedBlobs()` (see the Attachments row in
+[Azure DevOps API surface](#azure-devops-api-surface)) - without it, Turndown would read the
+throwaway blob: URL straight off `src` and bake a link into the Markdown that stops working the
+moment the tab closes. `updateWorkItemDescription()`
+branches on `d.descriptionFormat` - reading back with
+`readDetailDescriptionHtml()`/`processImagesForDevOps()` or
+`readDetailDescriptionMarkdown()`/`processImagesForDevOpsMarkdown()` - and, only on the Markdown
+branch, adds a `/multilineFieldsFormat/<path>` op asserting `'Markdown'` alongside the field op:
+this both performs the one-time conversion and re-asserts the format on every subsequent save as
+insurance against it ever reverting. Both image processors funnel uploads through the shared
+`uploadImageAttachment()`.
+
 **Change a single field** - `open*ChangeModal(...)` -> `openValuePicker(kind, context)` (no-op
 unless `store.canWrite`) -> the `#valuePickerApp` option click -> `PICKER_KINDS[kind].apply()` ->
 `changeWorkItem*()` -> `updateWorkItemField()` -> `PATCH /wit/workitems/{id}` ->
@@ -301,20 +340,25 @@ been loaded yet (lazy loading), the item is simply dropped; it appears correctly
 that tab is visited. No network reload either way.
 
 **Create work item** - `openCreateWorkItemModal(product, release, major, patch, prefill)` fills
-`store.createWorkItem` -> `createWorkItem()` validates, resolves `epicID` from `releaseNames`,
-builds JSON-patch operations (title with prefix, priority, tags, `Custom.PlatformRelease`, parent
-Epic link, description into `ReproSteps` for Bug, severity for Bug / t-shirt for Feature) ->
-`createWorkItemViaApi()` returns the full created item -> `store.addWorkItem()` places it straight
-into `store.releaseResults` (via `insertWorkItem()`, same bucket logic as `moveWorkItemPatch()`) ->
-`openWorkItemCreatedModal()`. No reload: the create response already has every field Azure DevOps
-assigned it. `copyWorkItemFromDetail()` prefills the same form and sets
-`store.closeDetailAfterCreate`.
+`store.createWorkItem` (including `descriptionFormat`, reset to `'Markdown'` unless `prefill`
+carries `'Html'` - see `copyWorkItemFromDetail()`) -> `createWorkItem()` validates, resolves
+`epicID` from
+`releaseNames`, reads the description back from whichever editor is mounted
+(`readEditorHtml()`/`readMarkdownEditorText()`), builds JSON-patch operations (title with prefix,
+priority, tags, `Custom.PlatformRelease`, parent Epic link, description into `ReproSteps` for Bug,
+severity for Bug / t-shirt for Feature, plus `/multilineFieldsFormat/<field>` when Markdown was
+picked) -> `createWorkItemViaApi()` returns the full created item -> `store.addWorkItem()` places
+it straight into `store.releaseResults` (via `insertWorkItem()`, same bucket logic as
+`moveWorkItemPatch()`) -> `openWorkItemCreatedModal()`. No reload: the create response already has
+every field Azure DevOps assigned it. `copyWorkItemFromDetail()` prefills the same form (reading
+back from the detail item's own format/editor) and sets `store.closeDetailAfterCreate`.
 
-**Create child task** - `openCreateTaskModal(parentId, parentTitle, prefill)` ->
-`createChildTask()` -> operations + `Hierarchy-Reverse` relation to the parent ->
-`createWorkItemViaApi('Task', ...)` -> `store.addChildTask(parentId, createdTask)` appends it to
-`store.childTasks[parentId]`, and if the detail modal for that parent is open, it is also appended
-to `store.detail.tasks` directly (no re-fetch) -> success modal.
+**Create child task** - `openCreateTaskModal(parentId, parentTitle, prefill)` fills
+`store.createTask` (same `descriptionFormat` toggle as the work item form) -> `createChildTask()`
+-> operations + `Hierarchy-Reverse` relation to the parent (+ `/multilineFieldsFormat/...` when
+Markdown was picked) -> `createWorkItemViaApi('Task', ...)` -> `store.addChildTask(parentId,
+createdTask)` appends it to `store.childTasks[parentId]`, and if the detail modal for that parent
+is open, it is also appended to `store.detail.tasks` directly (no re-fetch) -> success modal.
 
 **Markdown export** - `exportPatchToMarkdown(product, release, major, patch, patchId)` finds the
 patch node in `store.tree` (so it exports exactly what is visible), re-fetches those ids with
@@ -351,11 +395,11 @@ be registered here.
 | --- | --- |
 | Hierarchy query | `POST /wit/wiql?api-version=6.0` - Feature/Bug, `Custom.PlatformRelease CONTAINS '<release>-'`, not `Removed`, `Closed` only within `@startOfDay('-180d')` |
 | Work item batch | `GET /wit/workitems?ids=...&$expand=fields&api-version=6.0` (Markdown export uses 7.1) |
-| Detail | `GET /wit/workitems/{id}?$expand=Relations&api-version=7.1` |
+| Detail | `GET /wit/workitems/{id}?$expand=Relations&api-version=7.1` - no `fields=` projection, so the response's `multilineFieldsFormat` map (read into `d.descriptionFormat`) is populated |
 | Child tasks | `GET /wit/workitems?ids=...&$expand=relations&api-version=6.0`, batched by 200 |
 | Comments | `GET /wit/workItems/{id}/comments` (paged, see `fetchWorkItemCommentsAll`) |
 | Field update | `PATCH /wit/workitems/{id}?api-version=7.1`, `application/json-patch+json` |
-| Create | `POST /wit/workitems/${type}?api-version=6.0` |
+| Create | `POST /wit/workitems/${type}?api-version=7.1` (must be 7.1+ - the `/multilineFieldsFormat/<field>` op used for Markdown descriptions on create is silently ignored on older versions) |
 | Attachments | `POST /wit/attachments?fileName=...&api-version=6.0` on paste/upload; images in descriptions and comments are re-fetched authenticated and swapped for blob URLs (`replaceImagesWithAuthenticatedBlobs`) |
 | Token check | `GET https://dev.azure.com/{org}/_apis/connectionData` |
 
@@ -389,9 +433,12 @@ modes:
    (`:class="{ show: ... }"`); do not call `lockBodyScroll()` per modal.
 7. **Reusable components use `<script type="text/x-template">`.** In-DOM templates lowercase
    attribute names, which breaks camelCase props - that is why the grid components are not inline.
-8. **The description editors are uncontrolled.** Push content in via the `html` prop, read it back
-   with `readEditorHtml(id)` on submit, and call `$refs.editor.render()` when a modal opens (an
-   unsaved edit means the prop may not change).
+8. **The description editors are uncontrolled.** Push content in via the `html`/`markdown` prop,
+   read it back with `readEditorHtml(id)`/`readMarkdownEditorText(id)` on submit, and call
+   `$refs.editor.render()` when a modal opens (an unsaved edit means the prop may not change). Both
+   `HtmlEditor` and `MarkdownEditor` share the `ref="editor"` name behind a `v-if`/`v-else` (the
+   detail modal and both create forms), so callers do not need to know which one is currently
+   mounted.
 9. **`initializeHtmlEditor()` must not clone its toolbar.** It marks bound editors with
    `dataset.boundEditor`; cloning detaches Vue's bindings (this previously broke `v-show` on the
    toolbar in read-only mode).
@@ -421,6 +468,30 @@ modes:
   like every other field change, via its `storeValue` (store write differs from the PATCH body
   value) and `applyToStore: false` (Patch Version relocates the item with `moveWorkItemPatch()`
   instead) options - do not re-inline their own `fetch()` calls.
+- **A field's Markdown/HTML format is one-way and per-field.** Once `System.Description` or
+  `Microsoft.VSTS.TCM.ReproSteps` is saved as Markdown in Azure DevOps, it can never go back to
+  HTML - in the DevOps UI or via the API. The detail modal's format toggle enforces this:
+  `d.descriptionFormatLocked` disables the `HTML` option once the server already reports Markdown,
+  so only `Html -> Markdown` is ever offered. Unlike Azure DevOps' own format toggle (a flag flip
+  with no content rewrite), Releasy's toggle actually converts the content -
+  `convertDescriptionContent()` runs it through Turndown (`TurndownService`, CDN, global
+  `TurndownService`) - so the HTML markup does not leak as literal text into the Markdown source.
+- **`multilineFieldsFormat` values come back lower-cased** (`"markdown"`, `"html"`), not
+  capitalized - compare case-insensitively. A strict `=== 'Markdown'` check will always be false and
+  silently fall back to the `Html` branch even for a field genuinely saved as Markdown.
+- **Create forms (Feature/Bug/Task) let the user pick the format up front**, via the HTML/Markdown
+  toggle next to the Description field (`form.descriptionFormat`, defaults to `Markdown`) - safe to
+  set explicitly here (unlike the detail modal) because a brand-new field has no existing content
+  that could be lost or silently reformatted. `createWorkItem()`/`createChildTask()` add the
+  `/multilineFieldsFormat/<field>` op alongside the field op only when Markdown was chosen.
+  Copying a work item from the detail modal (`copyWorkItemFromDetail()`) carries over the source
+  item's format and content unchanged. Switching the toggle mid-edit goes through
+  `switchFormDescriptionFormat()` (same function the detail modal uses), so whatever was already
+  typed is read back, cached per-format, and restored verbatim on toggling back rather than lost or
+  re-converted (see [Description format](#flows-what-calls-what)).
+- `exportPatchToMarkdown()` still runs every description through the HTML-oriented `htmlToText()`
+  regardless of `multilineFieldsFormat` - for an already-Markdown description this is a mostly
+  harmless no-op today, but it is not format-aware.
 
 ## Where to change what
 
