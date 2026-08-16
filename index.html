@@ -2393,7 +2393,10 @@
                                 <span class="work-item-detail-comment-meta-sep" aria-hidden="true">·</span>
                                 <time class="work-item-detail-comment-time" :datetime="comment.when" :title="comment.when">{{ comment.whenLabel }}</time>
                             </div>
-                            <!-- Comment bodies are rendered HTML straight from Azure DevOps -->
+                            <!-- Comment bodies are HTML: straight from Azure DevOps for Html-format
+                                 comments, server-rendered (or marked.parse() as fallback) for
+                                 Markdown-format ones - see loadWorkItemDetailComments(). Read-only,
+                                 comments cannot be edited in Releasy. -->
                             <div class="work-item-detail-comment-body" v-html="comment.html"></div>
                         </div>
                     </div>
@@ -3032,7 +3035,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-08-16T19:20:57.000Z'
+            updatedAt: '2026-08-16T19:33:03.000Z'
         };
 
         // ===== API Configuration =====
@@ -5557,8 +5560,12 @@
             let continuationToken = null;
             do {
                 const url = new URL(base);
-                url.searchParams.set('api-version', '7.1-preview.3');
+                url.searchParams.set('api-version', '7.1-preview.4');
                 url.searchParams.set('$top', '200');
+                // Each comment can independently be Html or Markdown (comment.format) - renderedText
+                // asks the server to also include the HTML rendering for Markdown comments (Html
+                // comments' own `text` is already HTML either way), see loadWorkItemDetailComments().
+                url.searchParams.set('$expand', 'renderedText');
                 if (continuationToken) url.searchParams.set('continuationToken', continuationToken);
                 const res = await fetch(url.toString(), {
                     headers: { 'Authorization': 'Basic ' + btoa(':' + pat) }
@@ -5795,11 +5802,19 @@
                 if (d.id !== workItemId) return;
                 d.comments = list.map(comment => {
                     const when = comment.createdDate || comment.modifiedDate || '';
+                    // comment.format is per-comment, lower-cased just like descriptionFormat's
+                    // multilineFieldsFormat - a Markdown comment's `text` is raw Markdown source, not
+                    // HTML, so it needs the server's renderedText (requested via $expand above) to
+                    // display formatted; marked.parse() is only a fallback if that's ever missing.
+                    const isMarkdown = (comment.format || '').toLowerCase() === 'markdown';
+                    const html = isMarkdown
+                        ? (comment.renderedText || (comment.text ? marked.parse(comment.text) : ''))
+                        : (comment.text || comment.renderedText || '');
                     return {
                         author: comment.createdBy?.displayName || comment.createdBy?.uniqueName || 'Unknown',
                         when,
                         whenLabel: formatRelativeDate(when).text || when,
-                        html: comment.text || comment.renderedText || ''
+                        html
                     };
                 });
             } catch (e) {
