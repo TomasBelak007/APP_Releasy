@@ -92,16 +92,40 @@ export async function createWorkItemApi(cfg, type, operations, pat) {
   return devOpsFetch(url, { method: 'POST', pat, body: operations, contentType: 'application/json-patch+json' });
 }
 
+/** Escapes a value for embedding in a single-quoted WIQL string literal. */
+export function escapeWiqlString(value) {
+  return String(value).replace(/'/g, "''");
+}
+
+/** Mirrors fetchWIQL() in index.html - runs a WIQL query and returns the matching work item IDs
+ * (WIQL itself only ever returns IDs; fetch full fields separately via getWorkItemsBatch()). */
+export async function runWiql(cfg, query, pat) {
+  const url = `${apiBase(cfg)}/wit/wiql?api-version=7.1`;
+  return devOpsFetch(url, { method: 'POST', pat, body: { query } });
+}
+
 export async function getWorkItem(cfg, id, pat, { expandRelations = false } = {}) {
   const url = `${apiBase(cfg)}/wit/workitems/${id}?${expandRelations ? '$expand=Relations&' : ''}api-version=7.1`;
   return devOpsFetch(url, { pat });
 }
 
+// The "get work items by ID" endpoint rejects more than 200 IDs per call (VS403474) - list-tickets.mjs
+// can easily exceed that for an unfiltered whole-release query, so chunk transparently here rather
+// than making every caller worry about it.
+const MAX_WORK_ITEMS_BATCH = 200;
+
 export async function getWorkItemsBatch(cfg, ids, pat, { expandRelations = false } = {}) {
   if (!ids.length) return [];
-  const url = `${apiBase(cfg)}/wit/workitems?ids=${ids.join(',')}${expandRelations ? '&$expand=relations' : ''}&api-version=7.1`;
-  const data = await devOpsFetch(url, { pat });
-  return data.value || [];
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += MAX_WORK_ITEMS_BATCH) {
+    chunks.push(ids.slice(i, i + MAX_WORK_ITEMS_BATCH));
+  }
+  const results = await Promise.all(chunks.map(async (chunk) => {
+    const url = `${apiBase(cfg)}/wit/workitems?ids=${chunk.join(',')}${expandRelations ? '&$expand=relations' : ''}&api-version=7.1`;
+    const data = await devOpsFetch(url, { pat });
+    return data.value || [];
+  }));
+  return results.flat();
 }
 
 /** Just enough of a GET to answer "what type is this item" - used before every write to an

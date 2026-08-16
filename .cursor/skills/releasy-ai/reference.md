@@ -151,6 +151,67 @@ node scripts/create-task.mjs <parentId-or-url> --prefix DEV --title "..." \
 Rejects the parent if it is a Task (a Task cannot itself have child Tasks). `--format` defaults to
 `markdown`.
 
+## `list-tickets.mjs` (querying Bugs/Features + their Tasks for a release or the backlog)
+
+Read-only (a WIQL query + a batch field fetch), no plan file, no confirmation needed. This is the
+"what do we have queued up" / "what's not done yet" data source - it returns the raw list with
+every field the other scripts use for validation (state, priority, severity, t-shirt, assignee,
+dates) plus each item's Tasks with their own state/assignee/description; it does not itself decide
+what counts as "not done" or "new" - filter/summarize the returned JSON for whatever the user asked.
+
+```
+node scripts/list-tickets.mjs --product <Product>
+  [--release <ReleaseName>]      # default: that product's releaseNames entry
+  [--major <NN>]                 # e.g. "07" - default: auto-resolved if the product has exactly
+                                  # one configured major under this release, else required
+  [--patch <NNN> | --backlog]    # --backlog is exactly patch "999"; requires major (auto-resolved
+                                  # the same way); omit both to get every patch under the major
+  [--state New,Active | --open]  # --open = NOT IN ('Closed','Removed'); default: no state filter
+  [--no-tasks]                   # skip the per-item child-task fetch (faster for a big list)
+```
+
+Scope resolution, from most to least specific: `--major` + (`--patch` or `--backlog`) -> exactly
+one `Custom.PlatformRelease` value (`WHERE = '<release>-<major>.<patch>'`). `--major` alone -> every
+patch under that major (`CONTAINS '<release>-<major>.'`). Neither -> every major/patch under that
+release name (`CONTAINS '<release>-'`) - the same scope `index.html`'s own `loadProductData()` uses
+for a product's default tab.
+
+Output shape:
+
+```json
+{
+  "product": "Xeelo",
+  "release": "Labe",
+  "major": "07",
+  "patch": "999",
+  "scope": "Labe-07.999",
+  "count": 2,
+  "items": [
+    {
+      "id": 10180, "type": "Bug", "title": "...", "state": "New",
+      "priority": 2, "severity": "2 - High", "tshirtSize": null,
+      "platformRelease": "Labe-07.999", "assignedTo": "Tomas Belak",
+      "createdDate": "...", "changedDate": "...",
+      "url": "https://provisioning.integray.app/.../release-overview?workitem=10180",
+      "tasks": [
+        { "id": 10181, "title": "DEV - ...", "state": "New", "assignedTo": "...", "description": "...", "url": "..." }
+      ]
+    }
+  ]
+}
+```
+
+Notes:
+
+- `getWorkItemsBatch()` in `lib.mjs` chunks any ID list over 200 into multiple requests
+  automatically (Azure DevOps rejects more than 200 IDs per call, `VS403474`) - relevant here
+  because an unfiltered whole-release query can easily return 200+ items.
+- Tasks are fetched per matched item (one extra call each) unless `--no-tasks` is passed - for a
+  large, unfiltered scope this can be dozens of extra calls; narrow with `--major`/`--patch`/
+  `--state`/`--open` first if you only need a subset.
+- `--state` is validated against the live `statusOptions.Bug` (Bug and Feature share the same
+  state list in the current config).
+
 ## Other script flag references
 
 - `change-status.mjs <id-or-url> <newState>` - `newState` validated against the live
@@ -161,6 +222,8 @@ Rejects the parent if it is a Task (a Task cannot itself have child Tasks). `--f
 - `add-comment.mjs <id-or-url> --format markdown|html (--text "..." | --file path)`.
 - `get-ticket.mjs <id-or-url>` - read-only, prints fields/state/relations-derived parent or child
   Tasks/comments/`commentsAllowed` as one JSON object.
+- `list-tickets.mjs --product <name> [--release ... ] [--major ... ] [--patch ... | --backlog]
+  [--state s1,s2 | --open] [--no-tasks]` - read-only, see below.
 - `releasy-config.mjs` - no arguments, prints the live config as JSON.
 
 All scripts accept a bare numeric work item ID, a Releasy `...release-overview?workitem=<id>`

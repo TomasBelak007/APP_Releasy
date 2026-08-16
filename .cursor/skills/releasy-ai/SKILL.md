@@ -4,9 +4,10 @@ description: >-
   Create, read, and manage Azure DevOps Bugs/Features/Tasks and their comments for the
   smartermdm/Board project directly via the Azure DevOps REST API, bypassing the Releasy
   front-end. Use when the user asks to create a bug/feature/task ticket, add a task to an
-  existing ticket, add a comment to a ticket, change a ticket's status, or look up/read an
-  existing Azure DevOps work item, for any of Xeelo, XeeloAdmin, Integray, Repository, or
-  Connectors.
+  existing ticket, add a comment to a ticket, change a ticket's status, look up/read an existing
+  Azure DevOps work item, or list/query Bugs+Features (and their Tasks) for a product's release or
+  backlog - e.g. "what's new in the backlog" or "what's not done yet in this release" - for any of
+  Xeelo, XeeloAdmin, Integray, Repository, or Connectors.
 ---
 
 # releasy-ai
@@ -109,7 +110,24 @@ refuses on a Task, but say so upfront rather than let the user hit that error.
 ## 6. Just looking something up
 
 `node scripts/get-ticket.mjs <id-or-url>` is read-only - no confirmation needed. Use it whenever
-the user asks to "look at", "show me", or "what's the status of" a ticket.
+the user asks to "look at", "show me", or "what's the status of" a *specific, already-known*
+ticket.
+
+## 7. Listing/querying tickets for a release or the backlog
+
+For "what's new in the backlog", "what's not done yet in release X", or any other question about a
+*set* of tickets rather than one you already have an ID for. Read-only - no confirmation needed.
+
+1. Resolve the product (and release, if the user didn't name the default one).
+2. Resolve scope: a specific patch (`--major --patch`), the whole backlog (`--backlog`, patch
+   `"999"`), a whole major (`--major` alone), or the product's whole release (no `--major`/
+   `--patch` at all) - ask if it's unclear which the user means.
+3. Run `node scripts/list-tickets.mjs --product <Product> [--release ...] [--major ...] [--patch ... | --backlog] [--state ... | --open]`
+   (see reference.md for the exact flags and output shape). Add `--open` when the question is
+   about unfinished work ("not done yet" = exclude `Closed`/`Removed`, then look at what's left).
+4. The script returns raw data (every Bug/Feature in scope, each with its own Tasks and their
+   states) - do the actual filtering/summarizing/grouping the user asked for yourself from that
+   JSON; the script does not interpret "new" or "not done" for you.
 
 ## Maintenance
 

@@ -137,6 +137,18 @@ export function isValidPatch(cfg, product, release, major, patch) {
   return !!version && version.patches.includes(patch);
 }
 
+/** Every "<release>-<major>" version entry configured for a product under one release name -
+ * used to auto-resolve `major` when the caller only gave a release (list-tickets.mjs), and to
+ * list the options when that resolution is ambiguous. */
+export function findMajorsForRelease(cfg, product, release) {
+  const productEntry = cfg.availablePatchVersions.find((p) => p.product === product);
+  if (!productEntry) return [];
+  const prefix = `${release}-`;
+  return productEntry.versions
+    .filter((v) => v.version.startsWith(prefix))
+    .map((v) => v.version.slice(prefix.length));
+}
+
 export function isValidAssignee(cfg, email) {
   if (!email) return true; // unassigned is always fine
   return cfg.assignees.some((a) => a.email.toLowerCase() === String(email).toLowerCase());
