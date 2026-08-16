@@ -3032,7 +3032,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-08-16T19:12:00.000Z'
+            updatedAt: '2026-08-16T19:20:57.000Z'
         };
 
         // ===== API Configuration =====
@@ -5925,6 +5925,12 @@
                 store.applyFieldUpdate(workItemId, '/fields/System.Title', title);
                 store.applyFieldUpdate(workItemId, fieldPath, description || '');
                 
+                // The field is now permanently Markdown in Azure DevOps (this is what the
+                // /multilineFieldsFormat op above just did on the first Markdown save) - lock the
+                // toggle immediately rather than leaving the now-stale HTML option clickable until
+                // the item is reopened and re-detected from the server.
+                if (isMarkdown) d.descriptionFormatLocked = true;
+                
                 showNotification('Work item updated successfully', 'success');
             } catch (error) {
                 Logger.error('Error updating work item:', error);
@@ -6382,7 +6388,10 @@
                 // Azure DevOps itself); descriptionFormatLocked below prevents going back.
                 descriptionFormat: 'Html',
                 // True once the field is already Markdown on the server - Markdown -> Html is
-                // impossible in Azure DevOps, so the toggle disables the HTML option entirely.
+                // impossible in Azure DevOps, so the toggle disables the HTML option entirely. Set
+                // from the server's multilineFieldsFormat on load, and flipped straight to true by
+                // updateWorkItemDescription() right after a Markdown save (no re-fetch happens, so
+                // without that the toggle would stay wrongly clickable until the item is reopened).
                 descriptionFormatLocked: false,
                 // Per-format snapshots so switchFormDescriptionFormat() can restore what was there
                 // before instead of re-converting (see its own comment) - reset on every open
