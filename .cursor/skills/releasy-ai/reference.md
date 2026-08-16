@@ -1,0 +1,171 @@
+# releasy-ai reference
+
+Detailed field mappings, the JSON plan schema, and relation types behind the scripts in
+`scripts/`. See `SKILL.md` for the workflow that uses these.
+
+Everything here mirrors `index.html` in the Releasy repo (`createWorkItem()`, `createChildTask()`,
+`updateWorkItemDescription()`, `changeWorkItemStatus()`, `submitNewWorkItemComment()`,
+`openWorkItemDetailModal()`) - this file documents that mapping, it does not replace it. Product/
+release/prefix/assignee/status data itself is never hardcoded here; it is always read live via
+`scripts/releasy-config.mjs`.
+
+## Credentials
+
+`AZURE_DEVOPS_PAT` in `.env` (copy `.env.example`) or exported in the environment. This is a
+dedicated PAT for this skill, separate from the repo's own `dev.env` (see `AGENTS.md`).
+
+## Field mapping
+
+### Bug / Feature (creation and edits)
+
+| Field | Path | Notes |
+|---|---|---|
+| Title | `System.Title` | `"<prefix> - <text>"`. `prefix` must be one of `titlePrefixes[product]`. |
+| Priority | `Microsoft.VSTS.Common.Priority` | Integer 1-4. Required. |
+| Product | `System.Tags` | The product name itself (e.g. `"Xeelo"`), not a tag list. |
+| Platform release | `Custom.PlatformRelease` | `"<Release>-<major>.<patch>"`, e.g. `"Labe-07.999"`. `patch` must be one of `availablePatchVersions[product].versions[...].patches`; `"999"` is backlog. |
+| Description | `Microsoft.VSTS.TCM.ReproSteps` (Bug) or `System.Description` (Feature) | Plain text/HTML/Markdown string. |
+| Description format | `/multilineFieldsFormat/<field>` | Only added when the description is Markdown; op `add`, value `"Markdown"`. Once a field is saved as Markdown in Azure DevOps it cannot revert to HTML - this skill never attempts that. |
+| Severity (Bug only) | `Microsoft.VSTS.Common.Severity` | Label string, e.g. `"2 - High"` (`resolveSeverityLabel()` in `releasy-config.mjs` accepts either the digit or the full label). |
+| T-shirt size (Feature only) | `Custom.Shirtsize` | One of `S`, `M`, `L`. Optional. |
+| Assignee | `System.AssignedTo` | Email string; must be one of the live `assignees`. |
+| Parent Epic | relation | `System.LinkTypes.Hierarchy-Reverse` -> `.../wit/workitems/<epicID>`, `epicID` resolved from `releaseNames` by release name. |
+| Status | `System.State` | One of the live `statusOptions.Bug` / `statusOptions.Feature`. |
+
+### Task
+
+| Field | Path | Notes |
+|---|---|---|
+| Title | `System.Title` | `"<prefix> - <text>"`, `prefix` must be one of `titlePrefixesTask`. |
+| Description | `System.Description` | No ReproSteps variant. |
+| Description format | `/multilineFieldsFormat/System.Description` | Same Markdown-only rule as above. |
+| Assignee | `System.AssignedTo` | Optional. |
+| Parent | relation | `System.LinkTypes.Hierarchy-Reverse` -> `.../wit/workitems/<parentId>`. |
+| Status | `System.State` | One of the live `statusOptions.Task` (no `Evaluation`). |
+
+Tasks never get: Priority, Severity, T-shirt size, Tags, or PlatformRelease - `update-ticket.mjs`
+and `create-ticket.mjs` reject those fields on a Task.
+
+### Comments
+
+Bug/Feature only - never a Task. Every script that touches an existing item's comments
+(`add-comment.mjs`, and `get-ticket.mjs` when reading them back) checks `System.WorkItemType`
+first and refuses on a Task.
+
+`POST /wit/workitems/{id}/comments?format=markdown|html&api-version=7.1-preview.4`, body
+`{ "text": "..." }`. `format` is per-request, not per-field like `multilineFieldsFormat` - each
+comment on the same item can independently be Markdown or HTML.
+
+Reading comments back: `GET /wit/workitems/{id}/comments?api-version=7.1-preview.4&$expand=renderedText`
+(paginated via `continuationToken`). `$expand=renderedText` is what makes a Markdown comment's
+server-rendered HTML available - a Markdown comment's own `text` is raw Markdown source, not HTML.
+
+## Relation types
+
+| Relation | Meaning | Used by |
+|---|---|---|
+| `System.LinkTypes.Hierarchy-Reverse` | "my parent is X" | Bug/Feature -> Epic; Task -> Bug/Feature. Set on the child, pointing at the parent's URL. |
+| `System.LinkTypes.Hierarchy-Forward` | "my child is X" | The complementary side of Hierarchy-Reverse; Azure DevOps maintains it automatically once Hierarchy-Reverse is added. `get-ticket.mjs` reads this relation on a Bug/Feature to find its child Tasks. |
+| `System.LinkTypes.Related` | "see also X" (symmetric) | Multi-product companion tickets (e.g. Xeelo + XeeloAdmin). Add once (on either item) - Azure DevOps shows it on both sides. |
+
+## Description format limitation on `update-ticket.mjs`
+
+`update-ticket.mjs --description`/`--description-file` writes the new text into whichever
+description field the item already uses, and re-asserts the existing `multilineFieldsFormat` if
+it's already Markdown (insurance against Azure DevOps ever silently reverting it - same as
+`updateWorkItemDescription()` does on every save, not just the first). It does **not** convert
+between HTML and Markdown, and it does **not** upload pasted screenshots as attachments - both of
+those are Releasy-UI-only features (`convertDescriptionContent()` via Turndown/marked, and
+`processImagesForDevOps()`/`processImagesForDevOpsMarkdown()`) that depend on a live browser DOM
+and have no CLI equivalent. Supply description edits already in the item's current format, with
+any images already hosted (an existing attachment URL, or a plain link) rather than pasted.
+
+## JSON plan schema (`create-ticket.mjs`)
+
+Creates one or more brand-new Bugs/Features, each with an optional nested `tasks` array (Tasks
+created in the *same run* as their new parent), plus optional `relatedRefIds` cross-links between
+items in the plan.
+
+```json
+{
+  "items": [
+    {
+      "refId": "A",
+      "type": "Bug",
+      "product": "Xeelo",
+      "prefix": "Xeelo",
+      "title": "Free-text title",
+      "descriptionMarkdown": "...",
+      "priority": 2,
+      "severity": "2 - High",
+      "release": "Labe",
+      "major": "07",
+      "patch": "999",
+      "assigneeEmail": "foo@bar.com",
+      "tasks": [
+        { "prefix": "DEV", "title": "...", "descriptionMarkdown": "...", "assigneeEmail": "..." }
+      ]
+    },
+    {
+      "refId": "B",
+      "type": "Feature",
+      "product": "XeeloAdmin",
+      "prefix": "Xeelo admin",
+      "title": "Companion change on the admin side",
+      "tshirtSize": "M",
+      "priority": 3,
+      "release": "Odra",
+      "major": "01",
+      "patch": "999",
+      "relatedRefIds": ["A"]
+    }
+  ]
+}
+```
+
+Field notes:
+
+- `refId`: required, unique within the plan - used for `relatedRefIds` and to report back which
+  created ID corresponds to which planned item.
+- `type`: `"Bug"` or `"Feature"` only. A standalone Task on an *already-existing* parent does not
+  use this schema at all - see `create-task.mjs` below.
+- `descriptionMarkdown` xor `descriptionHtml` - pick one; Markdown is the default per your
+  instruction unless HTML was explicitly requested.
+- `severity` is Bug-only, `tshirtSize` is Feature-only - `create-ticket.mjs` rejects the wrong one
+  for the type.
+- `patch: "999"` is exactly what "add to backlog" means.
+- `tasks[]` items follow the Task field mapping above; no product/release/priority fields (Tasks
+  don't have them).
+- `relatedRefIds`: array of other `refId`s in the same plan to `System.LinkTypes.Related`-link
+  this item to.
+
+## `create-task.mjs` (adding a Task to an item that already exists)
+
+No plan file - flags only:
+
+```
+node scripts/create-task.mjs <parentId-or-url> --prefix DEV --title "..." \
+  [--description "..." | --description-file path] [--format markdown|html] [--assignee email]
+```
+
+Rejects the parent if it is a Task (a Task cannot itself have child Tasks). `--format` defaults to
+`markdown`.
+
+## Other script flag references
+
+- `change-status.mjs <id-or-url> <newState>` - `newState` validated against the live
+  `statusOptions` for that item's own type.
+- `update-ticket.mjs <id-or-url> [--title ...] [--priority ...] [--severity ...] [--tshirt ...]
+  [--release ... --major ... --patch ...] [--assignee ... | --unassign]
+  [--description ... | --description-file ...]` - any subset; only the given fields change.
+- `add-comment.mjs <id-or-url> --format markdown|html (--text "..." | --file path)`.
+- `get-ticket.mjs <id-or-url>` - read-only, prints fields/state/relations-derived parent or child
+  Tasks/comments/`commentsAllowed` as one JSON object.
+- `releasy-config.mjs` - no arguments, prints the live config as JSON.
+
+All scripts accept a bare numeric work item ID, a Releasy `...release-overview?workitem=<id>`
+link, or a full `https://dev.azure.com/<org>/<project>/_workitems/edit/<id>` DevOps URL wherever
+an ID is expected. Every script that reports on a work item (create, update, status change,
+comment, task, get) prints/returns a Releasy link
+(`https://provisioning.integray.app/api/endpoint/web-app/azure-devops/release-overview?workitem=<id>`),
+not a raw DevOps link - see `releasyWorkItemUrl()` in `scripts/lib.mjs`.

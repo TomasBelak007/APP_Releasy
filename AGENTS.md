@@ -65,3 +65,13 @@ smoke-testing alone cannot confirm something (API response shape, format quirks,
   invariant) must be reflected in `ARCHITECTURE.md` in the same change.
 - User-visible features, dependencies or localStorage keys also belong in `README.md`, which is
   written in Czech.
+- `.cursor/skills/releasy-ai/` lets an AI agent create/read/update Azure DevOps work items and
+  comments directly via the REST API, bypassing this front-end - it has its own PAT
+  (`.cursor/skills/releasy-ai/.env`, git-ignored), separate from `dev.env` above. Whenever a
+  constant it depends on changes in `index.html` - `statusOptions`, `releaseNames`,
+  `titlePrefixes`/`titlePrefixesTask`, `availablePatchVersions`, `assignees`, `RATING_LEVELS` - or
+  the work item field mapping/API endpoint versions used by `createWorkItem()`/
+  `createChildTask()`/comments change, review that skill. Most of those constants are read live
+  via `scripts/releasy-config.mjs` so no action is usually needed there, but the field-mapping/
+  endpoint logic in its other scripts and the tables in `reference.md` are hardcoded and must be
+  updated by hand if that logic itself changes.
