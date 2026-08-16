@@ -322,6 +322,23 @@ this both performs the one-time conversion and re-asserts the format on every su
 insurance against it ever reverting. Both image processors funnel uploads through the shared
 `uploadImageAttachment()`.
 
+**Adding a comment** - existing comments stay read-only (no edit/delete), but `store.canWrite`
+users get an "Add a comment" composer above the list (it sits above rather than below because the
+list sorts newest-first, same as Azure DevOps' own comment format concept but reusing Releasy's own
+`<html-editor>`/`<markdown-editor>` pair and toggle instead of a third editor implementation).
+`d.newComment` deliberately reuses `descriptionFormat`/`descriptionHtml`/`descriptionHtmlCache`/
+`descriptionMarkdownCache` as its field names (defaulting to `'Markdown'`, no lock - a fresh comment
+can freely be either) purely so `switchCommentFormat()` can call the exact same
+`switchFormDescriptionFormat()` used by the description toggle and both create forms, against this
+nested object instead of `d` itself. `submitNewWorkItemComment()` reads back the mounted editor,
+runs it through the same `processImagesForDevOps()`/`processImagesForDevOpsMarkdown()` used for
+descriptions (both are already generic, not tied to a specific field), then `POST`s to
+`/wit/workItems/{id}/comments?format=markdown|html` (format is a query param here, not a
+`/multilineFieldsFormat` op, since Add Comment takes it per-request) and unshifts the response -
+mapped through the same `mapCommentForDisplay()` the initial load uses - onto `d.comments`. Clearing
+`d.newComment.descriptionHtml` afterwards is enough to blank whichever editor is mounted, since both
+already watch their own `html`/`markdown` prop and re-render on change.
+
 **Change a single field** - `open*ChangeModal(...)` -> `openValuePicker(kind, context)` (no-op
 unless `store.canWrite`) -> the `#valuePickerApp` option click -> `PICKER_KINDS[kind].apply()` ->
 `changeWorkItem*()` -> `updateWorkItemField()` -> `PATCH /wit/workitems/{id}` ->
@@ -397,7 +414,7 @@ be registered here.
 | Work item batch | `GET /wit/workitems?ids=...&$expand=fields&api-version=6.0` (Markdown export uses 7.1) |
 | Detail | `GET /wit/workitems/{id}?$expand=Relations&api-version=7.1` - no `fields=` projection, so the response's `multilineFieldsFormat` map (read into `d.descriptionFormat`) is populated |
 | Child tasks | `GET /wit/workitems?ids=...&$expand=relations&api-version=6.0`, batched by 200 |
-| Comments | `GET /wit/workItems/{id}/comments?api-version=7.1-preview.4&$expand=renderedText` (paged, see `fetchWorkItemCommentsAll`) - `$expand` gets each comment's server-rendered HTML alongside its raw `text`, needed because each comment independently carries its own `format` (`"markdown"`/`"html"`, same lower-cased convention as `multilineFieldsFormat`); `loadWorkItemDetailComments()` picks `renderedText` for Markdown comments (falling back to `marked.parse()` if ever absent) and `text` for HTML ones. Read-only either way - comments are never editable in Releasy |
+| Comments | `GET /wit/workItems/{id}/comments?api-version=7.1-preview.4&$expand=renderedText` (paged, see `fetchWorkItemCommentsAll`) - `$expand` gets each comment's server-rendered HTML alongside its raw `text`, needed because each comment independently carries its own `format` (`"markdown"`/`"html"`, same lower-cased convention as `multilineFieldsFormat`); `mapCommentForDisplay()` picks `renderedText` for Markdown comments (falling back to `marked.parse()` if ever absent) and `text` for HTML ones. Existing comments are still read-only (never editable/deletable); `POST /wit/workItems/{id}/comments?format=markdown\|html&api-version=7.1-preview.4` (`submitNewWorkItemComment()`) adds a brand-new one from the detail modal's composer, format chosen per-comment via the same query param (not a field-level op like descriptions) |
 | Field update | `PATCH /wit/workitems/{id}?api-version=7.1`, `application/json-patch+json` |
 | Create | `POST /wit/workitems/${type}?api-version=7.1` (must be 7.1+ - the `/multilineFieldsFormat/<field>` op used for Markdown descriptions on create is silently ignored on older versions) |
 | Attachments | `POST /wit/attachments?fileName=...&api-version=6.0` on paste/upload; images in descriptions and comments are re-fetched authenticated and swapped for blob URLs (`replaceImagesWithAuthenticatedBlobs`) |

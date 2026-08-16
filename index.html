@@ -2383,6 +2383,30 @@
                     <label class="form-label work-item-detail-comments-label" style="color: var(--text-primary); font-weight: 600;">
                         <i class="fa-solid fa-comments"></i> Comments
                     </label>
+                    <!-- New comments only - existing ones stay read-only, see the comment on the
+                         v-html body below. Placed above the list (not below, like Azure DevOps'
+                         own UI) because the list itself sorts newest-first, so a just-posted comment
+                         lands right underneath instead of at the bottom, out of view. -->
+                    <div v-if="store.canWrite" class="work-item-detail-new-comment" style="margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 4px;">
+                            <span style="color: var(--text-secondary); font-size: 0.9em;">Add a comment</span>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Comment format">
+                                <button type="button" class="btn" :class="d.newComment.descriptionFormat === 'Html' ? 'btn-primary' : 'btn-light'"
+                                        @click="switchCommentFormat('Html')" style="border: 1px solid var(--border-color);">HTML</button>
+                                <button type="button" class="btn" :class="d.newComment.descriptionFormat === 'Markdown' ? 'btn-primary' : 'btn-light'"
+                                        @click="switchCommentFormat('Markdown')" style="border: 1px solid var(--border-color);">Markdown</button>
+                            </div>
+                        </div>
+                        <html-editor v-if="d.newComment.descriptionFormat !== 'Markdown'" ref="newCommentEditor" editor-id="workItemDetailNewComment" toolbar-id="workItemDetailNewCommentToolbar"
+                                     :html="d.newComment.descriptionHtml" min-height="90px"></html-editor>
+                        <markdown-editor v-else ref="newCommentEditor" editor-id="workItemDetailNewCommentMd" toolbar-id="workItemDetailNewCommentMarkdownToolbar"
+                                     :markdown="d.newComment.descriptionHtml" min-height="90px"></markdown-editor>
+                        <div style="margin-top: 8px; text-align: right;">
+                            <button type="button" class="btn btn-primary btn-sm" :disabled="d.commentSubmitting" @click="submitNewComment">
+                                <i class="fa-solid fa-paper-plane"></i> {{ d.commentSubmitting ? 'Posting…' : 'Add comment' }}
+                            </button>
+                        </div>
+                    </div>
                     <div class="work-item-detail-comments" aria-live="polite" ref="comments">
                         <p v-if="d.commentsLoading" class="work-item-detail-comments-loading">Loading comments…</p>
                         <p v-else-if="d.commentsError" class="work-item-detail-comments-empty">{{ d.commentsError }}</p>
@@ -3035,7 +3059,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-08-16T19:33:03.000Z'
+            updatedAt: '2026-08-16T19:58:56.000Z'
         };
 
         // ===== API Configuration =====
@@ -5720,6 +5744,11 @@
             d.comments = [];
             d.commentsError = '';
             d.commentsLoading = true;
+            d.commentSubmitting = false;
+            d.newComment.descriptionFormat = 'Markdown';
+            d.newComment.descriptionHtml = '';
+            d.newComment.descriptionHtmlCache = null;
+            d.newComment.descriptionMarkdownCache = null;
             d.open = true;
             d.loading = true;
             
@@ -5795,28 +5824,31 @@
             }
         }
         
+        // Shared by loadWorkItemDetailComments() and submitNewWorkItemComment() - comment.format is
+        // per-comment, lower-cased just like descriptionFormat's multilineFieldsFormat. A Markdown
+        // comment's `text` is raw Markdown source, not HTML, so it needs the server's renderedText
+        // (requested via $expand=renderedText, present on both the list and the Add Comment response)
+        // to display formatted; marked.parse() is only a fallback if that's ever missing.
+        function mapCommentForDisplay(comment) {
+            const when = comment.createdDate || comment.modifiedDate || '';
+            const isMarkdown = (comment.format || '').toLowerCase() === 'markdown';
+            const html = isMarkdown
+                ? (comment.renderedText || (comment.text ? marked.parse(comment.text) : ''))
+                : (comment.text || comment.renderedText || '');
+            return {
+                author: comment.createdBy?.displayName || comment.createdBy?.uniqueName || 'Unknown',
+                when,
+                whenLabel: formatRelativeDate(when).text || when,
+                html
+            };
+        }
+        
         async function loadWorkItemDetailComments(workItemId, pat) {
             const d = store.detail;
             try {
                 const list = await fetchWorkItemCommentsAll(workItemId, pat);
                 if (d.id !== workItemId) return;
-                d.comments = list.map(comment => {
-                    const when = comment.createdDate || comment.modifiedDate || '';
-                    // comment.format is per-comment, lower-cased just like descriptionFormat's
-                    // multilineFieldsFormat - a Markdown comment's `text` is raw Markdown source, not
-                    // HTML, so it needs the server's renderedText (requested via $expand above) to
-                    // display formatted; marked.parse() is only a fallback if that's ever missing.
-                    const isMarkdown = (comment.format || '').toLowerCase() === 'markdown';
-                    const html = isMarkdown
-                        ? (comment.renderedText || (comment.text ? marked.parse(comment.text) : ''))
-                        : (comment.text || comment.renderedText || '');
-                    return {
-                        author: comment.createdBy?.displayName || comment.createdBy?.uniqueName || 'Unknown',
-                        when,
-                        whenLabel: formatRelativeDate(when).text || when,
-                        html
-                    };
-                });
+                d.comments = list.map(mapCommentForDisplay);
             } catch (e) {
                 Logger.warn('Comments load failed', e);
                 if (d.id === workItemId) d.commentsError = `Comments could not be loaded: ${e.message || e}`;
@@ -5824,6 +5856,85 @@
                 if (d.id === workItemId) d.commentsLoading = false;
             }
         }
+        
+        // Posts a brand-new comment from the "Add a comment" composer (see #workItemDetailApp's
+        // template) - existing comments stay read-only, this only ever adds. Mirrors
+        // updateWorkItemDescription()'s shape: read the uncontrolled editor, upload any pasted
+        // screenshots as attachments (same helpers the description fields use - they're generic,
+        // not tied to a specific field), then PATCH... except here it's a POST with the format as a
+        // query param rather than a /multilineFieldsFormat op, since Add Comment takes format
+        // per-request instead of per-field.
+        //
+        // Returns true on success so the component method (see #workItemDetailApp) knows to force
+        // the mounted editor to re-render. That force-render can't happen in here: the composer is
+        // uncontrolled, so d.newComment.descriptionHtml never picks up what the user typed (only
+        // read back on submit via readEditorHtml()/readMarkdownEditorText()) - it is already '' the
+        // whole time, so setting it to '' again below is a no-op for Vue's prop watcher and would
+        // never actually clear the DOM without that explicit re-render.
+        window.submitNewWorkItemComment = async function() {
+            if (!store.canWrite) {
+                showNotification('Adding comments is only available in read-write mode', 'error');
+                return false;
+            }
+            const d = store.detail;
+            const workItemId = d.id;
+            if (!workItemId) return false;
+            
+            const isMarkdown = d.newComment.descriptionFormat === 'Markdown';
+            let text = isMarkdown
+                ? readMarkdownEditorText('workItemDetailNewCommentMd')
+                : readEditorHtml('workItemDetailNewComment');
+            if (!text) {
+                showNotification('Comment cannot be empty', 'error');
+                return false;
+            }
+            
+            d.commentSubmitting = true;
+            try {
+                const pat = await getPAT();
+                
+                text = isMarkdown
+                    ? await processImagesForDevOpsMarkdown(text, pat)
+                    : await processImagesForDevOps(text, pat);
+                
+                const url = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workItems/${workItemId}/comments?format=${isMarkdown ? 'markdown' : 'html'}&api-version=7.1-preview.4`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Basic ' + btoa(':' + pat),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text })
+                });
+                
+                if (!response.ok) {
+                    const errText = await response.text().catch(() => '');
+                    throw new Error(`${response.status} ${response.statusText}${errText ? ': ' + errText.slice(0, 200) : ''}`);
+                }
+                
+                const created = await response.json();
+                if (d.id !== workItemId) return true; // modal moved on to another item meanwhile
+                
+                // Comments sort newest-first (see fetchWorkItemCommentsAll()), so the one just
+                // posted belongs at the top, right below the composer.
+                d.comments.unshift(mapCommentForDisplay(created));
+                // Blank the composer and flip back to the default format for the next comment - the
+                // caller re-renders the mounted editor off these once this returns true.
+                d.newComment.descriptionHtml = '';
+                d.newComment.descriptionFormat = 'Markdown';
+                d.newComment.descriptionHtmlCache = null;
+                d.newComment.descriptionMarkdownCache = null;
+                
+                showNotification('Comment added', 'success');
+                return true;
+            } catch (error) {
+                Logger.error('Error adding comment:', error);
+                showNotification(`Error adding comment: ${error.message}`, 'error');
+                return false;
+            } finally {
+                d.commentSubmitting = false;
+            }
+        };
         
         window.closeWorkItemDetailModal = function(forceFullClose) {
             const d = store.detail;
@@ -6421,7 +6532,18 @@
                 tasksError: '',
                 comments: [],
                 commentsLoading: false,
-                commentsError: ''
+                commentsError: '',
+                commentSubmitting: false,
+                // Reuses switchFormDescriptionFormat()'s exact field names (descriptionFormat/
+                // descriptionHtml/descriptionHtmlCache/descriptionMarkdownCache) purely so the same
+                // shared toggle helper works unmodified against this nested object too - see the
+                // "Add a comment" composer in #workItemDetailApp and submitNewWorkItemComment().
+                newComment: {
+                    descriptionFormat: 'Markdown',
+                    descriptionHtml: '',
+                    descriptionHtmlCache: null,
+                    descriptionMarkdownCache: null
+                }
             },
             lastReloadAt: Number(localStorage.getItem('last_reload_time')) || null,
             // Bumped by a timer so every "x minutes ago" label recomputes on its own
@@ -7091,9 +7213,13 @@
             },
             watch: {
                 // Reopening cannot rely on the html prop changing: an unsaved edit leaves the
-                // editor holding text that store.detail.descriptionHtml never knew about
+                // editor holding text that store.detail.descriptionHtml never knew about - same
+                // reasoning applies to a comment typed but not submitted before closing the modal.
                 'd.open'(isOpen) {
-                    if (isOpen) this.$refs.editor?.render();
+                    if (isOpen) {
+                        this.$refs.editor?.render();
+                        this.$refs.newCommentEditor?.render();
+                    }
                 },
                 // Comment bodies are injected with v-html, so the attachment fix-ups that used to
                 // run while building the nodes now run after Vue has rendered them
@@ -7123,6 +7249,17 @@
                 switchDescriptionFormat(format) {
                     if (format === 'Html' && this.d.descriptionFormatLocked) return;
                     switchFormDescriptionFormat(this.d, format, 'workItemDetailDescription', 'workItemDetailDescriptionMd');
+                },
+                // Same shared toggle helper as the description field above, just against
+                // d.newComment instead of d - no lock, a fresh comment can be either format.
+                switchCommentFormat(format) {
+                    switchFormDescriptionFormat(this.d.newComment, format, 'workItemDetailNewComment', 'workItemDetailNewCommentMd');
+                },
+                // submitNewWorkItemComment() can't force the DOM clear itself (see its own comment)
+                // since the composer is uncontrolled - only $refs, which only the component has, can.
+                async submitNewComment() {
+                    const posted = await submitNewWorkItemComment();
+                    if (posted) this.$refs.newCommentEditor?.render();
                 },
                 copyTitle: copyWorkItemTitle,
                 copyLink: copyWorkItemLink,
