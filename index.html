@@ -116,12 +116,17 @@
         /* ===== Work Items ===== */
         .work-item {
             margin: 5px 0;
-            padding: 5px 10px;
+            padding: 5px 18px 5px 10px;
             border-left: 3px solid #007bff;
             transition: all 0.2s ease;
             overflow: visible;
             background-color: var(--bg-panel);
             line-height: 1.3;
+            position: relative;
+            z-index: 0;
+        }
+        .work-item:has(.task-status-dots:hover) {
+            z-index: 30;
         }
         .work-item:hover {
             background-color: var(--hover-bg);
@@ -132,6 +137,25 @@
         .state-badge-container {
             flex: 0 0 10%;
             text-align: right;
+            display: inline-flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            position: relative;
+            z-index: 0;
+            min-width: 0;
+        }
+        .work-item:not(.child-task) .state-badge-container {
+            flex: 0 0 168px;
+        }
+        .work-item:not(.child-task) .state-badge-wrapper {
+            flex: 0 0 88px;
+            display: inline-flex;
+            justify-content: flex-end;
+            min-width: 0;
+        }
+        .work-item:has(.task-status-dots:hover) .state-badge-container {
+            z-index: 31;
         }
         .state-badge {
             display: inline-flex;
@@ -1080,6 +1104,9 @@
             transform: scaleY(1);
             transform-origin: top;
         }
+        .epic-group:not(.collapsed) {
+            overflow: visible;
+        }
         .epic-group.collapsed,
         .epic-group.d-none {
             max-height: 0 !important;
@@ -1209,13 +1236,13 @@
         }
         .work-item-title {
             font-weight: 500;
-            flex: 0 0 calc(65% - 32px);
+            flex: 1 1 auto;
             min-width: 0;
             text-align: left;
             display: flex;
             align-items: center;
             gap: 4px;
-            overflow: hidden;
+            overflow: visible;
             position: relative;
         }
         .work-item-title > a {
@@ -1239,13 +1266,102 @@
             cursor: pointer;
             position: relative;
             z-index: 1;
-            max-width: calc(100% - 80px);
         }
         
         /* Created badge in work item title */
         .work-item-created-badge {
             flex-shrink: 0;
             margin-left: 6px;
+        }
+
+        /* Task-status dots: fixed slot so assignee/status columns stay aligned.
+           overflow must stay visible - the hover tooltip is positioned outside this box. */
+        .task-status-dots {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 3px;
+            flex: 0 0 63px;
+            width: 63px;
+            min-width: 63px;
+            max-width: 63px;
+            overflow: visible;
+            padding: 4px 0;
+            z-index: 2;
+        }
+        .task-status-dots:hover {
+            z-index: 1100;
+        }
+        .task-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            background-color: var(--text-secondary);
+        }
+        .task-status-dot[data-state="Evaluation"] { background-color: var(--color-critical); }
+        .task-status-dot[data-state="New"] { background-color: var(--color-new); }
+        .task-status-dot[data-state="On Hold"] { background-color: var(--color-onhold); }
+        .task-status-dot[data-state="Active"] { background-color: var(--color-active); }
+        .task-status-dot[data-state="Resolved"] { background-color: var(--color-resolved); }
+        .task-status-dot[data-state="Closed"] { background-color: var(--color-closed); }
+        .task-status-dot.is-empty {
+            background-color: transparent;
+            border: 1.5px solid var(--text-secondary);
+        }
+        .task-status-tooltip {
+            display: none;
+            position: absolute;
+            left: auto;
+            right: 0;
+            top: calc(100% - 2px);
+            z-index: 2000;
+            min-width: 220px;
+            max-width: 420px;
+            max-height: 240px;
+            overflow-y: auto;
+            padding: 8px 10px;
+            background: var(--bg-panel);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-shadow: 0 4px 16px var(--shadow-color);
+            flex-direction: column;
+            gap: 6px;
+        }
+        .task-status-dots:hover .task-status-tooltip {
+            display: flex;
+        }
+        .task-status-tooltip-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            padding: 3px 4px;
+            margin: 0 -4px;
+        }
+        .task-status-tooltip-row:hover,
+        .task-status-tooltip-row:focus {
+            background: var(--hover-bg);
+            outline: none;
+        }
+        .task-status-tooltip-title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+            font-size: 0.85em;
+        }
+        .task-status-tooltip-empty {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+        }
+        .task-status-tooltip .state-badge {
+            flex-shrink: 0;
+            font-size: 0.75em;
         }
         
         /* Age-based color coding for created badge - shades of gray (max 50% gray) */
@@ -1568,6 +1684,10 @@
         }
         .major-container {
             margin-left: 0 !important;
+        }
+        .major-container:not(.collapsed):not(.d-none),
+        .patch-container:not(.collapsed):not(.d-none) {
+            overflow: visible;
         }
         .major-container.collapsed,
         .patch-container.collapsed,
@@ -2958,6 +3078,27 @@
                     </span>
                 </span>
                 <span class="state-badge-container">
+                    <span v-if="!isChild" class="task-status-dots" @click.stop>
+                        <template v-if="taskDotsReady && taskDotItems.length">
+                            <span v-for="dot in taskDotItems" :key="dot.id"
+                                  class="task-status-dot" :data-state="dot.state"></span>
+                        </template>
+                        <span v-else-if="taskDotsReady" class="task-status-dot is-empty"></span>
+                        <span v-if="taskDotsReady" class="task-status-tooltip">
+                            <template v-if="taskDotAllItems.length">
+                                <span v-for="dot in taskDotAllItems" :key="'tip-' + dot.id"
+                                      class="task-status-tooltip-row" role="button" tabindex="0"
+                                      :title="dot.title"
+                                      @click.stop="openTaskDotItem(dot)"
+                                      @keydown.enter.prevent.stop="openTaskDotItem(dot)"
+                                      @keydown.space.prevent.stop="openTaskDotItem(dot)">
+                                    <span class="task-status-tooltip-title">{{ dot.title }}</span>
+                                    <span class="badge state-badge" :data-state="dot.state">{{ dot.state }}</span>
+                                </span>
+                            </template>
+                            <span v-else class="task-status-tooltip-empty">No tasks</span>
+                        </span>
+                    </span>
                     <span class="state-badge-wrapper" :style="{ cursor: store.canWrite ? 'pointer' : 'default' }"
                           @click.stop="editState">
                         <span class="badge bg-secondary state-badge" :data-state="state">{{ state }}</span>
@@ -3059,7 +3200,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-08-16T19:58:56.000Z'
+            updatedAt: '2026-08-18T20:20:00.000Z'
         };
 
         // ===== API Configuration =====
@@ -3601,7 +3742,7 @@
         
         // Azure DevOps caps ids per request at ~200; this splits into batches, fetches them in
         // parallel and flattens the results into one { value: [...] }, same shape as the raw API.
-        async function fetchWorkItemsInBatches(ids, pat, extraParams, warnLabel) {
+        async function fetchWorkItemsInBatches(ids, pat, extraParams, warnLabel, options = {}) {
             const BATCH_SIZE = 200;
             const batches = [];
             for (let i = 0; i < ids.length; i += BATCH_SIZE) {
@@ -3621,6 +3762,9 @@
                     
                     if (!response.ok) {
                         Logger.warn(`${warnLabel} batch fetch failed with status: ${response.status}`);
+                        if (options.throwOnError) {
+                            throw new Error(`${warnLabel} batch fetch failed with status: ${response.status}`);
+                        }
                         return { value: [] };
                     }
                     
@@ -3681,6 +3825,68 @@
             } catch (error) {
                 Logger.error('Error fetching child tasks:', error);
                 return {};
+            }
+        }
+
+        // Slim fetch for the grid's task-status dots: parent id + relations, then each child's
+        // id / title / state. Always returns a key for every requested parent (empty array =
+        // no tasks), so the UI can tell "not loaded yet" from "loaded, none".
+        async function fetchTaskDotStatusForParents(parentIds, pat) {
+            const result = {};
+            for (const id of parentIds) result[String(id)] = [];
+            if (parentIds.length === 0) return result;
+
+            try {
+                const parents = await fetchWorkItemsInBatches(
+                    parentIds, pat, '$expand=relations', 'Task-dot parents', { throwOnError: true });
+
+                if (parentIds.length > 0 && parents.value.length === 0) {
+                    throw new Error('Task-dot parents batch returned no work items');
+                }
+
+                const childIds = new Set();
+                const parentChildMap = {};
+                for (const workItem of parents.value) {
+                    const kids = [];
+                    for (const relation of workItem.relations || []) {
+                        if (relation.rel !== 'System.LinkTypes.Hierarchy-Forward') continue;
+                        const childId = parseInt(relation.url.split('/').pop(), 10);
+                        if (!childId) continue;
+                        childIds.add(childId);
+                        kids.push(childId);
+                    }
+                    parentChildMap[workItem.id] = kids;
+                }
+
+                if (childIds.size === 0) return result;
+
+                const children = await fetchWorkItemsInBatches(
+                    [...childIds],
+                    pat,
+                    'fields=System.Id,System.Title,System.State,System.WorkItemType',
+                    'Task-dot children',
+                    { throwOnError: true }
+                );
+                const byId = new Map();
+                for (const item of children.value) {
+                    const type = item.fields && item.fields['System.WorkItemType'];
+                    const state = (item.fields && item.fields['System.State']) || '';
+                    if (type && type !== 'Task') continue;
+                    if (state === 'Removed') continue;
+                    byId.set(item.id, {
+                        id: item.id,
+                        title: (item.fields && item.fields['System.Title']) || ('#' + item.id),
+                        state
+                    });
+                }
+
+                for (const [parentId, childIdList] of Object.entries(parentChildMap)) {
+                    result[String(parentId)] = childIdList.map(cid => byId.get(cid)).filter(Boolean);
+                }
+                return result;
+            } catch (error) {
+                Logger.error('Error fetching task-dot status:', error);
+                throw error;
             }
         }
         
@@ -4127,6 +4333,9 @@
             store.releaseResults = [];
             store.childTasks = {};
             store.taskLoadedProducts = [];
+            store.taskDotStatus = {};
+            store.loadingTaskDotIds = [];
+            store.taskDotFetchGen += 1;
             await reloadActiveProduct();
         }
 
@@ -6434,6 +6643,71 @@
             });
         }
 
+        const TASK_DOT_MAX = 6;
+
+        function sortTaskDotItems(tasks) {
+            return [...tasks].filter(t => t.state !== 'Removed').sort((a, b) => {
+                const orderA = STATE_ORDER.indexOf(a.state);
+                const orderB = STATE_ORDER.indexOf(b.state);
+                if (orderA !== orderB) return (orderA < 0 ? 999 : orderA) - (orderB < 0 ? 999 : orderB);
+                return (a.title || '').toLowerCase()
+                    .localeCompare((b.title || '').toLowerCase(), 'cs', { sensitivity: 'base' });
+            });
+        }
+
+        // Hamilton / largest-remainder split of `maxDots` across status counts.
+        // Every present status gets at least 1 (when there are ≤ maxDots statuses);
+        // leftover slots follow the remaining task counts. Never more than maxDots,
+        // never more dots than tasks in that status.
+        function allocateTaskDotQuota(counts, maxDots) {
+            const n = counts.length;
+            if (n === 0) return [];
+            if (n >= maxDots) return counts.map((_, i) => (i < maxDots ? 1 : 0));
+            const alloc = counts.map(() => 1);
+            let leftover = maxDots - n;
+            const rest = counts.map(c => Math.max(0, c - 1));
+            const restTotal = rest.reduce((sum, value) => sum + value, 0);
+            if (leftover <= 0 || restTotal <= 0) return alloc;
+            leftover = Math.min(leftover, restTotal);
+            const raw = rest.map(value => leftover * value / restTotal);
+            const extra = raw.map(Math.floor);
+            let used = extra.reduce((sum, value) => sum + value, 0);
+            const order = raw
+                .map((value, i) => ({ i, frac: value - extra[i], rest: rest[i] }))
+                .sort((a, b) => b.frac - a.frac || b.rest - a.rest);
+            for (let k = 0; used < leftover && k < order.length; k++) {
+                extra[order[k].i] += 1;
+                used += 1;
+            }
+            return alloc.map((value, i) => value + extra[i]);
+        }
+
+        function pickVisibleTaskDots(tasks) {
+            const sorted = sortTaskDotItems(tasks);
+            if (sorted.length <= TASK_DOT_MAX) return sorted;
+            const byState = new Map();
+            for (const task of sorted) {
+                if (!byState.has(task.state)) byState.set(task.state, []);
+                byState.get(task.state).push(task);
+            }
+            const states = [];
+            for (const state of STATE_ORDER) {
+                if (byState.has(state)) states.push(state);
+            }
+            for (const state of byState.keys()) {
+                if (!STATE_ORDER.includes(state)) states.push(state);
+            }
+            const quota = allocateTaskDotQuota(
+                states.map(state => byState.get(state).length),
+                TASK_DOT_MAX
+            );
+            const picked = [];
+            states.forEach((state, i) => {
+                picked.push(...byState.get(state).slice(0, quota[i]));
+            });
+            return picked.slice(0, TASK_DOT_MAX);
+        }
+
         // ===== Store =====
         // Raw state only. Everything derived is a computed below - that is the whole point of the
         // exercise: there is exactly one source of truth and the DOM is not part of it.
@@ -6447,6 +6721,12 @@
             // Products whose child tasks have been fetched at least once. Kept until a full
             // reset (Reload / new PAT), so toggling Task Mode off and on again does not refetch.
             taskLoadedProducts: [],
+            // Slim { [parentId]: [{ id, title, state }] } for the grid dots. A missing key means
+            // not fetched yet; an empty array means fetched and the parent has no child tasks.
+            taskDotStatus: {},
+            loadingTaskDotIds: [],
+            // Bumped on full reload so an in-flight background fetch cannot merge stale results.
+            taskDotFetchGen: 0,
             taskMode: localStorage.getItem('taskMode') === 'true',
             taskModeBusy: false,
             permission: localStorage.getItem('tokenPermission') || 'checking',
@@ -6619,6 +6899,13 @@
                     if (item.id === id) item.fields[field] = value;
                 });
                 if (Number(this.detail.id) === id) this.detail.fields[field] = value;
+                if (field === 'System.State' || field === 'System.Title') {
+                    const mapped = field === 'System.State' ? 'state' : 'title';
+                    for (const list of Object.values(this.taskDotStatus)) {
+                        const task = list.find(t => t.id === id);
+                        if (task) task[mapped] = value;
+                    }
+                }
             },
             // Patch version changes move the item to a different major/patch bucket, unlike
             // every other field - applyFieldUpdate() alone is not enough because the hierarchy
@@ -6670,11 +6957,25 @@
             // fetch.
             addWorkItem(item) {
                 this.insertWorkItem(item);
+                const key = String(item.id);
+                if (!Object.prototype.hasOwnProperty.call(this.taskDotStatus, key)) {
+                    this.taskDotStatus = { ...this.taskDotStatus, [key]: [] };
+                }
             },
             // Same idea for a freshly created child task.
             addChildTask(parentId, task) {
                 const key = String(parentId);
                 this.childTasks = { ...this.childTasks, [key]: [...(this.childTasks[key] || []), task] };
+                const dots = this.taskDotStatus[key] || [];
+                const already = dots.some(t => t.id === task.id);
+                this.taskDotStatus = {
+                    ...this.taskDotStatus,
+                    [key]: already ? dots : [...dots, {
+                        id: task.id,
+                        title: (task.fields && task.fields['System.Title']) || ('#' + task.id),
+                        state: (task.fields && task.fields['System.State']) || 'New'
+                    }]
+                };
             },
             forEachWorkItem(fn) {
                 for (const { releases } of this.releaseResults) {
@@ -6836,6 +7137,64 @@
             return [...ids];
         });
 
+        function mergeTaskDotStatusBatch(fetched) {
+            const next = { ...store.taskDotStatus };
+            for (const [parentId, list] of Object.entries(fetched)) {
+                const existing = next[parentId] || [];
+                const byId = new Map(list.map(t => [t.id, t]));
+                for (const t of existing) {
+                    if (!byId.has(t.id)) byId.set(t.id, t);
+                }
+                next[parentId] = [...byId.values()];
+            }
+            store.taskDotStatus = next;
+        }
+
+        function releaseTaskDotLoading(ids) {
+            const drop = new Set(ids.map(Number));
+            store.loadingTaskDotIds = store.loadingTaskDotIds.filter(id => !drop.has(Number(id)));
+        }
+
+        async function loadTaskDotStatus(parentIds, gen) {
+            const BATCH_SIZE = 200;
+            try {
+                const pat = await getPAT();
+                if (!pat || store.taskDotFetchGen !== gen) {
+                    releaseTaskDotLoading(parentIds);
+                    return;
+                }
+                for (let i = 0; i < parentIds.length; i += BATCH_SIZE) {
+                    if (store.taskDotFetchGen !== gen) {
+                        releaseTaskDotLoading(parentIds);
+                        return;
+                    }
+                    const batch = parentIds.slice(i, i + BATCH_SIZE);
+                    const fetched = await fetchTaskDotStatusForParents(batch, pat);
+                    if (store.taskDotFetchGen !== gen) {
+                        releaseTaskDotLoading(parentIds);
+                        return;
+                    }
+                    mergeTaskDotStatusBatch(fetched);
+                    releaseTaskDotLoading(batch);
+                }
+            } catch (error) {
+                Logger.error('Error loading task-status dots:', error);
+                showNotification('Error loading task status indicators', 'error');
+                releaseTaskDotLoading(parentIds);
+            }
+        }
+
+        function scheduleTaskDotFetch() {
+            const missing = store.visibleParentIds.filter(id => {
+                const key = String(id);
+                return !Object.prototype.hasOwnProperty.call(store.taskDotStatus, key)
+                    && !store.loadingTaskDotIds.includes(id);
+            });
+            if (missing.length === 0) return;
+            store.loadingTaskDotIds = [...store.loadingTaskDotIds, ...missing];
+            loadTaskDotStatus(missing, store.taskDotFetchGen);
+        }
+
         // ===== Persistence =====
         // One watch per storage key replaces 40+ scattered localStorage reads and writes.
         watch(() => store.expanded, v => localStorage.setItem('expanded_sections', JSON.stringify(v)), { deep: true });
@@ -6855,6 +7214,10 @@
         // DOMContentLoaded (no `immediate: true` here) to preserve today's startup ordering
         // relative to the mountApp() calls below.
         watch(() => store.activeProduct, activateProduct);
+
+        // Background: once the grid's parent ids are known, pull slim task id/title/state in
+        // batches. Does not block isActiveProductLoading or Task Mode.
+        watch(() => store.visibleParentIds, scheduleTaskDotFetch);
 
         // Drives every relative timestamp in the UI ("last reload", "updated x ago")
         setInterval(() => { store.clockTick = Date.now(); }, 60000);
@@ -7095,12 +7458,27 @@
                 iconTitle() {
                     if (this.isChild || this.type === 'Task') return 'Task';
                     return this.isReleaseFeature ? 'Release Feature' : this.type;
+                },
+                taskDotsReady() {
+                    if (this.isChild) return false;
+                    return Object.prototype.hasOwnProperty.call(this.store.taskDotStatus, String(this.item.id));
+                },
+                taskDotAllItems() {
+                    if (!this.taskDotsReady) return [];
+                    return sortTaskDotItems(this.store.taskDotStatus[String(this.item.id)] || []);
+                },
+                taskDotItems() {
+                    return pickVisibleTaskDots(this.taskDotAllItems);
                 }
             },
             methods: {
                 openWorkItemDetailModal,
                 openCreateTaskModal,
                 openChangePatchModal,
+                openTaskDotItem(dot) {
+                    if (!dot || !dot.id) return;
+                    openWorkItemDetailModal(dot.id);
+                },
                 toggleDetail() {
                     if (this.isChild) return;
                     this.store.toggleExpanded('workItem', this.item.id);
