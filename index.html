@@ -135,7 +135,7 @@
             box-shadow: 0 2px 8px var(--shadow-color);
         }
         .state-badge-container {
-            flex: 0 0 10%;
+            flex: 0 0 168px;
             text-align: right;
             display: inline-flex;
             align-items: center;
@@ -145,10 +145,7 @@
             z-index: 0;
             min-width: 0;
         }
-        .work-item:not(.child-task) .state-badge-container {
-            flex: 0 0 168px;
-        }
-        .work-item:not(.child-task) .state-badge-wrapper {
+        .work-item .state-badge-wrapper {
             flex: 0 0 88px;
             display: inline-flex;
             justify-content: flex-end;
@@ -1449,13 +1446,15 @@
         
         /* ===== Child Tasks ===== */
         .work-item.child-task {
+            --child-indent: 24px;
             font-size: 0.85em;
             font-style: italic;
             opacity: 0.85;
             background-color: rgba(139, 69, 19, 0.03);
             border-left-color: #8B4513;
-            margin-left: 24px;
-            padding: 5px 10px;
+            margin-left: var(--child-indent);
+            /* Same horizontal padding as parent so assignee/status share one right edge. */
+            padding: 5px 18px 5px 10px;
             line-height: 1.3;
         }
         
@@ -1469,12 +1468,7 @@
         }
         
         .work-item.child-task .work-item-title {
-            flex: 0 0 calc(65% - 32px);
-        }
-        
-        .work-item.child-task .state-badge-container {
-            flex: 0 0 10%;
-            text-align: right;
+            flex: 1 1 auto;
         }
         
         .work-item.child-task .state-badge {
@@ -1484,12 +1478,8 @@
         
         .work-item.child-task .assigned-to {
             font-size: 1em;
-            flex: 0 0 15%;
-        }
-        /* Shift Assigned To badge 10px left only for child tasks (visual shift, no layout impact) */
-        .work-item.child-task .assigned-to .assigned-to-badge-wrapper {
-            position: relative;
-            left: -8px;
+            /* 15% is of this narrower row; add 15% of the indent so the column matches the parent. */
+            flex: 0 0 calc(15% + var(--child-indent) * 0.15);
         }
         
         .work-item.child-task .priority-severity {
@@ -3200,7 +3190,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-08-18T20:20:00.000Z'
+            updatedAt: '2026-08-19T07:12:00.000Z'
         };
 
         // ===== API Configuration =====
