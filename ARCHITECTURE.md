@@ -162,7 +162,7 @@ Derived (`VUE LAYER > Derived state`):
 | Computed | Meaning |
 | --- | --- |
 | `products` | Product tabs, from `releaseNames` **configuration** - static, so all 5 tabs are always visible/clickable regardless of what has been fetched |
-| `isActiveProductLoading` | `true` while `activeProduct` has no entry in `releaseResults` yet, or is in `loadingProducts`; drives the grid's loading spinner |
+| `isActiveProductLoading` | `true` while `activeProduct` has no entry in `releaseResults` yet, or is in `loadingProducts` — but only when a PAT is stored (`store.pat.configured`) and the PAT modal is not open; drives the grid's loading spinner (which must never cover the PAT form) |
 | `allMajorIds` | All `release-major` ids **for `activeProduct` only** (for Expand All) |
 | `canWrite` | `permission === 'write'` - **the single gate for every edit affordance** |
 | `resolvedTheme` | `theme`, with `auto` resolved through `systemPrefersDark` |
@@ -239,7 +239,8 @@ Defined in `VUE LAYER > Components`, templates from `<script type="text/x-templa
 the other 4 products load the first time the user switches to their tab. The functions:
 
 - `loadProductData(product)` - the only function that actually talks to Azure DevOps for the main
-  hierarchy. `getPAT()` -> once (`window.tokenPermissionsChecked`) `checkTokenPermissions(pat)` ->
+  hierarchy. `getPAT()` (returns immediately if the user cancels the PAT modal, so no WIQL with a
+  null token) -> once (`window.tokenPermissionsChecked`) `checkTokenPermissions(pat)` ->
   looks up `releaseConfig` for `product` -> WIQL via `handleUnauthorized(fetchWIQL)` ->
   `fetchWorkItems(ids)` -> `groupWorkItems()` -> replaces just that product's entry in
   `store.releaseResults` (`[...filter(r => r.product !== product), entry]`) ->
@@ -264,7 +265,8 @@ the other 4 products load the first time the user switches to their tab. The fun
   toolbar's `reload()` and by `savePAT()` (a new PAT can mean different access, so the whole cache
   is invalidated). Other tabs simply go back to loading lazily on their next visit.
 
-A 401 clears `devops_pat` and re-prompts once through `handleUnauthorized()`.
+A 401 clears `devops_pat` and `store.pat.configured`, then re-prompts once through
+`handleUnauthorized()`.
 
 **Search / filter / expand / hide** - state only, no network, no re-render call: the toolbar or
 modal writes into `store.search` / `store.filters` / `store.expanded` / `store.hidden`, and
@@ -421,9 +423,13 @@ to `#helpModalBody`.
 
 **PAT** - `getPAT()` returns the decrypted token or opens the modal and **returns a promise that
 resolves when the user saves** (`patModalResolve`; `closePATModal()` resolves `null` so callers do
-not hang). `savePAT()` encrypts with AES-GCM (`encryptPAT`), stores the self-declared capability,
-then `checkTokenPermissions()` + `resetAndReloadActiveProduct()` (a new PAT can mean different
-access entirely, so the whole cache is invalidated, same as Reload).
+not hang). `store.pat.configured` is the reactive mirror of whether `devops_pat` is in
+`localStorage` (set `true` in `savePAT()`, `false` in `handleUnauthorized()` when the token is
+cleared); `isActiveProductLoading` stays false while the PAT modal is open or no token is stored,
+so the full-screen loader cannot cover the form. `savePAT()` encrypts with AES-GCM (`encryptPAT`),
+stores the self-declared capability, then `checkTokenPermissions()` +
+`resetAndReloadActiveProduct()` (a new PAT can mean different access entirely, so the whole cache
+is invalidated, same as Reload).
 
 **Modals: ESC and scroll lock** - `MODAL_STACK` (end of file) lists every modal as
 `{ isOpen, close }`, **topmost first**. One `keydown` listener closes the first open entry; one

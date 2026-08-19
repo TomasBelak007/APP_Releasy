@@ -3190,7 +3190,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-08-19T09:50:00.000Z'
+            updatedAt: '2026-08-19T12:03:28.000Z'
         };
 
         // ===== API Configuration =====
@@ -3303,7 +3303,7 @@
             { 
                 product: 'Repository', 
                 versions: [
-                    { version: 'Orlik-08', patches: ['999', '010', '009'] }
+                    { version: 'Orlik-08', patches: ['999', '010', '009', '007'] }
                 ]
             },
             { 
@@ -4091,6 +4091,7 @@
             
             localStorage.setItem('devops_pat', await encryptPAT(pat));
             localStorage.setItem('tokenHasWriteCapability', hasWritePermission ? 'true' : 'false');
+            store.pat.configured = true;
             updatePermissionBadge(hasWritePermission);
             
             const resolve = patModalResolve;
@@ -4212,6 +4213,7 @@
             } catch (err) {
                 if (err.message === 'unauthorized') {
                     localStorage.removeItem('devops_pat');
+                    store.pat.configured = false;
                     const pat = await getPAT(true);
                     return fn(pat);
                 }
@@ -4232,6 +4234,7 @@
             if (!releaseConfig) return;
 
             let pat = await getPAT();
+            if (!pat) return;
 
             // Kontrola práv tokenu (pouze při prvním načtení)
             if (!window.tokenPermissionsChecked) {
@@ -6741,7 +6744,7 @@
                 open: false, busy: false, kind: 'status',
                 id: null, type: '', current: '', title: '', options: []
             },
-            pat: { open: false, value: '', capability: 'read' },
+            pat: { open: false, value: '', capability: 'read', configured: !!localStorage.getItem('devops_pat') },
             help: { open: false, loading: false, html: '' },
             created: { open: false, item: {}, url: '' },
             buildChanges: { open: false, loading: false, meta: '', changes: [] },
@@ -6987,10 +6990,14 @@
         store.products = computed(() => releaseNames.map(r => r.product));
 
         // Data for a product is fetched lazily (see activateProduct()); this reflects whether
-        // the currently visible tab still needs to show the loader.
+        // the currently visible tab still needs to show the loader. Hidden while the PAT modal
+        // is open, and when no token is stored, so the loader cannot cover the PAT form.
         store.isActiveProductLoading = computed(() =>
-            !store.releaseResults.some(r => r.product === store.activeProduct) ||
-            store.loadingProducts.includes(store.activeProduct));
+            !store.pat.open &&
+            store.pat.configured && (
+                !store.releaseResults.some(r => r.product === store.activeProduct) ||
+                store.loadingProducts.includes(store.activeProduct)
+            ));
 
         // Scoped to the active product only: other products may have been visited (and cached)
         // earlier in the session, but "Expand All" should only ever affect what is on screen.
