@@ -2,3 +2,5 @@
 *.code-workspace
 dev.env
 .cursor/skills/releasy-ai/.env
+__pycache__/
+*.pyc

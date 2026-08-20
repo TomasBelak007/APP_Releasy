@@ -75,3 +75,9 @@ smoke-testing alone cannot confirm something (API response shape, format quirks,
   via `scripts/releasy-config.mjs` so no action is usually needed there, but the field-mapping/
   endpoint logic in its other scripts and the tables in `reference.md` are hardcoded and must be
   updated by hand if that logic itself changes.
+- `.cursor/skills/releasy-notes/` writes a business-facing Xeelo release-notes `.docx` for a
+  named patch (optionally merging a second product such as XeeloAdmin) into `release-notes/`
+  at the repo root. It does not talk to Azure DevOps itself: it calls `releasy-ai` scripts
+  (`list-tickets.mjs --descriptions`, `releasy-config.mjs`) and reuses that skill's PAT. A
+  change to how Bugs/Features store descriptions should be reflected in both
+  `list-tickets.mjs` and `releasy-notes/SKILL.md`.

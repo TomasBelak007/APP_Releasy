@@ -14,6 +14,7 @@
 //   node list-tickets.mjs --product Xeelo --backlog --open        # backlog, excluding Closed/Removed
 //   node list-tickets.mjs --product Xeelo --state New,Active      # only these states
 //   node list-tickets.mjs --product Xeelo --no-tasks               # skip the child-task fetch (faster)
+//   node list-tickets.mjs --product Xeelo --patch 013 --descriptions --no-tasks
 
 import { loadReleasyConfig, isValidStatus, findMajorsForRelease } from './releasy-config.mjs';
 import {
@@ -57,6 +58,14 @@ function taskSummary(task) {
     description: f['System.Description'] || '',
     url: releasyWorkItemUrl(task.id)
   };
+}
+
+/** Same field pick as get-ticket.mjs: Bug uses ReproSteps when present, otherwise Description. */
+function itemDescription(type, fields) {
+  const descriptionFieldPath = type === 'Bug' && fields['Microsoft.VSTS.TCM.ReproSteps']
+    ? 'Microsoft.VSTS.TCM.ReproSteps'
+    : 'System.Description';
+  return fields[descriptionFieldPath] || '';
 }
 
 async function main() {
@@ -116,14 +125,16 @@ async function main() {
   const ids = (wiqlResult.workItems || []).map((w) => w.id);
 
   const includeTasks = !flags['no-tasks'];
+  const includeDescriptions = !!flags.descriptions;
   let items = [];
   if (ids.length) {
     const fullItems = await getWorkItemsBatch(cfg, ids, pat, { expandRelations: includeTasks });
     items = await Promise.all(fullItems.map(async (item) => {
       const f = item.fields || {};
+      const type = f['System.WorkItemType'];
       const base = {
         id: item.id,
-        type: f['System.WorkItemType'],
+        type,
         title: f['System.Title'] || '',
         state: f['System.State'] || '',
         priority: f['Microsoft.VSTS.Common.Priority'] ?? null,
@@ -135,6 +146,9 @@ async function main() {
         changedDate: f['System.ChangedDate'] || null,
         url: releasyWorkItemUrl(item.id)
       };
+      if (includeDescriptions) {
+        base.description = itemDescription(type, f);
+      }
       if (includeTasks) {
         base.tasks = (await fetchChildTasks(cfg, item.id, item.relations, pat)).map(taskSummary);
       }

@@ -168,6 +168,7 @@ node scripts/list-tickets.mjs --product <Product>
                                   # the same way); omit both to get every patch under the major
   [--state New,Active | --open]  # --open = NOT IN ('Closed','Removed'); default: no state filter
   [--no-tasks]                   # skip the per-item child-task fetch (faster for a big list)
+  [--descriptions]               # include each Bug/Feature description (off by default)
 ```
 
 Scope resolution, from most to least specific: `--major` + (`--patch` or `--backlog`) -> exactly
@@ -211,6 +212,10 @@ Notes:
   `--state`/`--open` first if you only need a subset.
 - `--state` is validated against the live `statusOptions.Bug` (Bug and Feature share the same
   state list in the current config).
+- `--descriptions` adds a `description` string on each item (same field pick as `get-ticket.mjs`:
+  Bug uses `Microsoft.VSTS.TCM.ReproSteps` when present, otherwise `System.Description`; Feature
+  always uses `System.Description`). Omit it for list/summary questions so the JSON stays small;
+  pass it when the caller needs the raw ticket text (e.g. the `releasy-notes` skill).
 
 ## Other script flag references
 
@@ -223,7 +228,7 @@ Notes:
 - `get-ticket.mjs <id-or-url>` - read-only, prints fields/state/relations-derived parent or child
   Tasks/comments/`commentsAllowed` as one JSON object.
 - `list-tickets.mjs --product <name> [--release ... ] [--major ... ] [--patch ... | --backlog]
-  [--state s1,s2 | --open] [--no-tasks]` - read-only, see below.
+  [--state s1,s2 | --open] [--no-tasks] [--descriptions]` - read-only, see below.
 - `releasy-config.mjs` - no arguments, prints the live config as JSON.
 
 All scripts accept a bare numeric work item ID, a Releasy `...release-overview?workitem=<id>`

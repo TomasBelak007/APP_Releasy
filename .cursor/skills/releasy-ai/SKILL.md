@@ -125,9 +125,18 @@ For "what's new in the backlog", "what's not done yet in release X", or any othe
 3. Run `node scripts/list-tickets.mjs --product <Product> [--release ...] [--major ...] [--patch ... | --backlog] [--state ... | --open]`
    (see reference.md for the exact flags and output shape). Add `--open` when the question is
    about unfinished work ("not done yet" = exclude `Closed`/`Removed`, then look at what's left).
+   Add `--descriptions` only when you need the raw ticket text (e.g. the sibling `releasy-notes`
+   skill); leave it off for list/summary questions.
 4. The script returns raw data (every Bug/Feature in scope, each with its own Tasks and their
    states) - do the actual filtering/summarizing/grouping the user asked for yourself from that
    JSON; the script does not interpret "new" or "not done" for you.
+
+## Related
+
+Business-facing Xeelo release notes (plain-English .docx, no ticket IDs) are a different skill:
+[releasy-notes](../releasy-notes/SKILL.md). It reuses these scripts (`releasy-config.mjs`,
+`list-tickets.mjs --descriptions --no-tasks`) and the same PAT. Do not mix that email format
+with the CRUD/list workflows above.
 
 ## Maintenance
 
