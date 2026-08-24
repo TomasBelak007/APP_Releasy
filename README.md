@@ -10,7 +10,7 @@ Azure DevOps Release Overview Application
 
 ### Read-Only funkce (základní režim)
 - 📊 **Hierarchický přehled** - Zobrazení work items podle produktu → release → major verze → patch verze
-- 🔵 **Stav child tasků** - Barevné tečky vlevo od statusu Bugu/Feature podle stavu podřízených úkolů (nejvýše 6, poměrně podle počtu ve statusu, minimálně 1 tečka na status; hover ukáže všechny názvy a statusy, klik otevře detail tasku)
+- 🔵 **Stav child tasků** - Barevné tečky vlevo od statusu Bugu/Feature podle stavu podřízených úkolů (nejvýše 6, poměrně podle počtu ve statusu, minimálně 1 tečka na status; hover ukáže všechny názvy, assignee a statusy, klik otevře detail tasku)
 - 📈 **Progress bary** - Vizuální indikátory průběhu podle statusů (Closed, Resolved, Active, New, Evaluation)
 - 🔍 **Filtrování** - Filtrování work items podle assignee a statusu
 - 🔎 **Fulltextové hledání** - Hledání v gridu podle ID a názvu work itemů

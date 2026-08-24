@@ -116,7 +116,7 @@ active one), filled only in Task Mode by `fetchChildTasksForWorkItems()` and mer
 `loadChildTasksIntoStore()` - never replaced wholesale, so loading one product's tasks cannot wipe
 out another's.
 
-`store.taskDotStatus` - `{ [parentId]: [{ id, title, state }] }` for the coloured dots to the left of
+`store.taskDotStatus` - `{ [parentId]: [{ id, title, state, assignedTo }] }` for the coloured dots to the left of
 the status badge on Bug/Feature rows. A **missing key** means that parent has not been fetched yet (render nothing);
 an **empty array** means it was fetched and has no child tasks (hollow ring). Filled in the
 background by `scheduleTaskDotFetch()` / `fetchTaskDotStatusForParents()`, independently of Task
@@ -278,16 +278,16 @@ not in `loadingTaskDotIds` are fetched in the background, 200 at a time, without
 `activateProduct` or touching `isActiveProductLoading` / `taskModeBusy`. Each batch goes through
 `fetchTaskDotStatusForParents()` (parents: `$expand=relations` only — Azure DevOps rejects
 `fields` together with `$expand`; children:
-`fields=System.Id,System.Title,System.State,System.WorkItemType`) and is merged into
+`fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo`) and is merged into
 `taskDotStatus`, including empty arrays for parents with no tasks. The row renders at most
 `TASK_DOT_MAX` (6) dots via `pickVisibleTaskDots()` / `allocateTaskDotQuota()`: every present
 status gets at least one dot (when there are ≤ 6 statuses); leftover slots are split
 proportionally by remaining task counts (largest remainder), so 10 New / 3 Active / 15 Closed
-becomes 2 + 1 + 3. Hover lists every task (title + status badge), scrolled if needed; a click
+becomes 2 + 1 + 3. Hover lists every task (title + assignee badge + status badge), scrolled if needed; a click
 opens that task via `openWorkItemDetailModal(id)`. The dots slot and status badge have fixed
 widths so assignee/status columns stay aligned across rows. `addWorkItem()` seeds an empty array
 so a brand-new item does not wait for a fetch; `addChildTask()` / `applyFieldUpdate()` keep the
-map in sync.
+map in sync (`title`, `state`, and `assignedTo`).
 
 **Task Mode** - `toggleTaskMode()` flips `store.taskMode`, and if turning on calls
 `ensureTasksLoaded(activeProduct)` (lazy - a no-op if that product's tasks are already cached).
@@ -448,7 +448,7 @@ be registered here.
 | Work item batch | `GET /wit/workitems?ids=...&$expand=fields&api-version=6.0` (Markdown export uses 7.1) |
 | Detail | `GET /wit/workitems/{id}?$expand=Relations&api-version=7.1` - no `fields=` projection, so the response's `multilineFieldsFormat` map (read into `d.descriptionFormat`) is populated |
 | Child tasks (Task Mode) | `GET /wit/workitems?ids=...&$expand=relations&api-version=6.0`, batched by 200, then a second batch of the child ids with all fields |
-| Task-status dots | `GET /wit/workitems?ids=...&$expand=relations&api-version=6.0` for parents (no `fields` — Azure DevOps returns `ConflictingParametersException` if `$expand` is combined with `fields`), then `GET /wit/workitems?ids=...&fields=System.Id,System.Title,System.State,System.WorkItemType&api-version=6.0` for children (`fetchTaskDotStatusForParents`) |
+| Task-status dots | `GET /wit/workitems?ids=...&$expand=relations&api-version=6.0` for parents (no `fields` — Azure DevOps returns `ConflictingParametersException` if `$expand` is combined with `fields`), then `GET /wit/workitems?ids=...&fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo&api-version=6.0` for children (`fetchTaskDotStatusForParents`) |
 | Comments | `GET /wit/workItems/{id}/comments?api-version=7.1-preview.4&$expand=renderedText` (paged, see `fetchWorkItemCommentsAll`) - `$expand` gets each comment's server-rendered HTML alongside its raw `text`, needed because each comment independently carries its own `format` (`"markdown"`/`"html"`, same lower-cased convention as `multilineFieldsFormat`); `mapCommentForDisplay()` picks `renderedText` for Markdown comments (falling back to `marked.parse()` if ever absent) and `text` for HTML ones. Existing comments are still read-only (never editable/deletable); `POST /wit/workItems/{id}/comments?format=markdown\|html&api-version=7.1-preview.4` (`submitNewWorkItemComment()`) adds a brand-new one from the detail modal's composer, format chosen per-comment via the same query param (not a field-level op like descriptions) |
 | Field update | `PATCH /wit/workitems/{id}?api-version=7.1`, `application/json-patch+json` |
 | Create | `POST /wit/workitems/${type}?api-version=7.1` (must be 7.1+ - the `/multilineFieldsFormat/<field>` op used for Markdown descriptions on create is silently ignored on older versions) |

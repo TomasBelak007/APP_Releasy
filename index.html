@@ -1314,8 +1314,8 @@
             right: 0;
             top: calc(100% - 2px);
             z-index: 2000;
-            min-width: 220px;
-            max-width: 420px;
+            min-width: 420px;
+            max-width: 630px;
             max-height: 240px;
             overflow-y: auto;
             padding: 8px 10px;
@@ -1326,6 +1326,7 @@
             box-shadow: 0 4px 16px var(--shadow-color);
             flex-direction: column;
             gap: 6px;
+            text-align: left;
         }
         .task-status-dots:hover .task-status-tooltip {
             display: flex;
@@ -1350,15 +1351,21 @@
             text-overflow: ellipsis;
             white-space: nowrap;
             min-width: 0;
+            flex: 1;
             font-size: 0.85em;
+            text-align: left;
         }
         .task-status-tooltip-empty {
             font-size: 0.85em;
             color: var(--text-secondary);
         }
-        .task-status-tooltip .state-badge {
+        .task-status-tooltip .state-badge,
+        .task-status-tooltip .assigned-to-badge {
             flex-shrink: 0;
             font-size: 0.75em;
+        }
+        .task-status-tooltip .assigned-to-badge {
+            padding: 3px 6px;
         }
         
         /* Age-based color coding for created badge - shades of gray (max 50% gray) */
@@ -3083,6 +3090,7 @@
                                       @keydown.enter.prevent.stop="openTaskDotItem(dot)"
                                       @keydown.space.prevent.stop="openTaskDotItem(dot)">
                                     <span class="task-status-tooltip-title">{{ dot.title }}</span>
+                                    <span class="assigned-to-badge">{{ dot.assignedTo }}</span>
                                     <span class="badge state-badge" :data-state="dot.state">{{ dot.state }}</span>
                                 </span>
                             </template>
@@ -3190,7 +3198,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-08-19T15:46:00.000Z'
+            updatedAt: '2026-08-24T17:56:22.000Z'
         };
 
         // ===== API Configuration =====
@@ -3819,7 +3827,7 @@
         }
 
         // Slim fetch for the grid's task-status dots: parent id + relations, then each child's
-        // id / title / state. Always returns a key for every requested parent (empty array =
+        // id / title / state / assignedTo. Always returns a key for every requested parent (empty array =
         // no tasks), so the UI can tell "not loaded yet" from "loaded, none".
         async function fetchTaskDotStatusForParents(parentIds, pat) {
             const result = {};
@@ -3853,7 +3861,7 @@
                 const children = await fetchWorkItemsInBatches(
                     [...childIds],
                     pat,
-                    'fields=System.Id,System.Title,System.State,System.WorkItemType',
+                    'fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo',
                     'Task-dot children',
                     { throwOnError: true }
                 );
@@ -3866,7 +3874,8 @@
                     byId.set(item.id, {
                         id: item.id,
                         title: (item.fields && item.fields['System.Title']) || ('#' + item.id),
-                        state
+                        state,
+                        assignedTo: (item.fields && item.fields['System.AssignedTo'] && item.fields['System.AssignedTo'].displayName) || 'Unassigned'
                     });
                 }
 
@@ -6899,6 +6908,13 @@
                         if (task) task[mapped] = value;
                     }
                 }
+                if (field === 'System.AssignedTo') {
+                    const assignedTo = (value && value.displayName) || 'Unassigned';
+                    for (const list of Object.values(this.taskDotStatus)) {
+                        const task = list.find(t => t.id === id);
+                        if (task) task.assignedTo = assignedTo;
+                    }
+                }
             },
             // Patch version changes move the item to a different major/patch bucket, unlike
             // every other field - applyFieldUpdate() alone is not enough because the hierarchy
@@ -6966,7 +6982,8 @@
                     [key]: already ? dots : [...dots, {
                         id: task.id,
                         title: (task.fields && task.fields['System.Title']) || ('#' + task.id),
-                        state: (task.fields && task.fields['System.State']) || 'New'
+                        state: (task.fields && task.fields['System.State']) || 'New',
+                        assignedTo: (task.fields && task.fields['System.AssignedTo'] && task.fields['System.AssignedTo'].displayName) || 'Unassigned'
                     }]
                 };
             },
