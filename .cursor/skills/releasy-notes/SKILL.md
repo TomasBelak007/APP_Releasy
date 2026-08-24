@@ -49,8 +49,10 @@ Admin" / `XeeloAdmin`, optionally with its own version like `Odra-01.008`).
 5. Merge the remaining items from every product into one Feature list and one Bug list. Classify
    by `type` (`Feature` vs `Bug`) — don't second-guess even if a Feature ticket is really a bug
    report; file it under whichever section the type says, and let the prose reflect the nuance.
-6. One ticket is special: the **release container**, titled like `Release: <Version>
-   (<DD/MM/YYYY>)` (often with a product prefix, e.g. `Xeelo - Release: Labe-07.013 (18/08/2026)`).
+6. One ticket is special: the **release container**, titled `Release: <Version>
+   (<DD/MM/YYYY>)` with no product prefix (Labe-07.013 is `Release: Labe-07.013 (18/08/2026)`;
+   created by the sibling [releasy-release](../releasy-release/SKILL.md) skill). Older tickets
+   may still have a product prefix (`Xeelo - Release: …`) — accept either.
    - Pull **Version** from the named release (`Labe-07.013`). With two products, the Version
      line is `Labe-07.013 / Odra-01.008` (Xeelo first).
    - Pull **Release date** from the date in parentheses, reformatted `DD/MM/YYYY` → `D Month

@@ -138,6 +138,12 @@ Business-facing Xeelo release notes (plain-English .docx, no ticket IDs) are a d
 `list-tickets.mjs --descriptions --no-tasks`) and the same PAT. Do not mix that email format
 with the CRUD/list workflows above.
 
+The **release-container** Feature (`Release: Labe-07.014 (25/08/2026)` + the 6 numbered ship
+checklist Tasks, no product/DEV prefix) is also a different skill:
+[releasy-release](../releasy-release/SKILL.md). It calls `scripts/create-release.mjs` in this
+folder. Do not try to create that shape with `create-ticket.mjs` / `create-task.mjs` — they
+require prefixes and will reject it.
+
 ## Maintenance
 
 If any of these scripts start failing after `index.html` changes (new/renamed config constant, a

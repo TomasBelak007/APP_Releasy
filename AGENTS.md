@@ -81,3 +81,8 @@ smoke-testing alone cannot confirm something (API response shape, format quirks,
   (`list-tickets.mjs --descriptions`, `releasy-config.mjs`) and reuses that skill's PAT. A
   change to how Bugs/Features store descriptions should be reflected in both
   `list-tickets.mjs` and `releasy-notes/SKILL.md`.
+- `.cursor/skills/releasy-release/` creates the patch **release-container** Feature
+  (`Release: Labe-07.014 (25/08/2026)`) plus its 6 standard ship-checklist Tasks, copied from
+  Labe-07.013. It calls `releasy-ai/scripts/create-release.mjs` and the same PAT. A change to
+  how Features/Tasks are created (`createWorkItem()` / `createChildTask()`, epic parent,
+  PlatformRelease, Tags) must be reflected in that script and in `releasy-release/SKILL.md`.

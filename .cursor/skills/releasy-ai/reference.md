@@ -46,6 +46,10 @@ dedicated PAT for this skill, separate from the repo's own `dev.env` (see `AGENT
 Tasks never get: Priority, Severity, T-shirt size, Tags, or PlatformRelease - `update-ticket.mjs`
 and `create-ticket.mjs` reject those fields on a Task.
 
+**Exception — release-container Tasks** created by `create-release.mjs` (see below): their titles
+have no `DEV`/`TEST` prefix, and they *do* get `Custom.PlatformRelease` copied from the parent,
+matching Labe-07.013 (#10077-#10082). Regular `create-task.mjs` Tasks still do not.
+
 ### Comments
 
 Bug/Feature only - never a Task. Every script that touches an existing item's comments
@@ -217,6 +221,24 @@ Notes:
   always uses `System.Description`). Omit it for list/summary questions so the JSON stays small;
   pass it when the caller needs the raw ticket text (e.g. the `releasy-notes` skill).
 
+## `create-release.mjs` (release-container Feature + 6 checklist Tasks)
+
+Not a normal Bug/Feature. Template is Labe-07.013 (`Release: Labe-07.013 (18/08/2026)`, Feature
+#10076). Title has **no** product prefix; child Tasks have **no** `titlePrefixesTask` prefix.
+`create-ticket.mjs` / `create-task.mjs` cannot produce this shape. Workflow (confirm first) is
+the sibling `releasy-release` skill.
+
+```
+node scripts/create-release.mjs --version Labe-07.014 --date 25/08/2026 [--dry-run]
+node scripts/create-release.mjs --product Xeelo --release Labe --major 07 --patch 014 --date 25/08/2026
+```
+
+`--date` is stored in the title as `DD/MM/YYYY` (also accepts `YYYY-MM-DD` / `D.M.YYYY`).
+Defaults: `--owner` and `--steps-assignee` (tasks 01-05) `tomas.kocyan@intelstudios.com`;
+`--production-assignee` (task 06) `tomas@intelstudios.com`. Refuses backlog patch `999` and
+refuses to create a second container for the same
+`Custom.PlatformRelease`. Feature is Priority 4, no t-shirt, no description.
+
 ## Other script flag references
 
 - `change-status.mjs <id-or-url> <newState>` - `newState` validated against the live
@@ -230,6 +252,8 @@ Notes:
 - `list-tickets.mjs --product <name> [--release ... ] [--major ... ] [--patch ... | --backlog]
   [--state s1,s2 | --open] [--no-tasks] [--descriptions]` - read-only, see below.
 - `releasy-config.mjs` - no arguments, prints the live config as JSON.
+- `create-release.mjs --version Labe-07.014 --date 25/08/2026 [--dry-run]` - release-container
+  Feature + 6 checklist Tasks; see above. Not a substitute for `create-ticket.mjs`.
 
 All scripts accept a bare numeric work item ID, a Releasy `...release-overview?workitem=<id>`
 link, or a full `https://dev.azure.com/<org>/<project>/_workitems/edit/<id>` DevOps URL wherever
