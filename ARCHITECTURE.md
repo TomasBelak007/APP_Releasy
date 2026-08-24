@@ -69,9 +69,9 @@ reactive layer. Plain functions mutate `store` and never touch the DOM to expres
    silently renders nothing.
 3. `DOMContentLoaded` (registered just above `VUE LAYER`) runs:
    `initializePermissionBadge()` -> `activateProduct(store.activeProduct)` -> `checkAndOpenWorkItemFromUrl()`.
-   Only the active tab's data (and, if Task Mode is already on, its tasks) is fetched; the other
-   4 products load lazily the first time the user switches to them (see
-   [Load / reload](#flows-what-calls-what)).
+   Only the active tab's data is fetched; child tasks for that tab load in the background for the
+   status dots (and Task Mode). The other 4 products load lazily the first time the user switches
+   to them (see [Load / reload](#flows-what-calls-what)).
 4. `popstate` opens or closes the detail modal from the `?workitem=<id>` query parameter.
 
 ## Configuration
@@ -112,15 +112,11 @@ The nesting `release -> major -> patch` is built by `groupWorkItems()`, which pa
 `Labe-07.015`). **Items without a parseable `Custom.PlatformRelease` are silently dropped.**
 
 `store.childTasks` - `{ [parentId]: Task[] }` across **all** products fetched so far (not just the
-active one), filled only in Task Mode by `fetchChildTasksForWorkItems()` and merged in by
-`loadChildTasksIntoStore()` - never replaced wholesale, so loading one product's tasks cannot wipe
-out another's.
-
-`store.taskDotStatus` - `{ [parentId]: [{ id, title, state, assignedTo }] }` for the coloured dots to the left of
-the status badge on Bug/Feature rows. A **missing key** means that parent has not been fetched yet (render nothing);
-an **empty array** means it was fetched and has no child tasks (hollow ring). Filled in the
-background by `scheduleTaskDotFetch()` / `fetchTaskDotStatusForParents()`, independently of Task
-Mode. Never written into `childTasks`.
+active one). A **missing key** means that parent has not been fetched yet (render no dots); an
+**empty array** means it was fetched and has no child tasks (hollow ring). Filled in the
+background by `scheduleTaskDotFetch()` / `fetchChildTasksForWorkItems()`, independently of Task
+Mode. Each Task is a slim work-item object (`{ id, fields }` with Title, State, WorkItemType,
+AssignedTo). Task Mode rows, the status dots, and the detail-modal task cards all read this map.
 
 Work items are raw Azure DevOps objects (`{ id, fields, relations }`). Fields the app reads:
 
@@ -141,17 +137,16 @@ derived is a computed assigned onto the store afterwards (`reactive()` unwraps t
 templates and plain JS read `store.x`).
 
 Raw state: `theme`, `systemPrefersDark`, `releaseResults`, `loadingProducts`, `childTasks`,
-`taskLoadedProducts`, `taskDotStatus`, `loadingTaskDotIds`, `taskDotFetchGen`, `taskMode`,
-`taskModeBusy`, `permission`, `activeProduct`, `search`,
+`loadingTaskDotIds`, `taskDotFetchGen`, `taskMode`,
+`permission`, `activeProduct`, `search`,
 `expanded`, `hidden`, `filters`, `filterModalOpen`, `unhideModalOpen`, `notifications`,
 `closeDetailAfterCreate`, `lastReloadAt`, `clockTick`, plus **one slice per modal**: `picker`,
 `pat`, `help`, `created`, `buildChanges`, `createWorkItem`, `createTask`, `detail`.
 
-`loadingProducts` (products currently being fetched) and `taskLoadedProducts` (products whose
-tasks have been fetched at least once) exist purely to drive the lazy-loading functions in
-[Load / reload](#flows-what-calls-what); there is no more single `loading` boolean, since loading
-is per-product now. `taskDotStatus` / `loadingTaskDotIds` / `taskDotFetchGen` drive the
-background task-dot fetch, which is **not** gated on Task Mode.
+`loadingProducts` (products currently being fetched) exists purely to drive the lazy-loading
+functions in [Load / reload](#flows-what-calls-what); there is no more single `loading` boolean,
+since loading is per-product now. `loadingTaskDotIds` / `taskDotFetchGen` drive the background
+child-task fetch, which is **not** gated on Task Mode.
 
 Store methods: `isExpanded`, `toggleExpanded`, `expandAllMajors`, `collapseAll`, `toggleHidden`,
 `unhide`, `openUnhideModal`, `openFilterModal`, `setFilters`, `clearFilters`, `applyFieldUpdate`,
@@ -173,6 +168,7 @@ Derived (`VUE LAYER > Derived state`):
 | `tree` | **The rendered hierarchy.** One pass over `releaseResults` for `activeProduct`: skips hidden majors/patches, sorts, applies `itemPasses()`, keeps a parent whose child task matches, prunes empty branches |
 | `visibleResultCount` | Result counter in the toolbar |
 | `visibleParentIds` | Parent ids to fetch child tasks for, **scoped to `activeProduct`** |
+| `taskModeBusy` | `true` while Task Mode is on and a background child-task batch for a visible parent is still in flight (spinner on the Task Mode button) |
 
 `itemPasses(item)` = assignee filter + status filter + all search terms found in
 `buildWorkItemSearchText()`. `visibleChildTasksFor(parentId)` returns sorted, non-`Removed`,
@@ -187,9 +183,9 @@ Persistence (`VUE LAYER > Persistence`) - one `watch` per key:
 
 Also there: a `watchEffect` that mirrors `resolvedTheme` onto `<html data-theme>`, a
 `darkModeQuery` listener, `watch(() => store.activeProduct, activateProduct)` (fires
-`ensureProductLoaded`/`ensureTasksLoaded` for a tab the moment it becomes active - see
+`ensureProductLoaded` for a tab the moment it becomes active - see
 [Load / reload](#flows-what-calls-what)), `watch(() => store.visibleParentIds, scheduleTaskDotFetch)`
-(background slim task fetch for the dots), and a 60s interval bumping `clockTick` so every relative
+(background slim child-task fetch into `childTasks`, used by both the dots and Task Mode), and a 60s interval bumping `clockTick` so every relative
 timestamp refreshes. `activeProduct` itself is initialized from `lastActiveTab` only if that saved
 value is still one of the configured products, else it falls back to the first product - so a
 stale/removed product name in `localStorage` can never leave the app on a non-existent tab.
@@ -249,21 +245,20 @@ the other 4 products load the first time the user switches to their tab. The fun
   absent so the next visit/reload retries.
 - `ensureProductLoaded(product)` - no-op if `product` is already in `releaseResults` or
   `loadingProducts`, else `loadProductData(product)`. **Lazy** fetch.
-- `ensureTasksLoaded(product)` - no-op unless `taskMode && canWrite`, and unless `product` is
-  already in `taskLoadedProducts`, else `loadChildTasksIntoStore(product)`. **Lazy** fetch.
-- `activateProduct(product)` - `ensureProductLoaded(product)` then `ensureTasksLoaded(product)`.
+- `activateProduct(product)` - `ensureProductLoaded(product)`. Child tasks are not awaited here;
+  `scheduleTaskDotFetch()` fills `childTasks` in the background once `visibleParentIds` updates.
   Called by `DOMContentLoaded` (for the initial `activeProduct`) and by
   `watch(() => store.activeProduct, activateProduct)` (on every tab click).
-- `reloadActiveProduct()` - **force** refresh of just `activeProduct`: `loadProductData()`, then
-  (if Task Mode and `canWrite`) `loadChildTasksIntoStore()`. No write flow triggers this anymore -
-  creating an item inserts it locally (`addWorkItem()`/`addChildTask()`) and a patch-version change
-  relocates it locally (`moveWorkItemPatch()`); it now exists solely as the building block for
+- `reloadActiveProduct()` - **force** refresh of just `activeProduct`: `loadProductData()`. No
+  write flow triggers this anymore - creating an item inserts it locally
+  (`addWorkItem()`/`addChildTask()`) and a patch-version change relocates it locally
+  (`moveWorkItemPatch()`); it now exists solely as the building block for
   `resetAndReloadActiveProduct()`.
-- `resetAndReloadActiveProduct()` - clears `releaseResults`, `childTasks`,
-  `taskLoadedProducts`, `taskDotStatus` and `loadingTaskDotIds`, bumps `taskDotFetchGen` so an
-  in-flight dot fetch cannot merge stale results, then `reloadActiveProduct()`. Used by the
-  toolbar's `reload()` and by `savePAT()` (a new PAT can mean different access, so the whole cache
-  is invalidated). Other tabs simply go back to loading lazily on their next visit.
+- `resetAndReloadActiveProduct()` - clears `releaseResults`, `childTasks` and `loadingTaskDotIds`,
+  bumps `taskDotFetchGen` so an in-flight child-task fetch cannot merge stale results, then
+  `reloadActiveProduct()`. Used by the toolbar's `reload()` and by `savePAT()` (a new PAT can mean
+  different access, so the whole cache is invalidated). Other tabs simply go back to loading
+  lazily on their next visit.
 
 A 401 clears `devops_pat` and `store.pat.configured`, then re-prompts once through
 `handleUnauthorized()`.
@@ -272,35 +267,36 @@ A 401 clears `devops_pat` and `store.pat.configured`, then re-prompts once throu
 modal writes into `store.search` / `store.filters` / `store.expanded` / `store.hidden`, and
 `store.tree` recomputes.
 
-**Task-status dots** - independent of Task Mode (works in read-only too). `watch` on
-`store.visibleParentIds` calls `scheduleTaskDotFetch()`: parents not yet in `taskDotStatus` and
-not in `loadingTaskDotIds` are fetched in the background, 200 at a time, without awaiting from
-`activateProduct` or touching `isActiveProductLoading` / `taskModeBusy`. Each batch goes through
-`fetchTaskDotStatusForParents()` (parents: `$expand=relations` only — Azure DevOps rejects
-`fields` together with `$expand`; children:
-`fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo`) and is merged into
-`taskDotStatus`, including empty arrays for parents with no tasks. The row renders at most
-`TASK_DOT_MAX` (6) dots via `pickVisibleTaskDots()` / `allocateTaskDotQuota()`: every present
-status gets at least one dot (when there are ≤ 6 statuses); leftover slots are split
+**Task-status dots and Task Mode** share `store.childTasks`. Independent of Task Mode (dots work
+in read-only too). `watch` on `store.visibleParentIds` calls `scheduleTaskDotFetch()`: parents
+not yet in `childTasks` and not in `loadingTaskDotIds` are fetched in the background, 200 at a
+time, without awaiting from `activateProduct` or touching `isActiveProductLoading`. Each batch
+goes through `fetchChildTasksForWorkItems()` (parents: `$expand=relations` only — Azure DevOps
+rejects `fields` together with `$expand`; children:
+`fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo`) and is merged
+into `childTasks`, including empty arrays for parents with no tasks. The row renders at most
+`TASK_DOT_MAX` (6) dots via `taskDotView()` / `pickVisibleTaskDots()` / `allocateTaskDotQuota()`:
+every present status gets at least one dot (when there are ≤ 6 statuses); leftover slots are split
 proportionally by remaining task counts (largest remainder), so 10 New / 3 Active / 15 Closed
 becomes 2 + 1 + 3. Hover lists every task (title + assignee badge + status badge), scrolled if needed; a click
 opens that task via `openWorkItemDetailModal(id)`. The dots slot and status badge have fixed
 widths so assignee/status columns stay aligned across rows. `addWorkItem()` seeds an empty array
 so a brand-new item does not wait for a fetch; `addChildTask()` / `applyFieldUpdate()` keep the
-map in sync (`title`, `state`, and `assignedTo`).
+map in sync (`title`, `state`, and `assignedTo` live on `fields`).
 
-**Task Mode** - `toggleTaskMode()` flips `store.taskMode`, and if turning on calls
-`ensureTasksLoaded(activeProduct)` (lazy - a no-op if that product's tasks are already cached).
-`loadChildTasksIntoStore(product)` fetches `store.visibleParentIds` (scoped to `activeProduct`) in
-batches of 200 (`fetchChildTasksForWorkItems`) and **merges** the result into `store.childTasks`
-(never replaces it), then marks `product` in `taskLoadedProducts`. Switching to another tab while
-Task Mode is on lazily loads that tab's tasks via the `activateProduct` watcher above, without
-discarding tasks already cached for other tabs. Task Mode still uses the full work-item payload;
-it does not read `taskDotStatus`.
+**Task Mode** - `toggleTaskMode()` only flips `store.taskMode`. No network call: rows are
+`visibleChildTasksFor()` over the same `childTasks` map the dots already use. Parents still in
+flight appear as their batch lands; `taskModeBusy` is true while Task Mode is on and a visible
+parent is in `loadingTaskDotIds`. Switching tabs while Task Mode is on does not refetch - the
+`visibleParentIds` watcher lazy-loads any missing parents, without discarding tasks already
+cached for other tabs.
 
 **Detail modal** - `openWorkItemDetailModal(id, returnToParentId)` resets `store.detail`, pushes
 `?workitem=<id>`, starts `loadWorkItemDetailComments()` (parallel), awaits the work item with
-`$expand=Relations`, then starts `loadWorkItemDetailTasks()`. Every callback re-checks
+`$expand=Relations`, then starts `loadWorkItemDetailTasks()`. That helper reuses
+`store.childTasks[id]` when the grid's lazy fetch already has the parent; otherwise it calls
+`fetchChildTasksForWorkItems([id])` and merges the result into `childTasks` so the dots pick it
+up too. Every callback re-checks
 `d.id === workItemId` before writing, so a fast second open cannot be overwritten by a slow first
 response. `closeWorkItemDetailModal(forceFullClose)` re-opens `returnTo` unless forced.
 
@@ -447,8 +443,7 @@ be registered here.
 | Hierarchy query | `POST /wit/wiql?api-version=6.0` - Feature/Bug, `Custom.PlatformRelease CONTAINS '<release>-'`, not `Removed`, `Closed` only within `@startOfDay('-180d')` |
 | Work item batch | `GET /wit/workitems?ids=...&$expand=fields&api-version=6.0` (Markdown export uses 7.1) |
 | Detail | `GET /wit/workitems/{id}?$expand=Relations&api-version=7.1` - no `fields=` projection, so the response's `multilineFieldsFormat` map (read into `d.descriptionFormat`) is populated |
-| Child tasks (Task Mode) | `GET /wit/workitems?ids=...&$expand=relations&api-version=6.0`, batched by 200, then a second batch of the child ids with all fields |
-| Task-status dots | `GET /wit/workitems?ids=...&$expand=relations&api-version=6.0` for parents (no `fields` — Azure DevOps returns `ConflictingParametersException` if `$expand` is combined with `fields`), then `GET /wit/workitems?ids=...&fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo&api-version=6.0` for children (`fetchTaskDotStatusForParents`) |
+| Child tasks (dots, Task Mode, detail cards) | `GET /wit/workitems?ids=...&$expand=relations&api-version=6.0` for parents (no `fields` — Azure DevOps returns `ConflictingParametersException` if `$expand` is combined with `fields`), then `GET /wit/workitems?ids=...&fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo&api-version=6.0` for children (`fetchChildTasksForWorkItems`) |
 | Comments | `GET /wit/workItems/{id}/comments?api-version=7.1-preview.4&$expand=renderedText` (paged, see `fetchWorkItemCommentsAll`) - `$expand` gets each comment's server-rendered HTML alongside its raw `text`, needed because each comment independently carries its own `format` (`"markdown"`/`"html"`, same lower-cased convention as `multilineFieldsFormat`); `mapCommentForDisplay()` picks `renderedText` for Markdown comments (falling back to `marked.parse()` if ever absent) and `text` for HTML ones. Existing comments are still read-only (never editable/deletable); `POST /wit/workItems/{id}/comments?format=markdown\|html&api-version=7.1-preview.4` (`submitNewWorkItemComment()`) adds a brand-new one from the detail modal's composer, format chosen per-comment via the same query param (not a field-level op like descriptions) |
 | Field update | `PATCH /wit/workitems/{id}?api-version=7.1`, `application/json-patch+json` |
 | Create | `POST /wit/workitems/${type}?api-version=7.1` (must be 7.1+ - the `/multilineFieldsFormat/<field>` op used for Markdown descriptions on create is silently ignored on older versions) |
@@ -501,9 +496,10 @@ modes:
 
 ## Gotchas
 
-- **Task-dot cache is per parent id, not per product.** A missing `taskDotStatus[id]` means "not
+- **Child-task cache is per parent id, not per product.** A missing `childTasks[id]` means "not
   loaded"; `[]` means "loaded, no tasks". Do not treat a missing key as "no tasks" or the hollow
-  ring will flash during the background fetch. Do not merge this slim payload into `childTasks`.
+  ring will flash during the background fetch. Task Mode, the status dots, and the detail-modal
+  task cards all read this one map - do not add a second payload for the same children.
 - **`tokenHasWriteCapability` is self-declared.** The user picks Read-Only / Read-Write in the PAT
   modal; `checkTokenPermissions()` only validates that the token can reach Azure DevOps and stores
   the user's email. Azure DevOps still rejects unauthorized writes.
@@ -558,7 +554,7 @@ modes:
 | Change allowed statuses | `statusOptions` |
 | Change which items load | the WIQL query in `loadProductData()` (types, `Closed` window) |
 | Add a column or badge to a row | `tpl-work-item-row` (+ `WorkItemRow` computed) |
-| Change task-status dots | `store.taskDotStatus`, `fetchTaskDotStatusForParents()`, `tpl-work-item-row` |
+| Change task-status dots / Task Mode rows | `store.childTasks`, `fetchChildTasksForWorkItems()`, `tpl-work-item-row` |
 | Add a field to the detail modal | `#workItemDetailApp` markup + its computed |
 | Add a new "change X" modal | a new entry in `PICKER_KINDS` (`build` + `apply`) - no new markup |
 | Add a new modal | markup root in `<body>`, store slice, `mountApp`, `MODAL_STACK` entry |

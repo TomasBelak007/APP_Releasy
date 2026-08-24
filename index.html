@@ -3198,7 +3198,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-08-24T17:56:22.000Z'
+            updatedAt: '2026-08-24T18:12:14.000Z'
         };
 
         // ===== API Configuration =====
@@ -3693,13 +3693,10 @@
         }
         
         // ===== Task Mode Management =====
-        // Turning Task Mode on only fetches tasks for the tab you are looking at right now;
-        // the other tabs load theirs lazily when you switch to them (see ensureTasksLoaded()).
-        async function toggleTaskMode() {
+        // Task Mode is a visibility toggle over store.childTasks, which the background lazy
+        // fetch already fills for the dots. No extra network call.
+        function toggleTaskMode() {
             store.taskMode = !store.taskMode;
-            if (store.taskMode) {
-                await ensureTasksLoaded(store.activeProduct);
-            }
         }
         
         // updateEditVisibility() and its six wrappers (~185 lines) are gone. They re-queried the
@@ -3708,35 +3705,6 @@
         // now bind @click and v-if="store.canWrite" directly on the elements they render.
         
         // ===== Child Tasks Management =====
-        // Replaces loadAndDisplayChildTasks(). The parent ids come from the store, not from
-        // scraping data-work-item-id off the DOM and walking up looking for .version-hidden.
-        // Fetches unconditionally (a "force refresh" for `product`); callers that want the lazy,
-        // fetch-only-if-missing behavior should go through ensureTasksLoaded() instead.
-        async function loadChildTasksIntoStore(product) {
-            store.taskModeBusy = true;
-            try {
-                const parentIds = store.visibleParentIds;
-                if (parentIds.length > 0) {
-                    const pat = await getPAT();
-                    const fetched = await fetchChildTasksForWorkItems(parentIds, pat);
-                    // Merge, never replace - other products' already-loaded tasks must survive.
-                    store.childTasks = { ...store.childTasks, ...fetched };
-                }
-                if (!store.taskLoadedProducts.includes(product)) store.taskLoadedProducts.push(product);
-            } catch (error) {
-                Logger.error('Error loading child tasks:', error);
-            } finally {
-                store.taskModeBusy = false;
-            }
-        }
-        
-        // Fetches child tasks for `product` only if Task Mode is on, the token allows it, and
-        // this product's tasks have not already been fetched this session.
-        async function ensureTasksLoaded(product) {
-            if (!store.taskMode || !store.canWrite) return;
-            if (store.taskLoadedProducts.includes(product)) return;
-            await loadChildTasksIntoStore(product);
-        }
         
         // Azure DevOps caps ids per request at ~200; this splits into batches, fetches them in
         // parallel and flattens the results into one { value: [...] }, same shape as the raw API.
@@ -3773,73 +3741,21 @@
             return { value: allData.flatMap(d => d.value || []) };
         }
         
+        // Slim child-task fetch for the grid (dots + Task Mode rows) and the detail modal cards:
+        // parent id + relations, then each child's id / title / state / type / assignedTo.
+        // Always returns a key for every requested parent (empty array = no tasks), so the UI
+        // can tell "not loaded yet" from "loaded, none". AssignedTo stays the ADO identity object.
         async function fetchChildTasksForWorkItems(workItemIds, pat) {
-            try {
-                const data = await fetchWorkItemsInBatches(workItemIds, pat, '$expand=relations', 'Batch');
-                
-                // Extrahovat child task IDs
-                const childTaskIds = new Set();
-                const parentChildMap = {};
-                
-                data.value.forEach(workItem => {
-                    const childTasks = [];
-                    if (workItem.relations) {
-                        workItem.relations.forEach(relation => {
-                            // Vztah 'System.LinkTypes.Hierarchy-Forward' znamená child
-                            if (relation.rel === 'System.LinkTypes.Hierarchy-Forward') {
-                                const childUrl = relation.url;
-                                const childId = parseInt(childUrl.split('/').pop());
-                                if (childId) {
-                                    childTaskIds.add(childId);
-                                    childTasks.push(childId);
-                                }
-                            }
-                        });
-                    }
-                    if (childTasks.length > 0) {
-                        parentChildMap[workItem.id] = childTasks;
-                    }
-                });
-                
-                if (childTaskIds.size === 0) {
-                    return {};
-                }
-                
-                // Načíst detaily child tasků v batch requestech
-                const childTaskIdsArray = Array.from(childTaskIds);
-                const childTasksData = await fetchWorkItemsInBatches(childTaskIdsArray, pat, '', 'Child tasks');
-                
-                // Namapovat child tasky na jejich rodiče
-                const result = {};
-                Object.keys(parentChildMap).forEach(parentId => {
-                    const childIds = parentChildMap[parentId];
-                    const childTasks = childTasksData.value.filter(task => childIds.includes(task.id));
-                    if (childTasks.length > 0) {
-                        result[parentId] = childTasks;
-                    }
-                });
-                
-                return result;
-            } catch (error) {
-                Logger.error('Error fetching child tasks:', error);
-                return {};
-            }
-        }
-
-        // Slim fetch for the grid's task-status dots: parent id + relations, then each child's
-        // id / title / state / assignedTo. Always returns a key for every requested parent (empty array =
-        // no tasks), so the UI can tell "not loaded yet" from "loaded, none".
-        async function fetchTaskDotStatusForParents(parentIds, pat) {
             const result = {};
-            for (const id of parentIds) result[String(id)] = [];
-            if (parentIds.length === 0) return result;
+            for (const id of workItemIds) result[String(id)] = [];
+            if (workItemIds.length === 0) return result;
 
             try {
                 const parents = await fetchWorkItemsInBatches(
-                    parentIds, pat, '$expand=relations', 'Task-dot parents', { throwOnError: true });
+                    workItemIds, pat, '$expand=relations', 'Child-task parents', { throwOnError: true });
 
-                if (parentIds.length > 0 && parents.value.length === 0) {
-                    throw new Error('Task-dot parents batch returned no work items');
+                if (workItemIds.length > 0 && parents.value.length === 0) {
+                    throw new Error('Child-task parents batch returned no work items');
                 }
 
                 const childIds = new Set();
@@ -3862,7 +3778,7 @@
                     [...childIds],
                     pat,
                     'fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo',
-                    'Task-dot children',
+                    'Child tasks',
                     { throwOnError: true }
                 );
                 const byId = new Map();
@@ -3871,12 +3787,7 @@
                     const state = (item.fields && item.fields['System.State']) || '';
                     if (type && type !== 'Task') continue;
                     if (state === 'Removed') continue;
-                    byId.set(item.id, {
-                        id: item.id,
-                        title: (item.fields && item.fields['System.Title']) || ('#' + item.id),
-                        state,
-                        assignedTo: (item.fields && item.fields['System.AssignedTo'] && item.fields['System.AssignedTo'].displayName) || 'Unassigned'
-                    });
+                    byId.set(item.id, item);
                 }
 
                 for (const [parentId, childIdList] of Object.entries(parentChildMap)) {
@@ -3884,7 +3795,7 @@
                 }
                 return result;
             } catch (error) {
-                Logger.error('Error fetching task-dot status:', error);
+                Logger.error('Error fetching child tasks:', error);
                 throw error;
             }
         }
@@ -4311,22 +4222,18 @@
             await loadProductData(product);
         }
 
-        // Makes sure the tab the user is looking at has both its work items and (if Task Mode is
-        // on) its tasks. Runs on the very first load and again every time activeProduct changes.
+        // Makes sure the tab the user is looking at has its work items. Child tasks for the
+        // dots (and Task Mode) are filled in the background by scheduleTaskDotFetch(). Runs on
+        // the very first load and again every time activeProduct changes.
         async function activateProduct(product) {
             await ensureProductLoaded(product);
-            await ensureTasksLoaded(product);
         }
 
         // Force-refreshes just the active tab. Used after a write that we know made the active
         // tab's cached data stale (a new item was created, or a patch version changed) - other
         // tabs are untouched since nothing about them changed.
         async function reloadActiveProduct() {
-            const product = store.activeProduct;
-            await loadProductData(product);
-            if (store.taskMode && store.canWrite) {
-                await loadChildTasksIntoStore(product);
-            }
+            await loadProductData(store.activeProduct);
         }
 
         // Full reset: drops every product's cached data and tasks, then reloads just the active
@@ -4334,8 +4241,6 @@
         async function resetAndReloadActiveProduct() {
             store.releaseResults = [];
             store.childTasks = {};
-            store.taskLoadedProducts = [];
-            store.taskDotStatus = {};
             store.loadingTaskDotIds = [];
             store.taskDotFetchGen += 1;
             await reloadActiveProduct();
@@ -6014,7 +5919,9 @@
             }
         };
         
-        // Child task cards inside the detail modal. The grid renders store.detail.tasks.
+        // Child task cards inside the detail modal. Reuses store.childTasks when the grid's
+        // lazy fetch already has this parent; otherwise fetches once and merges so the dots
+        // pick it up too.
         async function loadWorkItemDetailTasks(workItemId, workItemType, pat) {
             const d = store.detail;
             if (workItemType === 'Task') {
@@ -6022,10 +5929,17 @@
                 return;
             }
             try {
-                const data = await fetchChildTasksForWorkItems([workItemId], pat);
+                const key = String(workItemId);
+                let tasks;
+                if (Object.prototype.hasOwnProperty.call(store.childTasks, key)) {
+                    tasks = store.childTasks[key];
+                } else {
+                    const fetched = await fetchChildTasksForWorkItems([workItemId], pat);
+                    if (d.id !== workItemId) return;
+                    mergeChildTasksBatch(fetched);
+                    tasks = fetched[key] || [];
+                }
                 if (d.id !== workItemId) return;
-                const tasks = (data[workItemId] || []).filter(task =>
-                    task.fields['System.State'] !== 'Removed' && task.fields['System.WorkItemType'] === 'Task');
                 d.tasks = sortChildTasks(tasks);
             } catch (e) {
                 Logger.error(e);
@@ -6647,6 +6561,15 @@
 
         const TASK_DOT_MAX = 6;
 
+        function taskDotView(task) {
+            return {
+                id: task.id,
+                title: (task.fields && task.fields['System.Title']) || ('#' + task.id),
+                state: (task.fields && task.fields['System.State']) || '',
+                assignedTo: (task.fields && task.fields['System.AssignedTo'] && task.fields['System.AssignedTo'].displayName) || 'Unassigned'
+            };
+        }
+
         function sortTaskDotItems(tasks) {
             return [...tasks].filter(t => t.state !== 'Removed').sort((a, b) => {
                 const orderA = STATE_ORDER.indexOf(a.state);
@@ -6719,18 +6642,15 @@
             releaseResults: [],
             // Products currently being fetched - dedupes concurrent loads and drives the loader
             loadingProducts: [],
+            // { [parentId]: Task[] } across all products fetched so far. A missing key means
+            // that parent has not been fetched yet; an empty array means it was fetched and
+            // has no child tasks. Filled in the background by scheduleTaskDotFetch(); Task Mode
+            // and the status dots both read from here.
             childTasks: {},
-            // Products whose child tasks have been fetched at least once. Kept until a full
-            // reset (Reload / new PAT), so toggling Task Mode off and on again does not refetch.
-            taskLoadedProducts: [],
-            // Slim { [parentId]: [{ id, title, state }] } for the grid dots. A missing key means
-            // not fetched yet; an empty array means fetched and the parent has no child tasks.
-            taskDotStatus: {},
             loadingTaskDotIds: [],
             // Bumped on full reload so an in-flight background fetch cannot merge stale results.
             taskDotFetchGen: 0,
             taskMode: localStorage.getItem('taskMode') === 'true',
-            taskModeBusy: false,
             permission: localStorage.getItem('tokenPermission') || 'checking',
             activeProduct: (() => {
                 const names = releaseNames.map(r => r.product);
@@ -6901,20 +6821,6 @@
                     if (item.id === id) item.fields[field] = value;
                 });
                 if (Number(this.detail.id) === id) this.detail.fields[field] = value;
-                if (field === 'System.State' || field === 'System.Title') {
-                    const mapped = field === 'System.State' ? 'state' : 'title';
-                    for (const list of Object.values(this.taskDotStatus)) {
-                        const task = list.find(t => t.id === id);
-                        if (task) task[mapped] = value;
-                    }
-                }
-                if (field === 'System.AssignedTo') {
-                    const assignedTo = (value && value.displayName) || 'Unassigned';
-                    for (const list of Object.values(this.taskDotStatus)) {
-                        const task = list.find(t => t.id === id);
-                        if (task) task.assignedTo = assignedTo;
-                    }
-                }
             },
             // Patch version changes move the item to a different major/patch bucket, unlike
             // every other field - applyFieldUpdate() alone is not enough because the hierarchy
@@ -6967,25 +6873,14 @@
             addWorkItem(item) {
                 this.insertWorkItem(item);
                 const key = String(item.id);
-                if (!Object.prototype.hasOwnProperty.call(this.taskDotStatus, key)) {
-                    this.taskDotStatus = { ...this.taskDotStatus, [key]: [] };
+                if (!Object.prototype.hasOwnProperty.call(this.childTasks, key)) {
+                    this.childTasks = { ...this.childTasks, [key]: [] };
                 }
             },
             // Same idea for a freshly created child task.
             addChildTask(parentId, task) {
                 const key = String(parentId);
                 this.childTasks = { ...this.childTasks, [key]: [...(this.childTasks[key] || []), task] };
-                const dots = this.taskDotStatus[key] || [];
-                const already = dots.some(t => t.id === task.id);
-                this.taskDotStatus = {
-                    ...this.taskDotStatus,
-                    [key]: already ? dots : [...dots, {
-                        id: task.id,
-                        title: (task.fields && task.fields['System.Title']) || ('#' + task.id),
-                        state: (task.fields && task.fields['System.State']) || 'New',
-                        assignedTo: (task.fields && task.fields['System.AssignedTo'] && task.fields['System.AssignedTo'].displayName) || 'Unassigned'
-                    }]
-                };
             },
             forEachWorkItem(fn) {
                 for (const { releases } of this.releaseResults) {
@@ -7132,9 +7027,8 @@
             return count;
         });
 
-        // Parent ids to fetch child tasks for - previously scraped out of the DOM. Scoped to the
-        // active product, so turning on Task Mode (or switching tabs) only fetches tasks for
-        // what is actually visible, not for every product loaded so far this session.
+        // Parent ids whose child tasks should be lazy-loaded. Scoped to the active product
+        // (and not hidden), so switching tabs only fetches tasks for what is on screen.
         store.visibleParentIds = computed(() => {
             const ids = new Set();
             for (const { product, release, releases } of store.releaseResults) {
@@ -7151,8 +7045,8 @@
             return [...ids];
         });
 
-        function mergeTaskDotStatusBatch(fetched) {
-            const next = { ...store.taskDotStatus };
+        function mergeChildTasksBatch(fetched) {
+            const next = { ...store.childTasks };
             for (const [parentId, list] of Object.entries(fetched)) {
                 const existing = next[parentId] || [];
                 const byId = new Map(list.map(t => [t.id, t]));
@@ -7161,7 +7055,7 @@
                 }
                 next[parentId] = [...byId.values()];
             }
-            store.taskDotStatus = next;
+            store.childTasks = next;
         }
 
         function releaseTaskDotLoading(ids) {
@@ -7183,16 +7077,16 @@
                         return;
                     }
                     const batch = parentIds.slice(i, i + BATCH_SIZE);
-                    const fetched = await fetchTaskDotStatusForParents(batch, pat);
+                    const fetched = await fetchChildTasksForWorkItems(batch, pat);
                     if (store.taskDotFetchGen !== gen) {
                         releaseTaskDotLoading(parentIds);
                         return;
                     }
-                    mergeTaskDotStatusBatch(fetched);
+                    mergeChildTasksBatch(fetched);
                     releaseTaskDotLoading(batch);
                 }
             } catch (error) {
-                Logger.error('Error loading task-status dots:', error);
+                Logger.error('Error loading child tasks:', error);
                 showNotification('Error loading task status indicators', 'error');
                 releaseTaskDotLoading(parentIds);
             }
@@ -7201,13 +7095,16 @@
         function scheduleTaskDotFetch() {
             const missing = store.visibleParentIds.filter(id => {
                 const key = String(id);
-                return !Object.prototype.hasOwnProperty.call(store.taskDotStatus, key)
+                return !Object.prototype.hasOwnProperty.call(store.childTasks, key)
                     && !store.loadingTaskDotIds.includes(id);
             });
             if (missing.length === 0) return;
             store.loadingTaskDotIds = [...store.loadingTaskDotIds, ...missing];
             loadTaskDotStatus(missing, store.taskDotFetchGen);
         }
+
+        store.taskModeBusy = computed(() =>
+            store.taskMode && store.loadingTaskDotIds.some(id => store.visibleParentIds.includes(id)));
 
         // ===== Persistence =====
         // One watch per storage key replaces 40+ scattered localStorage reads and writes.
@@ -7229,8 +7126,8 @@
         // relative to the mountApp() calls below.
         watch(() => store.activeProduct, activateProduct);
 
-        // Background: once the grid's parent ids are known, pull slim task id/title/state in
-        // batches. Does not block isActiveProductLoading or Task Mode.
+        // Background: once the grid's parent ids are known, pull slim child tasks in batches
+        // into store.childTasks. Does not block isActiveProductLoading; Task Mode just shows them.
         watch(() => store.visibleParentIds, scheduleTaskDotFetch);
 
         // Drives every relative timestamp in the UI ("last reload", "updated x ago")
@@ -7475,11 +7372,11 @@
                 },
                 taskDotsReady() {
                     if (this.isChild) return false;
-                    return Object.prototype.hasOwnProperty.call(this.store.taskDotStatus, String(this.item.id));
+                    return Object.prototype.hasOwnProperty.call(this.store.childTasks, String(this.item.id));
                 },
                 taskDotAllItems() {
                     if (!this.taskDotsReady) return [];
-                    return sortTaskDotItems(this.store.taskDotStatus[String(this.item.id)] || []);
+                    return sortTaskDotItems((this.store.childTasks[String(this.item.id)] || []).map(taskDotView));
                 },
                 taskDotItems() {
                     return pickVisibleTaskDots(this.taskDotAllItems);
