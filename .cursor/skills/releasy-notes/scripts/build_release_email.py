@@ -102,7 +102,8 @@ def build(content, output_path):
     doc = Document()
     set_page(doc)
 
-    add_plain_paragraph(doc, "Xeelo – Release Notes", 18, TITLE_COLOR,
+    title = content.get("document_title") or "Xeelo – Release Notes"
+    add_plain_paragraph(doc, title, 18, TITLE_COLOR,
                          bold=True, before_pt=0, after_pt=8)
     add_label_value_paragraph(doc, "Version: ", content["version"])
     add_label_value_paragraph(doc, "Release date: ", content["release_date"])
