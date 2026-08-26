@@ -43,7 +43,7 @@ Order of `// ===== ... =====` sections inside the script:
 1. `Configuration`, `API Configuration`, `Error Messages`, `Logging Utility` - constants, `Logger`
 2. `Build Changes Pipeline Mapping`, `Assignees Configuration`, `Title Prefixes ...`,
    `Available patch versions Configuration` - business configuration
-3. `DOM Cache Helper`, `DevOps API Helper`, `PAT Encryption/Decryption`, `Helper Functions`
+3. `DevOps API Helper`, `PAT Encryption/Decryption`, `Helper Functions`
 4. `Data Parsing & Grouping`, `Last Reload Time Management`, `Permission Management`,
    `Task Mode Management`, `Child Tasks Management`
 5. `Priority & Severity Handling`, `Work Item Rendering`, `Sorting Functions`
@@ -93,7 +93,8 @@ it first.
 | `assignees` | Assignee list (`{ email, name }`) for the "Change Assigned To" picker, create forms, **and** `store.availableAssignees` (see below) |
 | `titlePrefixes`, `titlePrefixesTask` | Allowed title prefixes per product / for tasks |
 | `availablePatchVersions` | Options in the "Change Patch Version" picker (`999` = next release bucket) |
-| `statusOptions` | Allowed `System.State` values per work item type; also the source for `store.availableStatuses` |
+| `statusOptions` | Allowed `System.State` values per work item type; also the source for `store.availableStatuses` (the Filter modal drops `Removed`, which the hierarchy WIQL never loads) |
+| `GRID_WORK_ITEM_FIELDS` | Projection for the main hierarchy fetch (no Description / ReproSteps). Detail modal and Markdown export load the full item separately. |
 | `RATING_LEVELS` | Shared 1-4 scale for priority and severity |
 | `THEMES`, `darkModeQuery`, `LOGO_URLS` | Theme buttons, the system dark-mode media query and the logo served per resolved theme |
 
@@ -118,14 +119,23 @@ background by `scheduleTaskDotFetch()` / `fetchChildTasksForWorkItems()`, indepe
 Mode. Each Task is a slim work-item object (`{ id, fields }` with Title, State, WorkItemType,
 AssignedTo). Task Mode rows, the status dots, and the detail-modal task cards all read this map.
 
-Work items are raw Azure DevOps objects (`{ id, fields, relations }`). Fields the app reads:
+Work items in `releaseResults` are slim Azure DevOps objects (`{ id, fields }`) from the grid
+projection (`GRID_WORK_ITEM_FIELDS`). The detail modal re-fetches the full item (`$expand=Relations`)
+when opened. Grid fields:
 
 - `System.Id`, `System.WorkItemType`, `System.Title`, `System.State`, `System.AssignedTo`,
-  `System.Tags`, `System.CreatedDate`, `System.ChangedDate`, `System.Description`
+  `System.CreatedDate`
 - `Custom.PlatformRelease` (hierarchy key), `Custom.Epictitle`, `Custom.Shirtsize`
 - `Microsoft.VSTS.Common.Priority` (number), `Microsoft.VSTS.Common.Severity` (**label**, e.g.
-  `"3 - Medium"`), `Microsoft.VSTS.Common.ClosedDate`, `Microsoft.VSTS.TCM.ReproSteps` (Bug
-  description)
+  `"3 - Medium"`)
+
+Each grid item also carries `_searchText`, a cached haystack from `attachSearchText()` /
+`buildWorkItemSearchText()`, refreshed on load and on `applyFieldUpdate()`. Patch arrays are
+sorted once in `groupWorkItems()` / `insertWorkItem()` / `resortPatchContaining()`, not on every
+tree recompute.
+
+Detail/export additionally read `System.Tags`, `System.ChangedDate`, `System.Description`,
+`Microsoft.VSTS.TCM.ReproSteps`, `Microsoft.VSTS.Common.ClosedDate` (WIQL Closed window only).
 
 T-shirt size is read through `getTshirtFieldKey()` / `getTshirtSizeFromFields()` because the field
 name is not identical across projects.
@@ -150,7 +160,8 @@ child-task fetch, which is **not** gated on Task Mode.
 
 Store methods: `isExpanded`, `toggleExpanded`, `expandAllMajors`, `collapseAll`, `toggleHidden`,
 `unhide`, `openUnhideModal`, `openFilterModal`, `setFilters`, `clearFilters`, `applyFieldUpdate`,
-`moveWorkItemPatch`, `insertWorkItem`, `addWorkItem`, `addChildTask`, `forEachWorkItem`.
+`moveWorkItemPatch`, `insertWorkItem`, `addWorkItem`, `addChildTask`, `resortPatchContaining`,
+`forEachWorkItem`.
 
 Derived (`VUE LAYER > Derived state`):
 
@@ -163,18 +174,17 @@ Derived (`VUE LAYER > Derived state`):
 | `resolvedTheme` | `theme`, with `auto` resolved through `systemPrefersDark` |
 | `hiddenCount`, `activeFilterCount` | Badge counters |
 | `lastReloadText` | Relative label; depends on `clockTick` |
-| `availableAssignees`, `availableStatuses` | Filter options, from the `assignees` / `statusOptions` **configuration** - not from loaded items, so an option is offered even if no currently loaded item uses it |
+| `availableAssignees`, `availableStatuses` | Filter options, from the `assignees` / `statusOptions` **configuration** - not from loaded items. `availableStatuses` omits `Removed` (the status picker still offers it via `statusOptions`) |
 | `searchTerms` | `search` split on whitespace |
-| `tree` | **The rendered hierarchy.** One pass over `releaseResults` for `activeProduct`: skips hidden majors/patches, sorts, applies `itemPasses()`, keeps a parent whose child task matches, prunes empty branches |
-| `visibleResultCount` | Result counter in the toolbar |
-| `visibleParentIds` | Parent ids to fetch child tasks for, **scoped to `activeProduct`** |
+| `tree` | **The rendered hierarchy.** One pass over `releaseResults` for `activeProduct`: skips hidden majors/patches, filters via `itemPasses()`, keeps a parent whose child task matches, attaches `childRowsByParent` (Task Mode), prunes empty branches. Sort is already on the patch arrays. |
+| `visibleResultCount` | Result counter in the toolbar (parents + `childRowsByParent`) |
+| `visibleParentIds` | Parent ids to fetch child tasks for, **scoped to expanded (and not hidden) majors/patches of `activeProduct`** |
 | `taskModeBusy` | `true` while Task Mode is on and a background child-task batch for a visible parent is still in flight (spinner on the Task Mode button) |
 
-`itemPasses(item)` = assignee filter + status filter + all search terms found in
-`buildWorkItemSearchText()`. `visibleChildTasksFor(parentId)` returns sorted, non-`Removed`,
-filtered child tasks (empty unless Task Mode). Note `availableStatuses` includes `Removed` (it is
-in `statusOptions` for every type), even though `loadProductData()`'s WIQL query never loads
-`Removed` items - so that option in the Filter modal currently can never hide anything.
+`itemPasses(item)` = assignee filter + status filter + all search terms found in the cached
+`item._searchText` (fallback `buildWorkItemSearchText()`). `visibleChildTasksFor(parentId)` returns
+sorted, non-`Removed`, filtered child tasks (empty unless Task Mode). The Filter modal does not
+offer `Removed`, even though it remains in `statusOptions` for the status picker.
 
 Persistence (`VUE LAYER > Persistence`) - one `watch` per key:
 `expanded_sections`, `hidden_versions`, `workItemFilters`, `taskMode`, `lastActiveTab`,
@@ -225,9 +235,9 @@ Defined in `VUE LAYER > Components`, templates from `<script type="text/x-templa
 | `MarkdownEditor` | `tpl-markdown-editor` | `editorId`, `toolbarId`, `markdown`, `editable`, `minHeight` | Markdown counterpart of `HtmlEditor`. In the detail modal it is used when `d.descriptionFormat === 'Markdown'`, either detected from the server or chosen via the format toggle's HTML->Markdown conversion (see [Detail modal](#flows-what-calls-what)); in both create forms it is used when the user picks Markdown in the format toggle (`form.descriptionFormat`). Edit/Preview toggle - opens in Preview if there is content, straight into Edit if the field is empty (`render()`); edit mode is a plain `<textarea>` (Markdown source, toolbar from `MARKDOWN_TOOLBAR_BUTTONS`), preview mode renders `marked.parse()` output into a `v-html` div; **uncontrolled** like `HtmlEditor` - content read back with `readMarkdownEditorText(editorId)`; emits `rendered` (with the preview container, so image auth fix-up runs the same way) |
 | `ProgressBar` | `tpl-progress-bar` | `items` | Segments per state in `PROGRESS_ORDER`, colors from `STATE_COLORS` |
 | `PriorityCell` | `tpl-priority-cell` | `item` | Priority / severity (Bug) / t-shirt (Feature) badges, each opening its picker |
-| `WorkItemRow` | `tpl-work-item-row` | `item`, `isChild`, `parentId` | Icon by type, clickable state/assignee badges, opens detail; parent rows show at most 6 task-status dots (`pickVisibleTaskDots` / `allocateTaskDotQuota`: ≥1 per present status, leftover proportional) in a fixed-width slot left of the status badge; hover lists every child task, each row opening that task's detail modal. Title column also shows a one-letter prefix pill (`openTaskPrefixes`) for each `titlePrefixesTask` prefix that still has a non-`Closed` child |
-| `PatchSection` | `tpl-patch-section` | `node` | A patch: header, progress bar, Markdown export, Build Changes, create; `rows` interleaves parents with their child tasks as siblings |
-| grid root | `tpl-releasy-grid` | - | Product tabs + releases + majors, mounted on `#content` |
+| `WorkItemRow` | `tpl-work-item-row` | `item`, `isChild`, `parentId` | Icon by type, clickable state/assignee badges; the row header opens the detail modal; parent rows show at most 6 task-status dots (`pickVisibleTaskDots` / `allocateTaskDotQuota`: ≥1 per present status, leftover proportional) in a fixed-width slot left of the status badge; hover lists every child task, each row opening that task's detail modal. Title column also shows a one-letter prefix pill (`openTaskPrefixes`) for each `titlePrefixesTask` prefix that still has a non-`Closed` child |
+| `PatchSection` | `tpl-patch-section` | `node` | A patch: header, progress bar, Markdown export, Build Changes, create; work-item rows mount only while the patch is expanded (`v-if`); `rows` interleaves parents with `node.childRowsByParent` as siblings |
+| grid root | `tpl-releasy-grid` | - | Product tabs + releases + majors, mounted on `#content`; patch sections mount only while the major is expanded |
 
 ## Flows: what calls what
 
@@ -238,8 +248,9 @@ the other 4 products load the first time the user switches to their tab. The fun
   hierarchy. `getPAT()` (returns immediately if the user cancels the PAT modal, so no WIQL with a
   null token) -> once (`window.tokenPermissionsChecked`) `checkTokenPermissions(pat)` ->
   looks up `releaseConfig` for `product` -> WIQL via `handleUnauthorized(fetchWIQL)` ->
-  `fetchWorkItems(ids)` -> `groupWorkItems()` -> replaces just that product's entry in
-  `store.releaseResults` (`[...filter(r => r.product !== product), entry]`) ->
+  `fetchWorkItems(ids)` (batched at 200, `fields=GRID_WORK_ITEM_FIELDS`, no Description) ->
+  `groupWorkItems()` (attaches `_searchText` and sorts each patch) -> replaces just that
+  product's entry in `store.releaseResults` (`[...filter(r => r.product !== product), entry]`) ->
   `saveLastReloadTime()`. Tracks itself in `store.loadingProducts` for the duration (drives
   `isActiveProductLoading`); on failure, logs + `showNotification()` and leaves the product
   absent so the next visit/reload retries.
@@ -265,13 +276,16 @@ A 401 clears `devops_pat` and `store.pat.configured`, then re-prompts once throu
 
 **Search / filter / expand / hide** - state only, no network, no re-render call: the toolbar or
 modal writes into `store.search` / `store.filters` / `store.expanded` / `store.hidden`, and
-`store.tree` recomputes.
+`store.tree` recomputes. Collapsed majors and patches are not mounted (`v-if` on the patch
+container / work-item rows); CSS `max-height` collapse is leftover and unused for that purpose.
+A click on a work-item row header opens the detail modal.
 
 **Task-status dots and Task Mode** share `store.childTasks`. Independent of Task Mode (dots work
 in read-only too). `watch` on `store.visibleParentIds` calls `scheduleTaskDotFetch()`: parents
 not yet in `childTasks` and not in `loadingTaskDotIds` are fetched in the background, 200 at a
-time, without awaiting from `activateProduct` or touching `isActiveProductLoading`. Each batch
-goes through `fetchChildTasksForWorkItems()` (parents: `$expand=relations` only — Azure DevOps
+time, without awaiting from `activateProduct` or touching `isActiveProductLoading`.
+`visibleParentIds` is only the parents in **expanded** majors and patches (collapsed rows are
+not on screen). Each batch goes through `fetchChildTasksForWorkItems()` (parents: `$expand=relations` only — Azure DevOps
 rejects `fields` together with `$expand`; children:
 `fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo`) and is merged
 into `childTasks`, including empty arrays for parents with no tasks. The row renders at most
@@ -436,14 +450,15 @@ be registered here.
 
 ## Azure DevOps API surface
 
-`devOpsApiRequest()` (+ `devOpsGet/Post/Patch/Delete`) prefixes `API_BASE_URL` and adds
-`Authorization: Basic btoa(':' + pat)`. Several older call sites still build the full URL and call
-`fetch` directly (create, field update, child tasks, comments, attachments).
+`devOpsApiRequest()` (+ `devOpsGet` / `devOpsPost` / `devOpsPatch`) prefixes `API_BASE_URL` and adds
+`Authorization: Basic btoa(':' + pat)`. Field updates and the batched work-item GETs go through
+these helpers. Create, comments and attachments still build the full URL and call `fetch` directly
+(they already hold a PAT for image upload / specialised error text).
 
 | Purpose | Call |
 | --- | --- |
 | Hierarchy query | `POST /wit/wiql?api-version=6.0` - Feature/Bug, `Custom.PlatformRelease CONTAINS '<release>-'`, not `Removed`, `Closed` only within `@startOfDay('-180d')` |
-| Work item batch | `GET /wit/workitems?ids=...&$expand=fields&api-version=6.0` (Markdown export uses 7.1) |
+| Work item batch | `GET /wit/workitems?ids=...&fields=<GRID_WORK_ITEM_FIELDS>&api-version=6.0` via `fetchWorkItemsInBatches` (200 ids per request). Markdown export still uses `$expand=fields&api-version=7.1` so it receives Description / ReproSteps |
 | Detail | `GET /wit/workitems/{id}?$expand=Relations&api-version=7.1` - no `fields=` projection, so the response's `multilineFieldsFormat` map (read into `d.descriptionFormat`) is populated |
 | Child tasks (dots, Task Mode, detail cards) | `GET /wit/workitems?ids=...&$expand=relations&api-version=6.0` for parents (no `fields` — Azure DevOps returns `ConflictingParametersException` if `$expand` is combined with `fields`), then `GET /wit/workitems?ids=...&fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo&api-version=6.0` for children (`fetchChildTasksForWorkItems`) |
 | Comments | `GET /wit/workItems/{id}/comments?api-version=7.1-preview.4&$expand=renderedText` (paged, see `fetchWorkItemCommentsAll`) - `$expand` gets each comment's server-rendered HTML alongside its raw `text`, needed because each comment independently carries its own `format` (`"markdown"`/`"html"`, same lower-cased convention as `multilineFieldsFormat`); `mapCommentForDisplay()` picks `renderedText` for Markdown comments (falling back to `marked.parse()` if ever absent) and `text` for HTML ones. Existing comments are still read-only (never editable/deletable); `POST /wit/workItems/{id}/comments?format=markdown\|html&api-version=7.1-preview.4` (`submitNewWorkItemComment()`) adds a brand-new one from the detail modal's composer, format chosen per-comment via the same query param (not a field-level op like descriptions) |
@@ -509,18 +524,21 @@ modes:
   normalizes for display.
 - **Patch `999`** is the "next release" bucket and is highlighted differently in the patch picker.
 - **Legacy `patchs` key**: older builds wrote `expanded_sections.patchs` / `hidden_versions.patchs`.
-  `readExpandedSections()` / `readHiddenVersions()` merge it forward - keep that shim.
+  `readExpandedSections()` / `readHiddenVersions()` merge it forward - keep that shim. The old
+  `expanded.workItems` key is dropped on read; the empty inline row expand is gone and a header
+  click opens the detail modal.
+- **Collapsed majors/patches are not mounted** (`v-if`). Task-dot fetch follows `visibleParentIds`,
+  which is only expanded patches, so the first expand of a patch may briefly show the hollow ring
+  until that batch lands.
 - **`closeDetailAfterCreate`** is set when a create form was prefilled from the detail modal, so a
   successful create also closes the item that was copied.
 - **`guide.html` is only loaded from disk on `127.0.0.1`**; elsewhere it comes from the
   provisioning endpoint. Opening the file over `file://` blocks the local `fetch`.
-- Many comments describe the **removed** imperative helpers (`filterWorkItems()`,
-  `updateHierarchyVisibility()`, `updateEditVisibility()`, ...) as migration notes. They are history,
-  not code that exists.
 - `changeWorkItemAssignedTo()` and `changeWorkItemPatchVersion()` go through `updateWorkItemField()`
   like every other field change, via its `storeValue` (store write differs from the PATCH body
   value) and `applyToStore: false` (Patch Version relocates the item with `moveWorkItemPatch()`
-  instead) options - do not re-inline their own `fetch()` calls.
+  instead) options - do not re-inline their own `fetch()` calls. `updateWorkItemField()` itself
+  uses `devOpsPatch()`.
 - **A field's Markdown/HTML format is one-way and per-field.** Once `System.Description` or
   `Microsoft.VSTS.TCM.ReproSteps` is saved as Markdown in Azure DevOps, it can never go back to
   HTML - in the DevOps UI or via the API. The detail modal's format toggle enforces this:
@@ -555,6 +573,7 @@ modes:
 | Add / remove an assignee | `assignees` |
 | Change allowed statuses | `statusOptions` |
 | Change which items load | the WIQL query in `loadProductData()` (types, `Closed` window) |
+| Change which fields the grid fetches | `GRID_WORK_ITEM_FIELDS` (keep Description out; detail/export fetch full items) |
 | Add a column or badge to a row | `tpl-work-item-row` (+ `WorkItemRow` computed) |
 | Change task-status dots / Task Mode rows | `store.childTasks`, `fetchChildTasksForWorkItems()`, `tpl-work-item-row` |
 | Add a field to the detail modal | `#workItemDetailApp` markup + its computed |

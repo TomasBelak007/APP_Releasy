@@ -22,8 +22,6 @@
             --color-closed: #28a745;
             --color-new: #fd7e14;
             --color-onhold: #7c8185;
-            --bg-dark-gradient-start: #1a1a2e;
-            --bg-dark-gradient-end: #16213e;
             
             /* Light theme */
             --bg-primary: #f5f5f5;
@@ -1111,18 +1109,6 @@
             padding-top: 0 !important;
             padding-bottom: 0 !important;
             transform: scaleY(0.95) !important;
-        }
-        .work-item-detail {
-            overflow: hidden;
-            transition: max-height 0.2s ease-out, opacity 0.2s ease-out;
-            max-height: 500px;
-            opacity: 1;
-        }
-        .work-item-detail.d-none {
-            max-height: 0;
-            opacity: 0;
-            padding: 0;
-            margin: 0;
         }
         .work-item-header {
             cursor: pointer;
@@ -3068,12 +3054,12 @@
     <script type="text/x-template" id="tpl-work-item-row">
         <div class="work-item" :class="{ 'release-feature': isReleaseFeature, 'child-task': isChild }"
              :data-work-item-id="item.id" :data-parent-id="parentId">
-            <div class="work-item-header" @click="toggleDetail">
+            <div class="work-item-header" @click="openWorkItemDetailModal(item.id)">
                 <span class="work-item-icon" :class="iconClass" :title="iconTitle">
                     <i class="fa-solid" :class="iconGlyph"></i>
                 </span>
                 <span class="work-item-title">
-                    <span class="work-item-title-text" :title="title" @click.stop="openWorkItemDetailModal(item.id)">{{ title }}</span>
+                    <span class="work-item-title-text" :title="title">{{ title }}</span>
                     <span v-if="!isChild && createdInfo.text" class="meta-badge work-item-created-badge"
                           :class="createdInfo.class" :title="'Created: ' + createdDate">{{ createdInfo.text }}</span>
                     <span v-for="badge in openTaskPrefixBadges" :key="badge.prefix"
@@ -3127,7 +3113,6 @@
                     </span>
                 </span>
             </div>
-            <div v-if="!isChild" class="work-item-detail" :class="{ 'd-none': !detailExpanded }"></div>
         </div>
     </script>
 
@@ -3153,7 +3138,7 @@
                 <progress-bar :items="node.allItems"></progress-bar>
             </div>
         </div>
-        <div class="epic-group ms-4" :class="{ collapsed: !expanded }" :data-patch-id="node.patchId">
+        <div v-if="expanded" class="epic-group ms-4" :data-patch-id="node.patchId">
             <div class="work-items">
                 <work-item-row v-for="row in rows" :key="row.key" :item="row.item" :is-child="row.isChild"
                                :parent-id="row.parentId"></work-item-row>
@@ -3195,7 +3180,7 @@
                                         <progress-bar :items="major.allItems"></progress-bar>
                                     </div>
                                 </div>
-                                <div class="patch-container ms-4" :class="{ collapsed: !store.isExpanded('major', major.majorId) }">
+                                <div v-if="store.isExpanded('major', major.majorId)" class="patch-container ms-4">
                                     <patch-section v-for="patch in major.patches" :key="patch.patchId" :node="patch"></patch-section>
                                 </div>
                             </template>
@@ -3221,11 +3206,27 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-08-26T09:09:48.000Z'
+            updatedAt: '2026-08-26T20:42:55.000Z'
         };
 
         // ===== API Configuration =====
         const API_BASE_URL = `https://dev.azure.com/${config.organization}/${config.project}/_apis`;
+
+        // Fields the grid actually renders / searches. Descriptions stay out of this list so the
+        // main hierarchy fetch stays slim; the detail modal and Markdown export load them separately.
+        const GRID_WORK_ITEM_FIELDS = [
+            'System.Id',
+            'System.WorkItemType',
+            'System.Title',
+            'System.AssignedTo',
+            'System.State',
+            'System.CreatedDate',
+            'Custom.PlatformRelease',
+            'Custom.Epictitle',
+            'Microsoft.VSTS.Common.Priority',
+            'Microsoft.VSTS.Common.Severity',
+            'Custom.Shirtsize'
+        ].join(',');
 
         // ===== Error Messages =====
         const ERROR_MESSAGES = {
@@ -3371,8 +3372,6 @@
             light: 'https://provisioning.integray.app/api/endpoint/web-app/azure-devops/release-overview-assets?Name=logo_light.png'
         };
 
-        // ===== Helper Functions (Phase 1 Optimizations - Safe Version) =====
-
         // ===== DevOps API Helper =====
         async function devOpsApiRequest(endpoint, method = 'GET', body = null, options = {}) {
             const pat = await getPAT();
@@ -3446,6 +3445,10 @@
 
         async function devOpsPost(endpoint, body, options = {}) {
             return devOpsApiRequest(endpoint, 'POST', body, options);
+        }
+
+        async function devOpsPatch(endpoint, body, options = {}) {
+            return devOpsApiRequest(endpoint, 'PATCH', body, options);
         }
 
         // ===== PAT Encryption/Decryption =====
@@ -3656,10 +3659,17 @@
                 releases[version.name][version.major][version.patch].push(item);
             });
 
+            for (const byMajor of Object.values(releases)) {
+                for (const byPatch of Object.values(byMajor)) {
+                    for (const [patch, items] of Object.entries(byPatch)) {
+                        items.forEach(attachSearchText);
+                        byPatch[patch] = sortWorkItems(items);
+                    }
+                }
+            }
+
             return releases;
         }
-
-        // calculateProgress() and createProgressBar() removed - replaced by the <progress-bar> component.
 
         // ===== Last Reload Time Management =====
         function saveLastReloadTime() {
@@ -3721,46 +3731,32 @@
         function toggleTaskMode() {
             store.taskMode = !store.taskMode;
         }
-        
-        // updateEditVisibility() and its six wrappers (~185 lines) are gone. They re-queried the
-        // badge wrappers, stashed handler references on the DOM nodes to be able to detach them,
-        // and re-read every value out of data-* attributes. Both the grid and the detail modal
-        // now bind @click and v-if="store.canWrite" directly on the elements they render.
-        
+
         // ===== Child Tasks Management =====
         
         // Azure DevOps caps ids per request at ~200; this splits into batches, fetches them in
         // parallel and flattens the results into one { value: [...] }, same shape as the raw API.
-        async function fetchWorkItemsInBatches(ids, pat, extraParams, warnLabel, options = {}) {
+        async function fetchWorkItemsInBatches(ids, extraParams, warnLabel) {
             const BATCH_SIZE = 200;
+            if (!ids.length) return { value: [] };
             const batches = [];
             for (let i = 0; i < ids.length; i += BATCH_SIZE) {
                 batches.push(ids.slice(i, i + BATCH_SIZE));
             }
-            
+
             const allData = await Promise.all(
                 batches.map(async (batch) => {
-                    const response = await fetch(
-                        `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems?ids=${batch.join(',')}${extraParams ? `&${extraParams}` : ''}&api-version=6.0`,
-                        {
-                            headers: {
-                                'Authorization': `Basic ${btoa(`:${pat}`)}`
-                            }
-                        }
-                    );
-                    
-                    if (!response.ok) {
-                        Logger.warn(`${warnLabel} batch fetch failed with status: ${response.status}`);
-                        if (options.throwOnError) {
-                            throw new Error(`${warnLabel} batch fetch failed with status: ${response.status}`);
-                        }
-                        return { value: [] };
+                    try {
+                        return await devOpsGet(
+                            `/wit/workitems?ids=${batch.join(',')}${extraParams ? `&${extraParams}` : ''}&api-version=6.0`
+                        );
+                    } catch (error) {
+                        Logger.warn(`${warnLabel} batch fetch failed:`, error);
+                        throw error;
                     }
-                    
-                    return response.json();
                 })
             );
-            
+
             return { value: allData.flatMap(d => d.value || []) };
         }
         
@@ -3768,14 +3764,14 @@
         // parent id + relations, then each child's id / title / state / type / assignedTo.
         // Always returns a key for every requested parent (empty array = no tasks), so the UI
         // can tell "not loaded yet" from "loaded, none". AssignedTo stays the ADO identity object.
-        async function fetchChildTasksForWorkItems(workItemIds, pat) {
+        async function fetchChildTasksForWorkItems(workItemIds) {
             const result = {};
             for (const id of workItemIds) result[String(id)] = [];
             if (workItemIds.length === 0) return result;
 
             try {
                 const parents = await fetchWorkItemsInBatches(
-                    workItemIds, pat, '$expand=relations', 'Child-task parents', { throwOnError: true });
+                    workItemIds, '$expand=relations', 'Child-task parents');
 
                 if (workItemIds.length > 0 && parents.value.length === 0) {
                     throw new Error('Child-task parents batch returned no work items');
@@ -3799,10 +3795,8 @@
 
                 const children = await fetchWorkItemsInBatches(
                     [...childIds],
-                    pat,
                     'fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo',
-                    'Child tasks',
-                    { throwOnError: true }
+                    'Child tasks'
                 );
                 const byId = new Map();
                 for (const item of children.value) {
@@ -3814,7 +3808,9 @@
                 }
 
                 for (const [parentId, childIdList] of Object.entries(parentChildMap)) {
-                    result[String(parentId)] = childIdList.map(cid => byId.get(cid)).filter(Boolean);
+                    const tasks = childIdList.map(cid => byId.get(cid)).filter(Boolean);
+                    tasks.forEach(attachSearchText);
+                    result[String(parentId)] = tasks;
                 }
                 return result;
             } catch (error) {
@@ -3822,19 +3818,6 @@
                 throw error;
             }
         }
-        
-        // The task cards and the "Add task" tile are part of the detail modal template now;
-        // loadWorkItemDetailTasks() only fills store.detail.tasks.
-        
-        // displayChildTasks() and hideAllChildTasks() removed (~150 lines).
-        // Child tasks are now derived state: <work-item-row> renders store.childTasks[item.id]
-        // when store.taskMode is on, so there is nothing to insert, remove or re-sort by hand.
-
-        // the expanded-sections and hidden-versions helpers (~170 lines) are gone.
-        // Both are now plain reactive arrays on `store` (see the Vue layer at the end of this
-        // file), persisted by a single watch() instead of being re-read from localStorage on
-        // every single render call. The cascade rules (collapsing a major collapses its patches,
-        // expanding a patch expands its ancestors) moved to store.toggleExpanded().
 
         // ===== Priority & Severity Handling =====
         function extractNumber(value) {
@@ -3869,10 +3852,6 @@
             const key = getTshirtFieldKey(fields);
             return normalizeTshirtSize(key ? fields[key] : '');
         }
-
-        // getPriorityBadge() removed (~60 lines of string concatenation with four
-        // different hand-rolled escaping variants). Replaced by the <priority-cell> component,
-        // where Vue escapes the title for us.
 
         // Format dates as relative time (min/hours/days) with age-based color class
         function formatRelativeDate(dateString) {
@@ -3933,10 +3912,19 @@
                 .toLowerCase();
         }
 
-        // createWorkItemElement(), toggleWorkItemDetail(), updateHiddenVersionsButton()
-        // and toggleAndHide() removed (~140 lines). The row markup is now the <work-item-row>
-        // template; hiding a version is `store.toggleHidden(type, id)` instead of locating the
-        // sibling container and juggling the .version-hidden class on both halves by hand.
+        function attachSearchText(item) {
+            if (!item) return item;
+            item._searchText = buildWorkItemSearchText(item.fields || {}, item.id);
+            return item;
+        }
+
+        const SORT_FIELDS = new Set([
+            'System.State',
+            'System.Title',
+            'System.WorkItemType',
+            'Microsoft.VSTS.Common.Priority',
+            'Microsoft.VSTS.Common.Severity'
+        ]);
 
         // ===== Sorting Functions =====
         function sortWorkItems(items) {
@@ -4139,9 +4127,10 @@
             }
         }
 
-        async function fetchWorkItems(ids, pat) {
+        async function fetchWorkItems(ids) {
             try {
-                return await devOpsGet(`/wit/workitems?ids=${ids.join(',')}&$expand=fields&api-version=6.0`);
+                return await fetchWorkItemsInBatches(
+                    ids, `fields=${GRID_WORK_ITEM_FIELDS}`, 'Work items');
             } catch (error) {
                 if (error.message && error.message.includes('401')) {
                     throw new Error('unauthorized');
@@ -4163,10 +4152,6 @@
                 throw err;
             }
         }
-
-        // renderRelease(), renderTabs() and switchTab() removed (~190 lines of
-        // document.createElement + innerHTML + onclick assignment). The whole hierarchy is now
-        // declared once in the <releasy-grid> template and re-renders from store state.
 
         // Fetches exactly one product's work items and replaces just that product's entry in
         // store.releaseResults - other products already in the store are left untouched. This is
@@ -4218,12 +4203,9 @@
                 if (data.workItems && data.workItems.length > 0) {
                     const ids = data.workItems.map(wi => wi.id);
                     // Work items fetch s retry na 401
-                    const workItemsData = await handleUnauthorized((newPat) => fetchWorkItems(ids, newPat || pat));
+                    const workItemsData = await handleUnauthorized(() => fetchWorkItems(ids));
                     releases = groupWorkItems(workItemsData.value);
                 }
-                // Replace just this product's entry. Everything that used to follow -
-                // re-render, re-apply filters in the right order, re-attach edit handlers,
-                // refresh the Unhide button - is now derived state.
                 store.releaseResults = [
                     ...store.releaseResults.filter(r => r.product !== product),
                     { product: releaseConfig.product, release: releaseConfig.release, releases }
@@ -5201,10 +5183,6 @@
             }
         };
         
-        // showSelectedVersions() / toggleAllCheckboxes() / toggleGroupCheckboxes() are gone with the
-        // hidden-versions modal. Note the original had to call loadData() - a full round trip to
-        // Azure DevOps - just to un-hide a version; the Vue one re-renders from data in memory.
-        
         // ===== Markdown Export =====
         window.exportPatchToMarkdown = async function(product, releaseName, major, patch, patchId) {
             try {
@@ -5462,9 +5440,6 @@
             store.picker.busy = true;
             
             try {
-                const pat = await getPAT();
-                const url = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems/${workItemId}?api-version=7.1`;
-                
                 const patchOperation = {
                     'op': operation,
                     'path': fieldPath
@@ -5472,20 +5447,11 @@
                 if (operation !== 'remove') {
                     patchOperation.value = newValue;
                 }
-                
-                const response = await fetch(url, {
-                    method: 'PATCH',
-                    headers: {
-                        'Authorization': 'Basic ' + btoa(':' + pat),
-                        'Content-Type': 'application/json-patch+json'
-                    },
-                    body: JSON.stringify([patchOperation])
-                });
-                
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Failed to update: ${response.statusText}${errorText ? ` - ${errorText}` : ''}`);
-                }
+
+                await devOpsPatch(
+                    `/wit/workitems/${workItemId}?api-version=7.1`,
+                    [patchOperation]
+                );
                 
                 if (applyToStore) {
                     store.applyFieldUpdate(workItemId, fieldPath, operation === 'remove' ? null : storeValue);
@@ -5957,7 +5923,7 @@
                 if (Object.prototype.hasOwnProperty.call(store.childTasks, key)) {
                     tasks = store.childTasks[key];
                 } else {
-                    const fetched = await fetchChildTasksForWorkItems([workItemId], pat);
+                    const fetched = await fetchChildTasksForWorkItems([workItemId]);
                     if (d.id !== workItemId) return;
                     mergeChildTasksBatch(fetched);
                     tasks = fetched[key] || [];
@@ -6144,8 +6110,6 @@
                     ? await processImagesForDevOpsMarkdown(description, pat)
                     : await processImagesForDevOps(description, pat);
                 
-                const url = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems/${workItemId}?api-version=7.1`;
-                
                 // Build patch operations for both title and description
                 const operations = [
                     {
@@ -6183,18 +6147,10 @@
                     });
                 }
                 
-                const response = await fetch(url, {
-                    method: 'PATCH',
-                    headers: {
-                        'Authorization': 'Basic ' + btoa(':' + pat),
-                        'Content-Type': 'application/json-patch+json'
-                    },
-                    body: JSON.stringify(operations)
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to update work item: ${response.statusText}`);
-                }
+                await devOpsPatch(
+                    `/wit/workitems/${workItemId}?api-version=7.1`,
+                    operations
+                );
                 
                 store.applyFieldUpdate(workItemId, '/fields/System.Title', title);
                 store.applyFieldUpdate(workItemId, fieldPath, description || '');
@@ -6498,27 +6454,8 @@
             }
         });
         
-        // ~150 lines of filter/search plumbing were removed here, along with isElementVisible().
-        // The predicates used to read the assignee and status back out of the rendered DOM
-        // (querySelector('.assigned-to').textContent), and the PDF export decided which rows to
-        // include by walking computed styles. Both read store.tree now.
-        
-        // isVersionVisible() and openFilterModal() removed (~140 lines). The modal used to build
-        // its own option lists by reading rendered rows out of the DOM; the Vue version derives
-        // availableAssignees / availableStatuses from the assignees / statusOptions configuration.
-        
-        // applyFilter(), removeFilter(), updateFilterUI(), epicGroupHasVisibleItems(),
-        // updateHierarchyVisibility() and filterWorkItems() removed (~190 lines).
-        //
-        // This was the heart of the problem: filterWorkItems() set style.display on every row, then
-        // updateHierarchyVisibility() re-derived the visibility of patches, majors and releases by
-        // reading those inline styles back. The DOM was the source of truth. All of it is now the
-        // single store.tree computed property, which prunes empty branches from the data.
-        
         // ============================================================================
         // ===== VUE LAYER ===========================================================
-        // Everything below replaces the ~900 lines of imperative rendering, DOM-based
-        // filtering and handler re-attachment that used to live in this file.
         // ============================================================================
         const { reactive, computed, watch, watchEffect, createApp } = Vue;
 
@@ -6536,7 +6473,7 @@
         // The original derived these keys as `type + 's'`, which turned 'patch' into 'patchs' while
         // the rest of the code read 'patches' - so expanded patch state was written to one key and
         // read from another. Spelling the mapping out avoids that class of bug entirely.
-        const EXPAND_KEYS = { release: 'releases', major: 'majors', patch: 'patches', workItem: 'workItems' };
+        const EXPAND_KEYS = { release: 'releases', major: 'majors', patch: 'patches' };
 
         function readJSON(key, fallback) {
             try {
@@ -6549,13 +6486,17 @@
         }
 
         function readExpandedSections() {
-            const sections = readJSON('expanded_sections', { releases: [], majors: [], patches: [], workItems: [] });
+            const sections = readJSON('expanded_sections', { releases: [], majors: [], patches: [] });
             // Pick up state written by the original under the mistaken 'patchs' key
             if (Array.isArray(sections.patchs)) {
-                sections.patches = [...new Set([...sections.patches, ...sections.patchs])];
+                sections.patches = [...new Set([...(sections.patches || []), ...sections.patchs])];
                 delete sections.patchs;
             }
-            return sections;
+            return {
+                releases: sections.releases || [],
+                majors: sections.majors || [],
+                patches: sections.patches || []
+            };
         }
 
         function readHiddenVersions() {
@@ -6705,7 +6646,11 @@
             search: '',
             expanded: readExpandedSections(),
             hidden: readHiddenVersions(),
-            filters: readJSON('workItemFilters', { hiddenAssignees: [], hiddenStatuses: [] }),
+            filters: (() => {
+                const f = readJSON('workItemFilters', { hiddenAssignees: [], hiddenStatuses: [] });
+                f.hiddenStatuses = (f.hiddenStatuses || []).filter(s => s !== 'Removed');
+                return f;
+            })(),
             filterModalOpen: false,
             unhideModalOpen: false,
             notifications: [],
@@ -6823,7 +6768,7 @@
                 this.expanded.patches = [];
             },
             collapseAll() {
-                this.expanded = { releases: [], majors: [], patches: [], workItems: [] };
+                this.expanded = { releases: [], majors: [], patches: [] };
             },
 
             // --- hidden versions ---
@@ -6862,10 +6807,15 @@
             applyFieldUpdate(workItemId, fieldPath, value) {
                 const field = String(fieldPath).replace(/^\/fields\//, '');
                 const id = Number(workItemId);
+                let sortTouched = false;
                 this.forEachWorkItem(item => {
-                    if (item.id === id) item.fields[field] = value;
+                    if (item.id !== id) return;
+                    item.fields[field] = value;
+                    attachSearchText(item);
+                    if (SORT_FIELDS.has(field)) sortTouched = true;
                 });
                 if (Number(this.detail.id) === id) this.detail.fields[field] = value;
+                if (sortTouched) this.resortPatchContaining(id);
             },
             // Patch version changes move the item to a different major/patch bucket, unlike
             // every other field - applyFieldUpdate() alone is not enough because the hierarchy
@@ -6897,6 +6847,7 @@
                 if (!item) return;
 
                 item.fields['Custom.PlatformRelease'] = newPatchVersion;
+                attachSearchText(item);
                 if (Number(this.detail.id) === id) this.detail.fields['Custom.PlatformRelease'] = newPatchVersion;
 
                 this.insertWorkItem(item);
@@ -6910,7 +6861,10 @@
                 if (!version) return;
                 const dest = this.releaseResults.find(r => r.release === version.name);
                 if (!dest) return;
-                (((dest.releases[version.name] ??= {})[version.major] ??= {})[version.patch] ??= []).push(item);
+                attachSearchText(item);
+                const list = (((dest.releases[version.name] ??= {})[version.major] ??= {})[version.patch] ??= []);
+                if (!list.some(existing => existing.id === item.id)) list.push(item);
+                dest.releases[version.name][version.major][version.patch] = sortWorkItems(list);
             },
             // A freshly created work item is placed straight into the tree from the create API's
             // own response - it already has every field Azure DevOps assigned it, nothing left to
@@ -6925,7 +6879,22 @@
             // Same idea for a freshly created child task.
             addChildTask(parentId, task) {
                 const key = String(parentId);
+                attachSearchText(task);
                 this.childTasks = { ...this.childTasks, [key]: [...(this.childTasks[key] || []), task] };
+            },
+            resortPatchContaining(workItemId) {
+                const id = Number(workItemId);
+                for (const { releases } of this.releaseResults) {
+                    for (const byMajor of Object.values(releases)) {
+                        for (const byPatch of Object.values(byMajor)) {
+                            for (const [patch, items] of Object.entries(byPatch)) {
+                                if (!items.some(item => item.id === id)) continue;
+                                byPatch[patch] = sortWorkItems(items);
+                                return;
+                            }
+                        }
+                    }
+                }
             },
             forEachWorkItem(fn) {
                 for (const { releases } of this.releaseResults) {
@@ -6990,6 +6959,7 @@
         store.availableStatuses = computed(() => {
             const states = new Set();
             Object.values(statusOptions).forEach(list => list.forEach(state => states.add(state)));
+            states.delete('Removed');
             return [...states].sort((a, b) => {
                 const ia = STATE_ORDER.indexOf(a);
                 const ib = STATE_ORDER.indexOf(b);
@@ -7005,7 +6975,7 @@
             if (store.filters.hiddenStatuses.includes(item.fields['System.State'] || '')) return false;
             const terms = store.searchTerms;
             if (terms.length === 0) return true;
-            const text = buildWorkItemSearchText(item.fields, item.id);
+            const text = item._searchText || buildWorkItemSearchText(item.fields, item.id);
             return terms.every(term => text.includes(term));
         }
 
@@ -7041,14 +7011,19 @@
                         const allItems = byMajor[major][patch];
                         majorItems.push(...allItems);
 
-                        // A parent stays if it matches, or if one of its visible tasks matches
-                        const items = sortWorkItems(allItems).filter(item =>
-                            itemPasses(item) || visibleChildTasksFor(item.id).length > 0);
+                        const items = [];
+                        const childRowsByParent = {};
+                        for (const item of allItems) {
+                            const childRows = visibleChildTasksFor(item.id);
+                            if (!itemPasses(item) && childRows.length === 0) continue;
+                            items.push(item);
+                            childRowsByParent[item.id] = childRows;
+                        }
                         if (items.length === 0) continue;
 
                         patches.push({
                             product: entry.product, release: entry.release, major, patch, patchId,
-                            items, allItems
+                            items, allItems, childRowsByParent
                         });
                     }
                     if (patches.length === 0) continue;
@@ -7065,24 +7040,30 @@
                 for (const major of rel.majors) {
                     for (const patch of major.patches) {
                         count += patch.items.length;
-                        for (const item of patch.items) count += visibleChildTasksFor(item.id).length;
+                        for (const item of patch.items) {
+                            count += (patch.childRowsByParent[item.id] || []).length;
+                        }
                     }
                 }
             }
             return count;
         });
 
-        // Parent ids whose child tasks should be lazy-loaded. Scoped to the active product
-        // (and not hidden), so switching tabs only fetches tasks for what is on screen.
+        // Parent ids whose child tasks should be lazy-loaded. Only expanded (and not hidden)
+        // majors/patches of the active product, since collapsed rows are not mounted.
         store.visibleParentIds = computed(() => {
             const ids = new Set();
             for (const { product, release, releases } of store.releaseResults) {
                 if (product !== store.activeProduct) continue;
                 const byMajor = releases[release] || {};
                 for (const major of Object.keys(byMajor)) {
-                    if (store.hidden.majors.includes(`${release}-${major}`)) continue;
+                    const majorId = `${release}-${major}`;
+                    if (store.hidden.majors.includes(majorId)) continue;
+                    if (!store.expanded.majors.includes(majorId)) continue;
                     for (const patch of Object.keys(byMajor[major])) {
-                        if (store.hidden.patches.includes(`${release}-${major}.${patch}`)) continue;
+                        const patchId = `${release}-${major}.${patch}`;
+                        if (store.hidden.patches.includes(patchId)) continue;
+                        if (!store.expanded.patches.includes(patchId)) continue;
                         byMajor[major][patch].forEach(item => ids.add(item.id));
                     }
                 }
@@ -7099,6 +7080,7 @@
                     if (!byId.has(t.id)) byId.set(t.id, t);
                 }
                 next[parentId] = [...byId.values()];
+                next[parentId].forEach(attachSearchText);
             }
             store.childTasks = next;
         }
@@ -7122,7 +7104,7 @@
                         return;
                     }
                     const batch = parentIds.slice(i, i + BATCH_SIZE);
-                    const fetched = await fetchChildTasksForWorkItems(batch, pat);
+                    const fetched = await fetchChildTasksForWorkItems(batch);
                     if (store.taskDotFetchGen !== gen) {
                         releaseTaskDotLoading(parentIds);
                         return;
@@ -7397,7 +7379,6 @@
                 isReleaseFeature() {
                     return this.type === 'Feature' && (this.fields['System.Title'] || '').startsWith('Release');
                 },
-                detailExpanded() { return this.store.expanded.workItems.includes(this.item.id); },
                 iconGlyph() {
                     if (this.isChild || this.type === 'Task') return 'fa-clipboard-list';
                     if (this.isReleaseFeature) return 'fa-rocket';
@@ -7439,10 +7420,6 @@
                     if (!dot || !dot.id) return;
                     openWorkItemDetailModal(dot.id);
                 },
-                toggleDetail() {
-                    if (this.isChild) return;
-                    this.store.toggleExpanded('workItem', this.item.id);
-                },
                 editAssignee() {
                     if (!this.store.canWrite) return;
                     openAssignedToChangeModal(this.item.id, this.type, this.assignedTo, this.title);
@@ -7468,9 +7445,10 @@
                 // existing .work-item.child-task styling keeps working.
                 rows() {
                     const rows = [];
+                    const childRowsByParent = this.node.childRowsByParent || {};
                     for (const item of this.node.items) {
                         rows.push({ key: `p${item.id}`, item, isChild: false, parentId: null });
-                        for (const child of visibleChildTasksFor(item.id)) {
+                        for (const child of childRowsByParent[item.id] || []) {
                             rows.push({ key: `c${item.id}-${child.id}`, item: child, isChild: true, parentId: item.id });
                         }
                     }
