@@ -50,9 +50,11 @@ current fields, child Tasks, and comments before doing anything else with it.
    `3 - Medium`, T-shirt `M`.
 6. Ask for an assignee (validate against the live `assignees` list) - optional, unassigned is fine.
 7. Description format defaults to Markdown unless the user asks for HTML.
-8. If the ticket needs Tasks created right away (e.g. the initial 1-5 DEV tasks), nest them under
-   the item in the plan - see reference.md's Task fields. A Task added *later* (e.g. a TEST task
-   once the DEV tasks are done) does not belong here - use step 4 below instead.
+8. If the ticket needs Tasks created right away, nest them under the item in the plan - see
+   reference.md's Task fields and **Child task content (DEV vs TEST)** below. Split DEV work
+   (SQL vs back-end + front-end) only as the requester asked — do not invent extra DEV tasks.
+   A Task added *later* (e.g. a TEST task once the DEV tasks are done) does not belong here -
+   use step 2 below instead.
 9. Build the JSON plan (schema in reference.md), print a human-readable summary - type, product,
    title, release/patch or "Backlog", priority/severity or t-shirt, assignee, nested tasks, any
    related links - and **stop for explicit confirmation**.
@@ -72,9 +74,44 @@ done - or any other Task added to a ticket after the fact. No plan file needed.
    Task - a Task cannot itself have child Tasks.
 2. Gather just the Task's own fields - prefix (validate against `titlePrefixesTask`), title,
    description, optional assignee. No product/release/epic/priority questions; those only apply
-   to the parent.
+   to the parent. Draft the description using **Child task content (DEV vs TEST)** below.
 3. Print the summary and confirm, then run:
    `node scripts/create-task.mjs <parentId> --prefix DEV --title "..." [--description "..."] [--assignee email]`
+
+## Child task content (DEV vs TEST)
+
+Applies whenever this skill creates a child Task (nested in a new Bug/Feature plan, or added
+later with `create-task.mjs`). Other prefixes (`UX/UI`, `DOCU`, …) are unchanged; follow the
+requester.
+
+### DEV
+
+May include a technical description and the relevant parts of the change plan (procedure names,
+files, validation rules, return values, API/UI wiring).
+
+Split into separate DEV tasks **according to the requester**, typically:
+
+- **SQL** — database / stored-procedure work
+- **back-end + front-end** — calling the change from the app and the UI
+
+Do not add a SQL task or a back-end/front-end task the requester did not ask for. If they ask
+for a single DEV task, keep it as one.
+
+### TEST
+
+Write a manual test scenario for a **medior tester** who:
+
+- tests **primarily through the front-end**
+- can read **basic data from the browser console or network** (e.g. a visible toast, or
+  SUCCESS/DANGER in the response of the UI call they just triggered)
+- **has no database access**
+- **does not test the back-end API** on its own (no SQL, no direct procedure/API calls, no
+  checking tables or server-only fields)
+
+Describe setup and steps in UI terms: what to click, what should appear or disappear on screen,
+what message/toast they should see. Pass/fail must be observable in the UI (optionally confirmed
+in console/network). Never ask them to verify DB rows, `RequestChange`, ModifiedDate, or to call
+an endpoint outside the application.
 
 ## 3. Changing a ticket's status
 
