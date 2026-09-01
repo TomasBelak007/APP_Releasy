@@ -3183,7 +3183,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-08-26T08:52:34.000Z'
+            updatedAt: '2026-09-01T17:09:00.000Z'
         };
 
         // ===== API Configuration =====
@@ -3897,76 +3897,52 @@
 
         const SORT_FIELDS = new Set([
             'System.State',
-            'System.Title',
             'System.WorkItemType',
-            'Microsoft.VSTS.Common.Priority',
-            'Microsoft.VSTS.Common.Severity'
+            'Microsoft.VSTS.Common.Priority'
         ]);
 
         // ===== Sorting Functions =====
         function sortWorkItems(items) {
-            // State priority order: Evaluation, New, On Hold, Active, Resolved, Closed
+            // Evaluation → New → Active → Resolved → Closed → On Hold → Removed
             const stateOrder = {
                 'Evaluation': 1,
                 'New': 2,
-                'On Hold': 3,
-                'Active': 4,
-                'Resolved': 5,
-                'Closed': 6
+                'Active': 3,
+                'Resolved': 4,
+                'Closed': 5,
+                'On Hold': 6,
+                'Removed': 7
             };
-            
-            // Komplexní porovnání: Status -> Priority -> Severity -> Title
+            const typeOrder = { 'Bug': 1, 'Feature': 2 };
+
             const compareItems = (a, b) => {
-                const stateA = a.fields['System.State'] || '';
-                const stateB = b.fields['System.State'] || '';
-                
-                // 1. Porovnání podle statusu
-                const orderA = stateOrder[stateA] || 999;
-                const orderB = stateOrder[stateB] || 999;
-                if (orderA !== orderB) {
-                    return orderA - orderB;
-                }
-                
-                // 2. Porovnání podle priority (nižší = vyšší priorita, 1 je nejvyšší)
-                // Konvertovat na číslo a zabezpečit správné sortování od 1 po 4
+                const orderA = stateOrder[a.fields['System.State'] || ''] || 999;
+                const orderB = stateOrder[b.fields['System.State'] || ''] || 999;
+                if (orderA !== orderB) return orderA - orderB;
+
                 const priorityA = parseInt(a.fields['Microsoft.VSTS.Common.Priority']) || 999;
                 const priorityB = parseInt(b.fields['Microsoft.VSTS.Common.Priority']) || 999;
-                if (priorityA !== priorityB) {
-                    return priorityA - priorityB; // 1 pred 2, 2 pred 3, 3 pred 4
-                }
-                
-                // 3. Porovnání podle severity (nižší = vyšší severity, 1 je nejvyšší)
-                // Konvertovat na číslo a zabezpečit správné sortování od 1 po 4
-                const severityA = parseInt(a.fields['Microsoft.VSTS.Common.Severity']) || 999;
-                const severityB = parseInt(b.fields['Microsoft.VSTS.Common.Severity']) || 999;
-                if (severityA !== severityB) {
-                    return severityA - severityB; // 1 pred 2, 2 pred 3, 3 pred 4
-                }
-                
-                // 4. Porovnání podle title abecedně
-                const titleA = (a.fields['System.Title'] || '').toLowerCase();
-                const titleB = (b.fields['System.Title'] || '').toLowerCase();
-                return titleA.localeCompare(titleB, 'cs', { sensitivity: 'base' });
+                if (priorityA !== priorityB) return priorityA - priorityB;
+
+                const typeA = typeOrder[a.fields['System.WorkItemType']] || 999;
+                const typeB = typeOrder[b.fields['System.WorkItemType']] || 999;
+                if (typeA !== typeB) return typeA - typeB;
+
+                return (a.id || 0) - (b.id || 0);
             };
-            
+
             const releaseFeatures = [];
-            const features = [];
-            const bugs = [];
-            
+            const rest = [];
             for (const item of items) {
                 const type = item.fields['System.WorkItemType'];
                 const title = item.fields['System.Title'] || '';
                 if (type === 'Feature' && title.startsWith('Release')) releaseFeatures.push(item);
-                else if (type === 'Feature') features.push(item);
-                else if (type === 'Bug') bugs.push(item);
+                else rest.push(item);
             }
-            
-            // Seřadit každou kategorii podle nového sortování
+
             releaseFeatures.sort(compareItems);
-            features.sort(compareItems);
-            bugs.sort(compareItems);
-            
-            return [...releaseFeatures, ...features, ...bugs];
+            rest.sort(compareItems);
+            return [...releaseFeatures, ...rest];
         }
 
         // ===== PAT Modal Management =====
