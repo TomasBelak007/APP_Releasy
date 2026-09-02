@@ -3065,6 +3065,7 @@
                           :class="createdInfo.class" :title="'Created: ' + createdDate">{{ createdInfo.text }}</span>
                     <span v-for="badge in openTaskPrefixBadges" :key="badge.prefix"
                           class="task-prefix-open-badge"
+                          :style="{ backgroundColor: badge.color }"
                           :title="'Open ' + badge.prefix + ' tasks (' + badge.count + ')'">{{ badge.letter }}</span>
                     <button v-if="!isChild && store.canWrite" class="add-task-btn" title="Create Child Task"
                             @click.stop="openCreateTaskModal(item.id, title)">
@@ -3207,7 +3208,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-02T11:02:08.000Z'
+            updatedAt: '2026-09-02T20:11:57.000Z'
         };
 
         // ===== API Configuration =====
@@ -3310,6 +3311,19 @@
 
         // ===== Title Prefixes Task Configuration =====
         const titlePrefixesTask = ['DEV', 'UX/UI', 'ISSUE', 'API', 'UNIT', 'TEST', 'DOCU', 'CHECK', 'OTHER'];
+        // One-letter pills next to the parent title. Keys must stay in sync with titlePrefixesTask;
+        // letters and colors are unique so prefixes stay distinguishable at a glance.
+        const TASK_PREFIX_BADGES = {
+            DEV:     { letter: 'D', color: '#17a2b8' },
+            'UX/UI': { letter: 'X', color: '#7c3aed' },
+            ISSUE:   { letter: 'I', color: '#dc3545' },
+            API:     { letter: 'A', color: '#0d6efd' },
+            UNIT:    { letter: 'U', color: '#0ea5e9' },
+            TEST:    { letter: 'T', color: '#28a745' },
+            DOCU:    { letter: 'C', color: '#d97706' },
+            CHECK:   { letter: 'K', color: '#fd7e14' },
+            OTHER:   { letter: 'O', color: '#6c757d' }
+        };
 
         // ===== Available patch versions Configuration =====
         const availablePatchVersions = [
@@ -6626,7 +6640,13 @@
             for (const prefix of titlePrefixesTask) {
                 const count = groups.get(prefix);
                 if (count > 0) {
-                    result.push({ prefix, letter: prefix.charAt(0), count });
+                    const meta = TASK_PREFIX_BADGES[prefix];
+                    result.push({
+                        prefix,
+                        letter: (meta && meta.letter) || prefix.charAt(0),
+                        color: (meta && meta.color) || '',
+                        count
+                    });
                 }
             }
             return result;
