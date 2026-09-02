@@ -118,10 +118,27 @@ add regression of unrelated existing behaviour, "while you're there" checks, or 
 exercise screens, fields, or flows that were not part of the change. If a step is not needed to
 confirm the change works, leave it out.
 
-**Unrelated findings.** Put this in the TEST description: issues found during the test that are
-**not a direct consequence of this change** must **not** fail this TEST task. File them as a new
-Bug or Feature on the **correct product** (Xeelo, XeeloAdmin, Integray, Repository, Connectors —
-whichever application actually has the issue).
+**Always use this structure** (this order, these headings). Write the body in the language of
+the parent ticket / tester (typically Czech or Slovak).
+
+```
+**Príprava**
+- data and/or settings needed before the steps (object, fields, sample values, language, …)
+
+**Kroky**
+1. …
+2. …
+
+Issue nájdené pri teste, ktoré priamo nesúvisia s touto zmenou, tento TEST task nefailujú. Zadaj ich ako nový Bug alebo Feature na správny produkt (Xeelo, XeeloAdmin, Integray, Repository, Connectors).
+```
+
+- **Príprava** — include only when data or settings are needed; omit the whole section if the
+  tester can start from a normal screen with nothing extra prepared.
+- **Kroky** — always present. Numbered steps that test only the change. Put the expected UI
+  result in the step itself (no extra Pass/Fail section, no unrelated checks).
+- **Disclaimer** — always last, verbatim. Issues found during the test that are **not a direct
+  consequence of this change** must **not** fail this TEST task; file them as a new Bug or
+  Feature on the **correct product**.
 
 ## 3. Changing a ticket's status
 

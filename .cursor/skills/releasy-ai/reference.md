@@ -37,7 +37,7 @@ dedicated PAT for this skill, separate from the repo's own `dev.env` (see `AGENT
 | Field | Path | Notes |
 |---|---|---|
 | Title | `System.Title` | `"<prefix> - <text>"`, `prefix` must be one of `titlePrefixesTask`. |
-| Description | `System.Description` | No ReproSteps variant. Draft per **Child task content (DEV vs TEST)** in SKILL.md: DEV may be technical and split SQL vs back-end+front-end as the requester asked; TEST is a front-end manual scenario for a medior tester (console/network ok, no DB, no back-end API testing) covering **only the change**; unrelated findings go to a new Bug/Feature on the correct product. |
+| Description | `System.Description` | No ReproSteps variant. Draft per **Child task content (DEV vs TEST)** in SKILL.md: DEV may be technical and split SQL vs back-end+front-end as the requester asked; TEST is a front-end manual scenario for a medior tester (console/network ok, no DB, no back-end API testing) covering **only the change**, always structured as **Príprava** (data/settings, omit if none) → **Kroky** → the unrelated-findings disclaimer (new Bug/Feature on the correct product). |
 | Description format | `/multilineFieldsFormat/System.Description` | Same Markdown-only rule as above. |
 | Assignee | `System.AssignedTo` | Optional. |
 | Parent | relation | `System.LinkTypes.Hierarchy-Reverse` -> `.../wit/workitems/<parentId>`. |
