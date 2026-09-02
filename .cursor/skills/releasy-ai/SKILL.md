@@ -113,6 +113,16 @@ what message/toast they should see. Pass/fail must be observable in the UI (opti
 in console/network). Never ask them to verify DB rows, `RequestChange`, ModifiedDate, or to call
 an endpoint outside the application.
 
+**Scope — only the change.** The test case must cover **only what this ticket changes**. Do not
+add regression of unrelated existing behaviour, "while you're there" checks, or steps that
+exercise screens, fields, or flows that were not part of the change. If a step is not needed to
+confirm the change works, leave it out.
+
+**Unrelated findings.** Put this in the TEST description: issues found during the test that are
+**not a direct consequence of this change** must **not** fail this TEST task. File them as a new
+Bug or Feature on the **correct product** (Xeelo, XeeloAdmin, Integray, Repository, Connectors —
+whichever application actually has the issue).
+
 ## 3. Changing a ticket's status
 
 1. Load the ticket (`get-ticket.mjs`) to see its current type and state if not already loaded.
