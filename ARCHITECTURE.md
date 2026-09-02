@@ -163,6 +163,12 @@ Store methods: `isExpanded`, `toggleExpanded`, `expandAll`, `collapseAll`, `togg
 `moveWorkItemPatch`, `insertWorkItem`, `addWorkItem`, `addChildTask`, `resortPatchContaining`,
 `forEachWorkItem`.
 
+`expanded` is **per product**: `{ Xeelo: { releases, majors, patches }, XeeloAdmin: { ... }, ... }`.
+`isExpanded` / `toggleExpanded` / `expandAll` / `collapseAll` / `visibleParentIds` go through
+`expandedOf(store)` so they only read/write `store.expanded[activeProduct]`. Switching tabs
+therefore restores that product's last expand tree instead of looking fully collapsed. `expandAll`
+and `collapseAll` never wipe another product's slice.
+
 Derived (`VUE LAYER > Derived state`):
 
 | Computed | Meaning |
@@ -526,6 +532,9 @@ modes:
   `readExpandedSections()` / `readHiddenVersions()` merge it forward - keep that shim. The old
   `expanded.workItems` key is dropped on read; the empty inline row expand is gone and a header
   click opens the detail modal.
+- **Legacy flat `expanded_sections`**: `{ releases, majors, patches }` (one list for all products).
+  `readExpandedSections()` splits those ids onto products by the release prefix (`Labe-` → Xeelo,
+  `Odra-` → XeeloAdmin, …) and then persists the per-product map. Keep that migration.
 - **Collapsed majors/patches are not mounted** (`v-if`). Task-dot fetch follows `visibleParentIds`,
   which is only expanded patches, so the first expand of a patch may briefly show the hollow ring
   until that batch lands.
