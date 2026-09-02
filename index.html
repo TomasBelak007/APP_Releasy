@@ -3184,7 +3184,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-02T09:16:53.000Z'
+            updatedAt: '2026-09-02T11:02:08.000Z'
         };
 
         // ===== API Configuration =====
@@ -6439,18 +6439,54 @@
             }
         }
 
-        function readExpandedSections() {
-            const sections = readJSON('expanded_sections', { releases: [], majors: [], patches: [] });
-            // Pick up state written by the original under the mistaken 'patchs' key
-            if (Array.isArray(sections.patchs)) {
-                sections.patches = [...new Set([...(sections.patches || []), ...sections.patchs])];
-                delete sections.patchs;
-            }
+        function emptyExpandedSlice() {
+            return { releases: [], majors: [], patches: [] };
+        }
+
+        function productForSectionId(id) {
+            const release = String(id || '').split('-')[0];
+            const row = releaseNames.find(r => r.release === release);
+            return row ? row.product : null;
+        }
+
+        function normalizeExpandedSlice(slice) {
+            const src = slice && typeof slice === 'object' && !Array.isArray(slice) ? slice : {};
+            const patches = [...(src.patches || [])];
+            if (Array.isArray(src.patchs)) patches.push(...src.patchs);
             return {
-                releases: sections.releases || [],
-                majors: sections.majors || [],
-                patches: sections.patches || []
+                releases: src.releases || [],
+                majors: src.majors || [],
+                patches: [...new Set(patches)]
             };
+        }
+
+        function readExpandedSections() {
+            const raw = readJSON('expanded_sections', {});
+            const products = releaseNames.map(r => r.product);
+            const out = {};
+            for (const product of products) out[product] = emptyExpandedSlice();
+
+            const isPerProduct = products.some(p => raw[p] && typeof raw[p] === 'object' && !Array.isArray(raw[p]));
+            if (isPerProduct) {
+                for (const product of products) out[product] = normalizeExpandedSlice(raw[product]);
+                return out;
+            }
+
+            // Legacy flat { majors, patches, releases } — split onto products by release name.
+            const flat = normalizeExpandedSlice(raw);
+            for (const type of ['releases', 'majors', 'patches']) {
+                for (const id of flat[type]) {
+                    const product = productForSectionId(id);
+                    if (product && out[product]) out[product][type].push(id);
+                }
+            }
+            return out;
+        }
+
+        function expandedOf(target) {
+            const product = target.activeProduct;
+            if (!target.expanded[product]) target.expanded[product] = emptyExpandedSlice();
+            return target.expanded[product];
         }
 
         function readHiddenVersions() {
@@ -6675,32 +6711,34 @@
 
             // --- expand / collapse ---
             isExpanded(type, id) {
-                return this.expanded[EXPAND_KEYS[type]].includes(id);
+                return expandedOf(this)[EXPAND_KEYS[type]].includes(id);
             },
             toggleExpanded(type, id) {
-                const list = this.expanded[EXPAND_KEYS[type]];
+                const slice = expandedOf(this);
+                const list = slice[EXPAND_KEYS[type]];
                 const index = list.indexOf(id);
                 if (index > -1) {
                     list.splice(index, 1);
                     // Collapsing a level collapses everything under it
                     if (type === 'major') {
-                        this.expanded.patches = this.expanded.patches.filter(p => !p.startsWith(id + '.'));
+                        slice.patches = slice.patches.filter(p => !p.startsWith(id + '.'));
                     }
                 } else {
                     list.push(id);
                     // Expanding a patch has to open its ancestors
                     if (type === 'patch') {
                         const majorId = id.replace(/\.\d+$/, '');
-                        if (!this.expanded.majors.includes(majorId)) this.expanded.majors.push(majorId);
+                        if (!slice.majors.includes(majorId)) slice.majors.push(majorId);
                     }
                 }
             },
             expandAll() {
-                this.expanded.majors = this.allMajorIds.filter(id => !this.hidden.majors.includes(id));
-                this.expanded.patches = this.allPatchIds.slice();
+                const slice = expandedOf(this);
+                slice.majors = this.allMajorIds.filter(id => !this.hidden.majors.includes(id));
+                slice.patches = this.allPatchIds.slice();
             },
             collapseAll() {
-                this.expanded = { releases: [], majors: [], patches: [] };
+                this.expanded[this.activeProduct] = emptyExpandedSlice();
             },
 
             // --- hidden versions ---
@@ -7009,11 +7047,11 @@
                 for (const major of Object.keys(byMajor)) {
                     const majorId = `${release}-${major}`;
                     if (store.hidden.majors.includes(majorId)) continue;
-                    if (!store.expanded.majors.includes(majorId)) continue;
+                    if (!expandedOf(store).majors.includes(majorId)) continue;
                     for (const patch of Object.keys(byMajor[major])) {
                         const patchId = `${release}-${major}.${patch}`;
                         if (store.hidden.patches.includes(patchId)) continue;
-                        if (!store.expanded.patches.includes(patchId)) continue;
+                        if (!expandedOf(store).patches.includes(patchId)) continue;
                         byMajor[major][patch].forEach(item => ids.add(item.id));
                     }
                 }
