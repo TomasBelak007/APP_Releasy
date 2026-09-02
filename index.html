@@ -2175,7 +2175,8 @@
                             :disabled="store.taskModeBusy" @click="toggleTaskMode()" :title="taskModeTitle">
                         <i class="fa-solid" :class="store.taskModeBusy ? 'fa-spinner fa-spin' : 'fa-clipboard-list'"></i>
                     </button>
-                    <button class="btn btn-outline-primary" @click="store.expandAllMajors()">Expand All</button>
+                    <button class="btn btn-outline-primary" @click="store.expandAll()"
+                            title="Expand all majors and patches of the current product">Expand All</button>
                     <button class="btn btn-outline-secondary" @click="store.collapseAll()">Collapse All</button>
                 </div>
                 <div class="grid-search-container">
@@ -3183,7 +3184,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-01T17:09:00.000Z'
+            updatedAt: '2026-09-02T09:16:53.000Z'
         };
 
         // ===== API Configuration =====
@@ -6694,9 +6695,9 @@
                     }
                 }
             },
-            expandAllMajors() {
+            expandAll() {
                 this.expanded.majors = this.allMajorIds.filter(id => !this.hidden.majors.includes(id));
-                this.expanded.patches = [];
+                this.expanded.patches = this.allPatchIds.slice();
             },
             collapseAll() {
                 this.expanded = { releases: [], majors: [], patches: [] };
@@ -6865,6 +6866,24 @@
                 for (const major of Object.keys(releases[release] || {})) ids.add(`${release}-${major}`);
             }
             return [...ids];
+        });
+
+        store.allPatchIds = computed(() => {
+            const ids = [];
+            for (const { product, release, releases } of store.releaseResults) {
+                if (product !== store.activeProduct) continue;
+                const byMajor = releases[release] || {};
+                for (const major of Object.keys(byMajor)) {
+                    const majorId = `${release}-${major}`;
+                    if (store.hidden.majors.includes(majorId)) continue;
+                    for (const patch of Object.keys(byMajor[major])) {
+                        const patchId = `${release}-${major}.${patch}`;
+                        if (store.hidden.patches.includes(patchId)) continue;
+                        ids.push(patchId);
+                    }
+                }
+            }
+            return ids;
         });
 
         store.canWrite = computed(() => store.permission === 'write');
