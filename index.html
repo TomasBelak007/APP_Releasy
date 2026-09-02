@@ -2195,7 +2195,8 @@
                             :disabled="store.taskModeBusy" @click="toggleTaskMode()" :title="taskModeTitle">
                         <i class="fa-solid" :class="store.taskModeBusy ? 'fa-spinner fa-spin' : 'fa-clipboard-list'"></i>
                     </button>
-                    <button class="btn btn-outline-primary" @click="store.expandAllMajors()">Expand All</button>
+                    <button class="btn btn-outline-primary" @click="store.expandAll()"
+                            title="Expand all majors and patches of the current product">Expand All</button>
                     <button class="btn btn-outline-secondary" @click="store.collapseAll()">Collapse All</button>
                 </div>
                 <div class="grid-search-container">
@@ -3206,7 +3207,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-08-26T20:42:55.000Z'
+            updatedAt: '2026-09-02T11:02:08.000Z'
         };
 
         // ===== API Configuration =====
@@ -3920,76 +3921,52 @@
 
         const SORT_FIELDS = new Set([
             'System.State',
-            'System.Title',
             'System.WorkItemType',
-            'Microsoft.VSTS.Common.Priority',
-            'Microsoft.VSTS.Common.Severity'
+            'Microsoft.VSTS.Common.Priority'
         ]);
 
         // ===== Sorting Functions =====
         function sortWorkItems(items) {
-            // State priority order: Evaluation, New, On Hold, Active, Resolved, Closed
+            // Evaluation → New → Active → Resolved → Closed → On Hold → Removed
             const stateOrder = {
                 'Evaluation': 1,
                 'New': 2,
-                'On Hold': 3,
-                'Active': 4,
-                'Resolved': 5,
-                'Closed': 6
+                'Active': 3,
+                'Resolved': 4,
+                'Closed': 5,
+                'On Hold': 6,
+                'Removed': 7
             };
-            
-            // Komplexní porovnání: Status -> Priority -> Severity -> Title
+            const typeOrder = { 'Bug': 1, 'Feature': 2 };
+
             const compareItems = (a, b) => {
-                const stateA = a.fields['System.State'] || '';
-                const stateB = b.fields['System.State'] || '';
-                
-                // 1. Porovnání podle statusu
-                const orderA = stateOrder[stateA] || 999;
-                const orderB = stateOrder[stateB] || 999;
-                if (orderA !== orderB) {
-                    return orderA - orderB;
-                }
-                
-                // 2. Porovnání podle priority (nižší = vyšší priorita, 1 je nejvyšší)
-                // Konvertovat na číslo a zabezpečit správné sortování od 1 po 4
+                const orderA = stateOrder[a.fields['System.State'] || ''] || 999;
+                const orderB = stateOrder[b.fields['System.State'] || ''] || 999;
+                if (orderA !== orderB) return orderA - orderB;
+
                 const priorityA = parseInt(a.fields['Microsoft.VSTS.Common.Priority']) || 999;
                 const priorityB = parseInt(b.fields['Microsoft.VSTS.Common.Priority']) || 999;
-                if (priorityA !== priorityB) {
-                    return priorityA - priorityB; // 1 pred 2, 2 pred 3, 3 pred 4
-                }
-                
-                // 3. Porovnání podle severity (nižší = vyšší severity, 1 je nejvyšší)
-                // Konvertovat na číslo a zabezpečit správné sortování od 1 po 4
-                const severityA = parseInt(a.fields['Microsoft.VSTS.Common.Severity']) || 999;
-                const severityB = parseInt(b.fields['Microsoft.VSTS.Common.Severity']) || 999;
-                if (severityA !== severityB) {
-                    return severityA - severityB; // 1 pred 2, 2 pred 3, 3 pred 4
-                }
-                
-                // 4. Porovnání podle title abecedně
-                const titleA = (a.fields['System.Title'] || '').toLowerCase();
-                const titleB = (b.fields['System.Title'] || '').toLowerCase();
-                return titleA.localeCompare(titleB, 'cs', { sensitivity: 'base' });
+                if (priorityA !== priorityB) return priorityA - priorityB;
+
+                const typeA = typeOrder[a.fields['System.WorkItemType']] || 999;
+                const typeB = typeOrder[b.fields['System.WorkItemType']] || 999;
+                if (typeA !== typeB) return typeA - typeB;
+
+                return (a.id || 0) - (b.id || 0);
             };
-            
+
             const releaseFeatures = [];
-            const features = [];
-            const bugs = [];
-            
+            const rest = [];
             for (const item of items) {
                 const type = item.fields['System.WorkItemType'];
                 const title = item.fields['System.Title'] || '';
                 if (type === 'Feature' && title.startsWith('Release')) releaseFeatures.push(item);
-                else if (type === 'Feature') features.push(item);
-                else if (type === 'Bug') bugs.push(item);
+                else rest.push(item);
             }
-            
-            // Seřadit každou kategorii podle nového sortování
+
             releaseFeatures.sort(compareItems);
-            features.sort(compareItems);
-            bugs.sort(compareItems);
-            
-            return [...releaseFeatures, ...features, ...bugs];
+            rest.sort(compareItems);
+            return [...releaseFeatures, ...rest];
         }
 
         // ===== PAT Modal Management =====
@@ -6485,18 +6462,54 @@
             }
         }
 
-        function readExpandedSections() {
-            const sections = readJSON('expanded_sections', { releases: [], majors: [], patches: [] });
-            // Pick up state written by the original under the mistaken 'patchs' key
-            if (Array.isArray(sections.patchs)) {
-                sections.patches = [...new Set([...(sections.patches || []), ...sections.patchs])];
-                delete sections.patchs;
-            }
+        function emptyExpandedSlice() {
+            return { releases: [], majors: [], patches: [] };
+        }
+
+        function productForSectionId(id) {
+            const release = String(id || '').split('-')[0];
+            const row = releaseNames.find(r => r.release === release);
+            return row ? row.product : null;
+        }
+
+        function normalizeExpandedSlice(slice) {
+            const src = slice && typeof slice === 'object' && !Array.isArray(slice) ? slice : {};
+            const patches = [...(src.patches || [])];
+            if (Array.isArray(src.patchs)) patches.push(...src.patchs);
             return {
-                releases: sections.releases || [],
-                majors: sections.majors || [],
-                patches: sections.patches || []
+                releases: src.releases || [],
+                majors: src.majors || [],
+                patches: [...new Set(patches)]
             };
+        }
+
+        function readExpandedSections() {
+            const raw = readJSON('expanded_sections', {});
+            const products = releaseNames.map(r => r.product);
+            const out = {};
+            for (const product of products) out[product] = emptyExpandedSlice();
+
+            const isPerProduct = products.some(p => raw[p] && typeof raw[p] === 'object' && !Array.isArray(raw[p]));
+            if (isPerProduct) {
+                for (const product of products) out[product] = normalizeExpandedSlice(raw[product]);
+                return out;
+            }
+
+            // Legacy flat { majors, patches, releases } — split onto products by release name.
+            const flat = normalizeExpandedSlice(raw);
+            for (const type of ['releases', 'majors', 'patches']) {
+                for (const id of flat[type]) {
+                    const product = productForSectionId(id);
+                    if (product && out[product]) out[product][type].push(id);
+                }
+            }
+            return out;
+        }
+
+        function expandedOf(target) {
+            const product = target.activeProduct;
+            if (!target.expanded[product]) target.expanded[product] = emptyExpandedSlice();
+            return target.expanded[product];
         }
 
         function readHiddenVersions() {
@@ -6743,32 +6756,34 @@
 
             // --- expand / collapse ---
             isExpanded(type, id) {
-                return this.expanded[EXPAND_KEYS[type]].includes(id);
+                return expandedOf(this)[EXPAND_KEYS[type]].includes(id);
             },
             toggleExpanded(type, id) {
-                const list = this.expanded[EXPAND_KEYS[type]];
+                const slice = expandedOf(this);
+                const list = slice[EXPAND_KEYS[type]];
                 const index = list.indexOf(id);
                 if (index > -1) {
                     list.splice(index, 1);
                     // Collapsing a level collapses everything under it
                     if (type === 'major') {
-                        this.expanded.patches = this.expanded.patches.filter(p => !p.startsWith(id + '.'));
+                        slice.patches = slice.patches.filter(p => !p.startsWith(id + '.'));
                     }
                 } else {
                     list.push(id);
                     // Expanding a patch has to open its ancestors
                     if (type === 'patch') {
                         const majorId = id.replace(/\.\d+$/, '');
-                        if (!this.expanded.majors.includes(majorId)) this.expanded.majors.push(majorId);
+                        if (!slice.majors.includes(majorId)) slice.majors.push(majorId);
                     }
                 }
             },
-            expandAllMajors() {
-                this.expanded.majors = this.allMajorIds.filter(id => !this.hidden.majors.includes(id));
-                this.expanded.patches = [];
+            expandAll() {
+                const slice = expandedOf(this);
+                slice.majors = this.allMajorIds.filter(id => !this.hidden.majors.includes(id));
+                slice.patches = this.allPatchIds.slice();
             },
             collapseAll() {
-                this.expanded = { releases: [], majors: [], patches: [] };
+                this.expanded[this.activeProduct] = emptyExpandedSlice();
             },
 
             // --- hidden versions ---
@@ -6936,6 +6951,24 @@
             return [...ids];
         });
 
+        store.allPatchIds = computed(() => {
+            const ids = [];
+            for (const { product, release, releases } of store.releaseResults) {
+                if (product !== store.activeProduct) continue;
+                const byMajor = releases[release] || {};
+                for (const major of Object.keys(byMajor)) {
+                    const majorId = `${release}-${major}`;
+                    if (store.hidden.majors.includes(majorId)) continue;
+                    for (const patch of Object.keys(byMajor[major])) {
+                        const patchId = `${release}-${major}.${patch}`;
+                        if (store.hidden.patches.includes(patchId)) continue;
+                        ids.push(patchId);
+                    }
+                }
+            }
+            return ids;
+        });
+
         store.canWrite = computed(() => store.permission === 'write');
 
         store.resolvedTheme = computed(() =>
@@ -7059,11 +7092,11 @@
                 for (const major of Object.keys(byMajor)) {
                     const majorId = `${release}-${major}`;
                     if (store.hidden.majors.includes(majorId)) continue;
-                    if (!store.expanded.majors.includes(majorId)) continue;
+                    if (!expandedOf(store).majors.includes(majorId)) continue;
                     for (const patch of Object.keys(byMajor[major])) {
                         const patchId = `${release}-${major}.${patch}`;
                         if (store.hidden.patches.includes(patchId)) continue;
-                        if (!store.expanded.patches.includes(patchId)) continue;
+                        if (!expandedOf(store).patches.includes(patchId)) continue;
                         byMajor[major][patch].forEach(item => ids.add(item.id));
                     }
                 }

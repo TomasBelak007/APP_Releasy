@@ -107,6 +107,10 @@ Install deps once if needed: `pip install -r requirements.txt` (from this folder
 {
   "version": "Labe-07.013",
   "release_date": "18 August 2026",
+  "notice": {
+    "title": "Optional callout heading.",
+    "paragraphs": ["Optional highlighted box at the top of the document, rendered in a red frame. Omit the whole key when there is no callout."]
+  },
   "features": [
     "Smoother Time Picker Navigation. Moving the cursor between hours, minutes, and seconds no longer clears the value that was just entered..."
   ],

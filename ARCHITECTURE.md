@@ -158,10 +158,16 @@ functions in [Load / reload](#flows-what-calls-what); there is no more single `l
 since loading is per-product now. `loadingTaskDotIds` / `taskDotFetchGen` drive the background
 child-task fetch, which is **not** gated on Task Mode.
 
-Store methods: `isExpanded`, `toggleExpanded`, `expandAllMajors`, `collapseAll`, `toggleHidden`,
+Store methods: `isExpanded`, `toggleExpanded`, `expandAll`, `collapseAll`, `toggleHidden`,
 `unhide`, `openUnhideModal`, `openFilterModal`, `setFilters`, `clearFilters`, `applyFieldUpdate`,
 `moveWorkItemPatch`, `insertWorkItem`, `addWorkItem`, `addChildTask`, `resortPatchContaining`,
 `forEachWorkItem`.
+
+`expanded` is **per product**: `{ Xeelo: { releases, majors, patches }, XeeloAdmin: { ... }, ... }`.
+`isExpanded` / `toggleExpanded` / `expandAll` / `collapseAll` / `visibleParentIds` go through
+`expandedOf(store)` so they only read/write `store.expanded[activeProduct]`. Switching tabs
+therefore restores that product's last expand tree instead of looking fully collapsed. `expandAll`
+and `collapseAll` never wipe another product's slice.
 
 Derived (`VUE LAYER > Derived state`):
 
@@ -170,6 +176,7 @@ Derived (`VUE LAYER > Derived state`):
 | `products` | Product tabs, from `releaseNames` **configuration** - static, so all 5 tabs are always visible/clickable regardless of what has been fetched |
 | `isActiveProductLoading` | `true` while `activeProduct` has no entry in `releaseResults` yet, or is in `loadingProducts` — but only when a PAT is stored (`store.pat.configured`) and the PAT modal is not open; drives the grid's loading spinner (which must never cover the PAT form) |
 | `allMajorIds` | All `release-major` ids **for `activeProduct` only** (for Expand All) |
+| `allPatchIds` | All `release-major.patch` ids **for `activeProduct` only**, skipping hidden majors/patches (so Expand All can open Bugs/Features) |
 | `canWrite` | `permission === 'write'` - **the single gate for every edit affordance** |
 | `resolvedTheme` | `theme`, with `auto` resolved through `systemPrefersDark` |
 | `hiddenCount`, `activeFilterCount` | Badge counters |
@@ -527,6 +534,9 @@ modes:
   `readExpandedSections()` / `readHiddenVersions()` merge it forward - keep that shim. The old
   `expanded.workItems` key is dropped on read; the empty inline row expand is gone and a header
   click opens the detail modal.
+- **Legacy flat `expanded_sections`**: `{ releases, majors, patches }` (one list for all products).
+  `readExpandedSections()` splits those ids onto products by the release prefix (`Labe-` → Xeelo,
+  `Odra-` → XeeloAdmin, …) and then persists the per-product map. Keep that migration.
 - **Collapsed majors/patches are not mounted** (`v-if`). Task-dot fetch follows `visibleParentIds`,
   which is only expanded patches, so the first expand of a patch may briefly show the hollow ring
   until that batch lands.

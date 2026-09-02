@@ -274,8 +274,8 @@
                     <div id="help-expand" class="help-section">
                         <h4><i class="fa-solid fa-angles-down"></i> Expand All / Collapse All</h4>
                         <ul>
-                            <li><strong>Expand All:</strong> Expands all releases and major versions (patches stay collapsed)</li>
-                            <li><strong>Collapse All:</strong> Collapses everything to the top level</li>
+                            <li><strong>Expand All:</strong> Expands all major versions <em>and</em> their patches for the current product, so Bugs and Features are visible. Hidden versions stay hidden. Other products keep their own expand/collapse state.</li>
+                            <li><strong>Collapse All:</strong> Collapses the current product to the top level. Other products are unchanged.</li>
                         </ul>
                     </div>
 
@@ -831,10 +831,10 @@
                     <div id="help-tips" class="help-section">
                         <h4><i class="fa-solid fa-lightbulb"></i> Tips & Shortcuts</h4>
                         <ul>
-                            <li>Your view preferences (expanded sections, hidden versions) are saved and persist across sessions</li>
+                            <li>Your view preferences (expanded/collapsed sections <em>per product</em>, hidden versions) are saved and persist across sessions</li>
                             <li>Press <code>ESC</code> to close any modal dialog</li>
                             <li>Click outside a modal to close it</li>
-                            <li>Work items are sorted by status priority: Evaluation → New → Active → Resolved → Closed</li>
+                            <li>Work items in a patch: the Release container stays at the top; the rest sort by status (Evaluation → New → Active → Resolved → Closed → On Hold → Removed), then priority, then type (Bug before Feature), then ID</li>
                             <li>Click on any work item title to open the <strong>Work Item Detail</strong> modal (use the "Open in DevOps" button inside the modal to navigate to Azure DevOps)</li>
                         </ul>
                     </div>
