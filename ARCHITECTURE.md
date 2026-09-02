@@ -242,7 +242,7 @@ Defined in `VUE LAYER > Components`, templates from `<script type="text/x-templa
 | `MarkdownEditor` | `tpl-markdown-editor` | `editorId`, `toolbarId`, `markdown`, `editable`, `minHeight` | Markdown counterpart of `HtmlEditor`. In the detail modal it is used when `d.descriptionFormat === 'Markdown'`, either detected from the server or chosen via the format toggle's HTML->Markdown conversion (see [Detail modal](#flows-what-calls-what)); in both create forms it is used when the user picks Markdown in the format toggle (`form.descriptionFormat`). Edit/Preview toggle - opens in Preview if there is content, straight into Edit if the field is empty (`render()`); edit mode is a plain `<textarea>` (Markdown source, toolbar from `MARKDOWN_TOOLBAR_BUTTONS`), preview mode renders `marked.parse()` output into a `v-html` div; **uncontrolled** like `HtmlEditor` - content read back with `readMarkdownEditorText(editorId)`; emits `rendered` (with the preview container, so image auth fix-up runs the same way) |
 | `ProgressBar` | `tpl-progress-bar` | `items` | Segments per state in `PROGRESS_ORDER`, colors from `STATE_COLORS` |
 | `PriorityCell` | `tpl-priority-cell` | `item` | Priority / severity (Bug) / t-shirt (Feature) badges, each opening its picker |
-| `WorkItemRow` | `tpl-work-item-row` | `item`, `isChild`, `parentId` | Icon by type, clickable state/assignee badges; the row header opens the detail modal; parent rows show at most 6 task-status dots (`pickVisibleTaskDots` / `allocateTaskDotQuota`: ≥1 per present status, leftover proportional) in a fixed-width slot left of the status badge; hover lists every child task, each row opening that task's detail modal |
+| `WorkItemRow` | `tpl-work-item-row` | `item`, `isChild`, `parentId` | Icon by type, clickable state/assignee badges; the row header opens the detail modal; parent rows show at most 6 task-status dots (`pickVisibleTaskDots` / `allocateTaskDotQuota`: ≥1 per present status, leftover proportional) in a fixed-width slot left of the status badge; hover lists every child task, each row opening that task's detail modal. Title column also shows a one-letter prefix pill (`openTaskPrefixes`) for each `titlePrefixesTask` prefix that still has a non-`Closed` child |
 | `PatchSection` | `tpl-patch-section` | `node` | A patch: header, progress bar, Markdown export, Build Changes, create; work-item rows mount only while the patch is expanded (`v-if`); `rows` interleaves parents with `node.childRowsByParent` as siblings |
 | grid root | `tpl-releasy-grid` | - | Product tabs + releases + majors, mounted on `#content`; patch sections mount only while the major is expanded |
 
@@ -300,8 +300,10 @@ into `childTasks`, including empty arrays for parents with no tasks. The row ren
 every present status gets at least one dot (when there are ≤ 6 statuses); leftover slots are split
 proportionally by remaining task counts (largest remainder), so 10 New / 3 Active / 15 Closed
 becomes 2 + 1 + 3. Hover lists every task (title + assignee badge + status badge), scrolled if needed; a click
-opens that task via `openWorkItemDetailModal(id)`. The dots slot and status badge have fixed
-widths so assignee/status columns stay aligned across rows. `addWorkItem()` seeds an empty array
+opens that task via `openWorkItemDetailModal(id)`. The same `taskDotAllItems` feed
+`openTaskPrefixes()`: a one-letter pill (D, T, C, …) next to the title for each `titlePrefixesTask`
+prefix that still has a non-`Closed` child (unknown prefixes are ignored). The dots slot
+and status badge have fixed widths so assignee/status columns stay aligned across rows. `addWorkItem()` seeds an empty array
 so a brand-new item does not wait for a fetch; `addChildTask()` / `applyFieldUpdate()` keep the
 map in sync (`title`, `state`, and `assignedTo` live on `fields`).
 

@@ -1257,6 +1257,23 @@
             margin-left: 6px;
         }
 
+        /* Prefix chip: at least one child task of this titlePrefixesTask prefix is not Closed */
+        .task-prefix-open-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-left: 4px;
+            min-width: 1.15em;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-weight: bold;
+            line-height: 1.1;
+            white-space: nowrap;
+            background-color: var(--color-active);
+            color: #fff;
+        }
+
         /* Task-status dots: fixed slot so assignee/status columns stay aligned.
            overflow must stay visible - the hover tooltip is positioned outside this box. */
         .task-status-dots {
@@ -1500,11 +1517,13 @@
         }
         
         /* Meta badge in work item rows */
-        .work-item:not(.child-task) .work-item-created-badge {
+        .work-item:not(.child-task) .work-item-created-badge,
+        .work-item:not(.child-task) .task-prefix-open-badge {
             font-size: 12px !important;
             line-height: 1.1;
         }
-        .work-item.child-task .work-item-created-badge {
+        .work-item.child-task .work-item-created-badge,
+        .work-item.child-task .task-prefix-open-badge {
             font-size: 11px !important;
             line-height: 1.1;
         }
@@ -1515,7 +1534,8 @@
         .severity-badge,
         .tshirt-badge,
         .assigned-to-badge,
-        .work-item-created-badge {
+        .work-item-created-badge,
+        .task-prefix-open-badge {
             flex: 0 0 auto !important;
         }
 
@@ -3043,6 +3063,9 @@
                     <span class="work-item-title-text" :title="title">{{ title }}</span>
                     <span v-if="!isChild && createdInfo.text" class="meta-badge work-item-created-badge"
                           :class="createdInfo.class" :title="'Created: ' + createdDate">{{ createdInfo.text }}</span>
+                    <span v-for="badge in openTaskPrefixBadges" :key="badge.prefix"
+                          class="task-prefix-open-badge"
+                          :title="'Open ' + badge.prefix + ' tasks (' + badge.count + ')'">{{ badge.letter }}</span>
                     <button v-if="!isChild && store.canWrite" class="add-task-btn" title="Create Child Task"
                             @click.stop="openCreateTaskModal(item.id, title)">
                         <i class="fa-solid fa-plus"></i><i class="fa-solid fa-clipboard-list"></i>
@@ -6587,6 +6610,28 @@
             return picked.slice(0, TASK_DOT_MAX);
         }
 
+        // Prefixes that still have at least one non-Closed child. Tasks without a known
+        // titlePrefixesTask prefix (empty fallback) are ignored. Order follows titlePrefixesTask.
+        function openTaskPrefixes(tasks) {
+            const groups = new Map();
+            for (const prefix of titlePrefixesTask) {
+                groups.set(prefix, 0);
+            }
+            for (const task of tasks) {
+                const { prefix } = splitTitleIntoPrefixAndSuffix(task.title, titlePrefixesTask, '');
+                if (!prefix || !groups.has(prefix)) continue;
+                if (task.state !== 'Closed') groups.set(prefix, groups.get(prefix) + 1);
+            }
+            const result = [];
+            for (const prefix of titlePrefixesTask) {
+                const count = groups.get(prefix);
+                if (count > 0) {
+                    result.push({ prefix, letter: prefix.charAt(0), count });
+                }
+            }
+            return result;
+        }
+
         // ===== Store =====
         // Raw state only. Everything derived is a computed below - that is the whole point of the
         // exercise: there is exactly one source of truth and the DOM is not part of it.
@@ -7394,6 +7439,10 @@
                 },
                 taskDotItems() {
                     return pickVisibleTaskDots(this.taskDotAllItems);
+                },
+                openTaskPrefixBadges() {
+                    if (!this.taskDotsReady) return [];
+                    return openTaskPrefixes(this.taskDotAllItems);
                 }
             },
             methods: {
