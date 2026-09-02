@@ -158,7 +158,7 @@ functions in [Load / reload](#flows-what-calls-what); there is no more single `l
 since loading is per-product now. `loadingTaskDotIds` / `taskDotFetchGen` drive the background
 child-task fetch, which is **not** gated on Task Mode.
 
-Store methods: `isExpanded`, `toggleExpanded`, `expandAllMajors`, `collapseAll`, `toggleHidden`,
+Store methods: `isExpanded`, `toggleExpanded`, `expandAll`, `collapseAll`, `toggleHidden`,
 `unhide`, `openUnhideModal`, `openFilterModal`, `setFilters`, `clearFilters`, `applyFieldUpdate`,
 `moveWorkItemPatch`, `insertWorkItem`, `addWorkItem`, `addChildTask`, `resortPatchContaining`,
 `forEachWorkItem`.
@@ -170,6 +170,7 @@ Derived (`VUE LAYER > Derived state`):
 | `products` | Product tabs, from `releaseNames` **configuration** - static, so all 5 tabs are always visible/clickable regardless of what has been fetched |
 | `isActiveProductLoading` | `true` while `activeProduct` has no entry in `releaseResults` yet, or is in `loadingProducts` — but only when a PAT is stored (`store.pat.configured`) and the PAT modal is not open; drives the grid's loading spinner (which must never cover the PAT form) |
 | `allMajorIds` | All `release-major` ids **for `activeProduct` only** (for Expand All) |
+| `allPatchIds` | All `release-major.patch` ids **for `activeProduct` only**, skipping hidden majors/patches (so Expand All can open Bugs/Features) |
 | `canWrite` | `permission === 'write'` - **the single gate for every edit affordance** |
 | `resolvedTheme` | `theme`, with `auto` resolved through `systemPrefersDark` |
 | `hiddenCount`, `activeFilterCount` | Badge counters |
