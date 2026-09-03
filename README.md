@@ -16,7 +16,7 @@ Azure DevOps Release Overview Application
 - 🔎 **Fulltextové hledání** - Hledání v gridu podle ID a názvu work itemů
 - 👁️ **Detail work itemu** - Zobrazení detailních informací včetně popisu a komentářů
 - 📋 **Kopírování** - Zkopírování názvu nebo odkazu na work item do schránky
-- 🔀 **Build Changes** - Přehled změn v buildu pro patch verze s namapovanou pipeline
+- 🔀 **Build Changes** - Přehled změn v buildu pro patch verze s namapovanou pipeline. Vedle tlačítka je ikona stavu posledního Jenkins buildu (tyrkysová = běží, zelená = prošel, červená = spadl, šedá = žádný build). Stav se na zobrazených patchích obnovuje na pozadí každou minutu
 - 📄 **Export do Markdown** - Export patch verzí do Markdown dokumentu
 - 🎨 **Témata** - Světlý režim, tmavý režim a automatický režim podle nastavení systému
 - 🔄 **Reload dat** - Aktualizace dat z Azure DevOps včetně informace o posledním načtení

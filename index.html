@@ -183,6 +183,22 @@
         .hide-toggle-btn i {
             pointer-events: none;
         }
+
+        .jenkins-status-icon {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.7em;
+            padding: 2px 4px;
+            margin-left: 8px;
+            opacity: 0.9;
+        }
+        .jenkins-status-icon.is-running { color: #20c997; }
+        .jenkins-status-icon.is-success { color: var(--color-closed); }
+        .jenkins-status-icon.is-failed { color: var(--color-critical); }
+        .jenkins-status-icon.is-none { color: #adb5bd; }
+        .jenkins-status-icon:hover { opacity: 1; }
+        .jenkins-status-icon i { pointer-events: none; }
         
         /* ===== Create Work Item Button ===== */
         .create-workitem-btn {
@@ -3130,6 +3146,10 @@
                     <button class="hide-toggle-btn" title="Export to Markdown" style="margin-left: 8px;" @click.stop="exportMarkdown">
                         <i class="fa-brands fa-markdown"></i>
                     </button>
+                    <button v-if="pipeline" class="jenkins-status-icon" :class="'is-' + jenkinsState"
+                            :title="jenkinsTitle" @click.stop="buildChanges">
+                        <i class="fa-solid" :class="jenkinsIconClass"></i>
+                    </button>
                     <button v-if="pipeline" class="hide-toggle-btn" title="Build Changes" style="margin-left: 8px;" @click.stop="buildChanges">
                         <i class="fa-solid fa-code-branch"></i>
                     </button>
@@ -3208,7 +3228,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-03T11:33:34.000Z'
+            updatedAt: '2026-09-03T11:50:37.000Z'
         };
 
         // ===== API Configuration =====
@@ -3584,6 +3604,15 @@
         }
         
         // ===== Helper Functions =====
+
+        function jenkinsReleaseBranch(product, major, patch) {
+            const year = buildChangesBranchYearMap[product] || '2025';
+            return `rel-${year}-${major}.${patch}`;
+        }
+
+        function jenkinsStatusKey(product, patchId) {
+            return `${product}:${patchId}`;
+        }
         
         /**
          * Require PAT token or throw error
@@ -4212,6 +4241,7 @@
                 ];
 
                 saveLastReloadTime();
+                refreshJenkinsStatusForProduct(product);
             } catch (error) {
                 Logger.error(`Error loading data for ${product}:`, error);
                 showNotification(`Failed to load ${product}: ${error.message || error}`, 'error');
@@ -4232,6 +4262,8 @@
         // the very first load and again every time activeProduct changes.
         async function activateProduct(product) {
             await ensureProductLoaded(product);
+            stopJenkinsStatusPoll();
+            syncJenkinsStatusPoll();
         }
 
         // Force-refreshes just the active tab. Used after a write that we know made the active
@@ -4246,11 +4278,103 @@
         async function resetAndReloadActiveProduct() {
             store.releaseResults = [];
             store.childTasks = {};
+            store.jenkinsStatus = {};
             store.loadingTaskDotIds = [];
             store.taskDotFetchGen += 1;
+            stopJenkinsStatusPoll();
             await reloadActiveProduct();
         }
 
+        // ===== Jenkins Build Status =====
+        const JENKINS_STATUS_POLL_MS = 60000;
+        let jenkinsStatusPollId = null;
+
+        function mapJenkinsBuildState(row) {
+            if (!row) return { state: 'none', build: null };
+            if (row.building) return { state: 'running', build: row.build ?? null };
+            if (row.result === 'SUCCESS') return { state: 'success', build: row.build ?? null };
+            if (row.result === 'FAILURE' || row.result === 'UNSTABLE' || row.result === 'ABORTED') {
+                return { state: 'failed', build: row.build ?? null };
+            }
+            return { state: 'none', build: row.build ?? null };
+        }
+
+        // Patch headers (and their Jenkins icons) mount only while the parent major is expanded.
+        function visibleJenkinsPatches(product) {
+            if (!product || product !== store.activeProduct || !store.tree) return [];
+            const out = [];
+            for (const rel of store.tree) {
+                for (const major of rel.majors) {
+                    if (!store.isExpanded('major', major.majorId)) continue;
+                    for (const node of major.patches) {
+                        if (node.patch === '999') continue;
+                        out.push({ major: node.major, patch: node.patch, patchId: node.patchId });
+                    }
+                }
+            }
+            return out;
+        }
+
+        function stopJenkinsStatusPoll() {
+            if (jenkinsStatusPollId == null) return;
+            clearInterval(jenkinsStatusPollId);
+            jenkinsStatusPollId = null;
+        }
+
+        function syncJenkinsStatusPoll() {
+            const product = store.activeProduct;
+            if (product && buildChangesPipelineMap[product]) {
+                if (jenkinsStatusPollId == null) {
+                    jenkinsStatusPollId = setInterval(() => {
+                        refreshJenkinsStatusForProduct(store.activeProduct);
+                    }, JENKINS_STATUS_POLL_MS);
+                }
+                return;
+            }
+            stopJenkinsStatusPoll();
+        }
+
+        async function fetchJenkinsBuildStatus(pipeline, branch) {
+            const url = `https://provisioning.integray.app/api/endpoint/web-app/jenkins/build-status?pipeline=${encodeURIComponent(pipeline)}&branch=${encodeURIComponent(branch)}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Failed to load build status: ${response.statusText}`);
+            }
+            const data = await response.json();
+            return mapJenkinsBuildState(data?.[0]);
+        }
+
+        async function refreshJenkinsStatusForProduct(product, { onlyMissing = false } = {}) {
+            const pipeline = buildChangesPipelineMap[product];
+            if (!pipeline) return;
+
+            let targets = visibleJenkinsPatches(product);
+            if (onlyMissing) {
+                targets = targets.filter(p => {
+                    const cur = store.jenkinsStatus[jenkinsStatusKey(product, p.patchId)];
+                    return !cur || cur.state === 'loading';
+                });
+            } else {
+                for (const p of targets) {
+                    const key = jenkinsStatusKey(product, p.patchId);
+                    if (!store.jenkinsStatus[key]) {
+                        store.jenkinsStatus[key] = { state: 'loading', build: null, fetchedAt: 0 };
+                    }
+                }
+            }
+            if (targets.length === 0) return;
+
+            await Promise.all(targets.map(async (p) => {
+                const key = jenkinsStatusKey(product, p.patchId);
+                try {
+                    const mapped = await fetchJenkinsBuildStatus(pipeline, jenkinsReleaseBranch(product, p.major, p.patch));
+                    store.jenkinsStatus[key] = { ...mapped, fetchedAt: Date.now() };
+                } catch (error) {
+                    Logger.error('Error loading Jenkins build status:', error);
+                    store.jenkinsStatus[key] = { state: 'none', build: null, fetchedAt: Date.now() };
+                }
+            }));
+        }
 
         // ===== Modal Functions =====
         // The hidden versions modal is a Vue component (#hiddenVersionsApp) driven by
@@ -4874,8 +4998,7 @@
             Object.assign(bc, { open: true, loading: true, changes: [], meta: `${product} - ${releaseName}-${major}.${patch}` });
             
             try {
-                const year = buildChangesBranchYearMap[product] || '2025';
-                const branch = `rel-${year}-${major}.${patch}`;
+                const branch = jenkinsReleaseBranch(product, major, patch);
                 const url = `https://provisioning.integray.app/api/endpoint/web-app/jenkins/build-changes?pipeline=${encodeURIComponent(pipeline)}&branch=${encodeURIComponent(branch)}`;
                 const response = await fetch(url);
                 if (!response.ok) {
@@ -6676,6 +6799,9 @@
             // has no child tasks. Filled in the background by scheduleTaskDotFetch(); Task Mode
             // and the status dots both read from here.
             childTasks: {},
+            // Jenkins last-build status per `${product}:${patchId}` (product is part of the key
+            // because Odra-01.xxx exists on both Xeelo and XeeloAdmin).
+            jenkinsStatus: {},
             loadingTaskDotIds: [],
             // Bumped on full reload so an in-flight background fetch cannot merge stale results.
             taskDotFetchGen: 0,
@@ -7220,6 +7346,13 @@
         // into store.childTasks. Does not block isActiveProductLoading; Task Mode just shows them.
         watch(() => store.visibleParentIds, scheduleTaskDotFetch);
 
+        // Newly expanded majors mount patch headers — fetch their Jenkins status immediately
+        // (the 60s poll only covers what is already visible).
+        watch(
+            () => visibleJenkinsPatches(store.activeProduct).map(p => p.patchId).sort().join('|'),
+            () => refreshJenkinsStatusForProduct(store.activeProduct, { onlyMissing: true })
+        );
+
         // Drives every relative timestamp in the UI ("last reload", "updated x ago")
         setInterval(() => { store.clockTick = Date.now(); }, 60000);
 
@@ -7504,6 +7637,27 @@
                 store: () => store,
                 expanded() { return this.store.isExpanded('patch', this.node.patchId); },
                 pipeline() { return buildChangesPipelineMap[this.node.product]; },
+                jenkinsEntry() {
+                    return this.store.jenkinsStatus[jenkinsStatusKey(this.node.product, this.node.patchId)]
+                        || { state: 'none', build: null };
+                },
+                jenkinsState() {
+                    return this.jenkinsEntry.state === 'loading' ? 'none' : this.jenkinsEntry.state;
+                },
+                jenkinsIconClass() {
+                    if (this.jenkinsState === 'running') return ['fa-circle-notch', 'fa-spin'];
+                    if (this.jenkinsState === 'success') return 'fa-circle-check';
+                    if (this.jenkinsState === 'failed') return 'fa-circle-xmark';
+                    return 'fa-circle';
+                },
+                jenkinsTitle() {
+                    const { state, build } = this.jenkinsEntry;
+                    const n = build != null ? `#${build}` : '';
+                    if (state === 'running') return n ? `Building ${n}` : 'Building';
+                    if (state === 'success') return n ? `Build ${n} · SUCCESS` : 'SUCCESS';
+                    if (state === 'failed') return n ? `Build ${n} · FAILED` : 'FAILED';
+                    return 'No Jenkins build';
+                },
                 // Parents and their child tasks stay siblings in the DOM, exactly as before, so the
                 // existing .work-item.child-task styling keeps working.
                 rows() {

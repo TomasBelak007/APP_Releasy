@@ -47,7 +47,8 @@ Order of `// ===== ... =====` sections inside the script:
 4. `Data Parsing & Grouping`, `Last Reload Time Management`, `Permission Management`,
    `Task Mode Management`, `Child Tasks Management`
 5. `Priority & Severity Handling`, `Work Item Rendering`, `Sorting Functions`
-6. `PAT Modal Management`, `Azure DevOps API Integration`, `Token Permissions Check`
+6. `PAT Modal Management`, `Azure DevOps API Integration`, `Token Permissions Check`,
+   `Jenkins Build Status`
 7. `Modal Functions` ... `Work Item Created Success modal` - modal open/close/submit functions
 8. `Markdown Export`, `Theme Management`
 9. `Status Change Feature`, `Value picker`, and the per-field `... Change Functions`
@@ -89,8 +90,8 @@ it first.
 | `APP_RELEASE` | `version` + `updatedAt` shown in the footer; bump on every release |
 | `IS_PRODUCTION` | false only on `localhost` / `127.0.0.1`; sets `Logger.level` |
 | `releaseNames` | The 5 products: `{ product, release, epicID }`. Drives both the WIQL loop and the parent Epic link when creating work items |
-| `buildChangesPipelineMap` | product -> Jenkins pipeline name; a product missing here has no Build Changes button |
-| `buildChangesBranchYearMap` | product -> year in `rel-<year>-<major>.<patch>`; missing products fall back to `2025` |
+| `buildChangesPipelineMap` | product -> Jenkins pipeline name; a product missing here has no Build Changes button and no Jenkins status icon |
+| `buildChangesBranchYearMap` | product -> year in `rel-<year>-<major>.<patch>`; missing products fall back to `2025`. Shared by Build Changes and Jenkins status via `jenkinsReleaseBranch()` |
 | `assignees` | Assignee list (`{ email, name }`) for the "Change Assigned To" picker, create forms, **and** `store.availableAssignees` (see below) |
 | `titlePrefixes`, `titlePrefixesTask` | Allowed title prefixes per product / for tasks |
 | `TASK_PREFIX_BADGES` | Unique letter + color for each `titlePrefixesTask` prefix pill (D/X/I/A/U/T/C/K/O) |
@@ -149,11 +150,17 @@ derived is a computed assigned onto the store afterwards (`reactive()` unwraps t
 templates and plain JS read `store.x`).
 
 Raw state: `theme`, `systemPrefersDark`, `releaseResults`, `loadingProducts`, `childTasks`,
-`loadingTaskDotIds`, `taskDotFetchGen`, `taskMode`,
+`jenkinsStatus`, `loadingTaskDotIds`, `taskDotFetchGen`, `taskMode`,
 `permission`, `activeProduct`, `search`,
 `expanded`, `hidden`, `filters`, `filterModalOpen`, `unhideModalOpen`, `notifications`,
 `closeDetailAfterCreate`, `lastReloadAt`, `clockTick`, plus **one slice per modal**: `picker`,
 `pat`, `help`, `created`, `buildChanges`, `createWorkItem`, `createTask`, `detail`.
+
+`store.jenkinsStatus` is `{ ['${product}:${patchId}']: { state, build, fetchedAt } }` with
+`state` one of `loading` / `running` / `success` / `failed` / `none`. Filled by
+`refreshJenkinsStatusForProduct()` for **visible** patches only (parent major expanded, patch
+not hidden, not `999`). A 60s background interval re-fetches those same visible keys; expanding
+a major fetches any newly shown patch immediately (`onlyMissing`).
 
 `loadingProducts` (products currently being fetched) exists purely to drive the lazy-loading
 functions in [Load / reload](#flows-what-calls-what); there is no more single `loading` boolean,
@@ -245,7 +252,7 @@ Defined in `VUE LAYER > Components`, templates from `<script type="text/x-templa
 | `ProgressBar` | `tpl-progress-bar` | `items` | Segments per state in `PROGRESS_ORDER`, colors from `STATE_COLORS` |
 | `PriorityCell` | `tpl-priority-cell` | `item` | Priority / severity (Bug) / t-shirt (Feature) badges, each opening its picker |
 | `WorkItemRow` | `tpl-work-item-row` | `item`, `isChild`, `parentId` | Icon by type, clickable state/assignee badges; the row header opens the detail modal; parent rows show at most 6 task-status dots (`pickVisibleTaskDots` / `allocateTaskDotQuota`: ≥1 per present status, leftover proportional) in a fixed-width slot left of the status badge; hover lists every child task, each row opening that task's detail modal. Title column also shows a one-letter prefix pill (`openTaskPrefixes` / `TASK_PREFIX_BADGES`) for each `titlePrefixesTask` prefix that still has a non-`Closed` child |
-| `PatchSection` | `tpl-patch-section` | `node` | A patch: header, progress bar, Markdown export, Build Changes, create; work-item rows mount only while the patch is expanded (`v-if`); `rows` interleaves parents with `node.childRowsByParent` as siblings |
+| `PatchSection` | `tpl-patch-section` | `node` | A patch: header, progress bar, Markdown export, Jenkins status icon + Build Changes (when the product has a pipeline), create; work-item rows mount only while the patch is expanded (`v-if`); `rows` interleaves parents with `node.childRowsByParent` as siblings |
 | grid root | `tpl-releasy-grid` | - | Product tabs + releases + majors, mounted on `#content`; patch sections mount only while the major is expanded |
 
 ## Flows: what calls what
@@ -260,23 +267,26 @@ the other 4 products load the first time the user switches to their tab. The fun
   `fetchWorkItems(ids)` (batched at 200, `fields=GRID_WORK_ITEM_FIELDS`, no Description) ->
   `groupWorkItems()` (attaches `_searchText` and sorts each patch) -> replaces just that
   product's entry in `store.releaseResults` (`[...filter(r => r.product !== product), entry]`) ->
-  `saveLastReloadTime()`. Tracks itself in `store.loadingProducts` for the duration (drives
+  `saveLastReloadTime()` -> `refreshJenkinsStatusForProduct(product)` (fire-and-forget, not
+  awaited, so the grid loader does not wait on Jenkins). Tracks itself in `store.loadingProducts` for the duration (drives
   `isActiveProductLoading`); on failure, logs + `showNotification()` and leaves the product
   absent so the next visit/reload retries.
 - `ensureProductLoaded(product)` - no-op if `product` is already in `releaseResults` or
   `loadingProducts`, else `loadProductData(product)`. **Lazy** fetch.
-- `activateProduct(product)` - `ensureProductLoaded(product)`. Child tasks are not awaited here;
-  `scheduleTaskDotFetch()` fills `childTasks` in the background once `visibleParentIds` updates.
-  Called by `DOMContentLoaded` (for the initial `activeProduct`) and by
-  `watch(() => store.activeProduct, activateProduct)` (on every tab click).
+- `activateProduct(product)` - `ensureProductLoaded(product)`, then restarts the 60s Jenkins
+  status poll for the new tab (`stopJenkinsStatusPoll` + `syncJenkinsStatusPoll`). Child tasks
+  are not awaited here; `scheduleTaskDotFetch()` fills `childTasks` in the background once
+  `visibleParentIds` updates. Called by `DOMContentLoaded` (for the initial `activeProduct`) and
+  by `watch(() => store.activeProduct, activateProduct)` (on every tab click).
 - `reloadActiveProduct()` - **force** refresh of just `activeProduct`: `loadProductData()`. No
   write flow triggers this anymore - creating an item inserts it locally
   (`addWorkItem()`/`addChildTask()`) and a patch-version change relocates it locally
   (`moveWorkItemPatch()`); it now exists solely as the building block for
   `resetAndReloadActiveProduct()`.
-- `resetAndReloadActiveProduct()` - clears `releaseResults`, `childTasks` and `loadingTaskDotIds`,
-  bumps `taskDotFetchGen` so an in-flight child-task fetch cannot merge stale results, then
-  `reloadActiveProduct()`. Used by the toolbar's `reload()` and by `savePAT()` (a new PAT can mean
+- `resetAndReloadActiveProduct()` - clears `releaseResults`, `childTasks`, `jenkinsStatus` and
+  `loadingTaskDotIds`, stops the Jenkins status poll, bumps `taskDotFetchGen` so an in-flight
+  child-task fetch cannot merge stale results, then `reloadActiveProduct()`. Used by the
+  toolbar's `reload()` and by `savePAT()` (a new PAT can mean
   different access, so the whole cache is invalidated). Other tabs simply go back to loading
   lazily on their next visit.
 
@@ -437,8 +447,15 @@ description) downloaded as a `Blob`.
 
 **Build Changes** - the `PatchSection` button (only when the product has a pipeline) calls
 `openBuildChangesModal(product, release, major, patch, pipeline)`, which derives the branch as
-`rel-<year>-<major>.<patch>` from `buildChangesBranchYearMap[product]` (default `2025`), fetches
-the Jenkins proxy and fills `store.buildChanges.changes`.
+`jenkinsReleaseBranch(product, major, patch)` (`rel-<year>-<major>.<patch>`), fetches the Jenkins
+proxy and fills `store.buildChanges.changes`.
+
+**Jenkins status** - after each successful product load, `refreshJenkinsStatusForProduct()` GETs
+`.../jenkins/build-status` for visible non-`999` patches (major expanded) and writes
+`store.jenkinsStatus`. `PatchSection` maps `building` / `result` / `build` to a teal spinner
+(running), green check (SUCCESS), red cross (FAILURE/UNSTABLE/ABORTED) or grey circle (none).
+Click opens the same Build Changes modal. A 60s background poll refreshes those visible
+patches; expanding a major fetches any patch that does not have a status yet.
 
 **Help** - `openHelpModal()` sets `store.help.open`, and on first open `fetchHelpGuide()` loads
 `guide.html` locally (only on `127.0.0.1`) or from the Integray provisioning endpoint. Result goes
@@ -485,6 +502,9 @@ Two calls do **not** go to Azure DevOps, both to `provisioning.integray.app`:
   and the response's `[0].changes` is what the modal lists. `year` comes from
   `buildChangesBranchYearMap` (XeeloAdmin is `2026`; others `2025`). `pipeline` is a **Jenkins**
   job name.
+- **Jenkins status**: `GET .../jenkins/build-status?pipeline=&branch=` (same query as Build
+  Changes). Response `[0]` is `{ pipeline, branch, building, result, build }`; a missing branch
+  is **200** with `result: null, build: null` (not 400). Mapped in `mapJenkinsBuildState()`.
 - **Assets**: `guide.html` and both logos (`LOGO_URLS`).
 
 ## Invariants and conventions
