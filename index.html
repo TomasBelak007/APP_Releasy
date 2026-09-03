@@ -3208,7 +3208,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-02T20:11:57.000Z'
+            updatedAt: '2026-09-03T11:33:34.000Z'
         };
 
         // ===== API Configuration =====
@@ -3287,6 +3287,15 @@
             XeeloAdmin: 'XeeloAdmin_REL_PROV',
             Integray: 'Integray_REL_PROV',
             Repository: 'IntegrayCR_REL_PROV'
+        };
+
+        // Jenkins release-branch year per product (`rel-<year>-<major>.<patch>`). A product
+        // missing here falls back to 2025 so existing Xeelo / Integray / Repository calls stay put.
+        const buildChangesBranchYearMap = {
+            Xeelo: '2025',
+            XeeloAdmin: '2026',
+            Integray: '2025',
+            Repository: '2025'
         };
 
         // ===== Assignees Configuration =====
@@ -4865,7 +4874,8 @@
             Object.assign(bc, { open: true, loading: true, changes: [], meta: `${product} - ${releaseName}-${major}.${patch}` });
             
             try {
-                const branch = `rel-2025-${major}.${patch}`;
+                const year = buildChangesBranchYearMap[product] || '2025';
+                const branch = `rel-${year}-${major}.${patch}`;
                 const url = `https://provisioning.integray.app/api/endpoint/web-app/jenkins/build-changes?pipeline=${encodeURIComponent(pipeline)}&branch=${encodeURIComponent(branch)}`;
                 const response = await fetch(url);
                 if (!response.ok) {

@@ -90,6 +90,7 @@ it first.
 | `IS_PRODUCTION` | false only on `localhost` / `127.0.0.1`; sets `Logger.level` |
 | `releaseNames` | The 5 products: `{ product, release, epicID }`. Drives both the WIQL loop and the parent Epic link when creating work items |
 | `buildChangesPipelineMap` | product -> Jenkins pipeline name; a product missing here has no Build Changes button |
+| `buildChangesBranchYearMap` | product -> year in `rel-<year>-<major>.<patch>`; missing products fall back to `2025` |
 | `assignees` | Assignee list (`{ email, name }`) for the "Change Assigned To" picker, create forms, **and** `store.availableAssignees` (see below) |
 | `titlePrefixes`, `titlePrefixesTask` | Allowed title prefixes per product / for tasks |
 | `TASK_PREFIX_BADGES` | Unique letter + color for each `titlePrefixesTask` prefix pill (D/X/I/A/U/T/C/K/O) |
@@ -436,7 +437,8 @@ description) downloaded as a `Blob`.
 
 **Build Changes** - the `PatchSection` button (only when the product has a pipeline) calls
 `openBuildChangesModal(product, release, major, patch, pipeline)`, which derives the branch as
-`rel-2025-<major>.<patch>`, fetches the Jenkins proxy and fills `store.buildChanges.changes`.
+`rel-<year>-<major>.<patch>` from `buildChangesBranchYearMap[product]` (default `2025`), fetches
+the Jenkins proxy and fills `store.buildChanges.changes`.
 
 **Help** - `openHelpModal()` sets `store.help.open`, and on first open `fetchHelpGuide()` loads
 `guide.html` locally (only on `127.0.0.1`) or from the Integray provisioning endpoint. Result goes
@@ -479,9 +481,10 @@ these helpers. Create, comments and attachments still build the full URL and cal
 
 Two calls do **not** go to Azure DevOps, both to `provisioning.integray.app`:
 
-- **Build Changes**: `GET .../jenkins/build-changes?pipeline=<buildChangesPipelineMap[product]>&branch=rel-2025-<major>.<patch>`,
-  and the response's `[0].changes` is what the modal lists. Note the hardcoded `rel-2025-` branch
-  prefix and that `pipeline` is a **Jenkins** job name.
+- **Build Changes**: `GET .../jenkins/build-changes?pipeline=<buildChangesPipelineMap[product]>&branch=rel-<year>-<major>.<patch>`,
+  and the response's `[0].changes` is what the modal lists. `year` comes from
+  `buildChangesBranchYearMap` (XeeloAdmin is `2026`; others `2025`). `pipeline` is a **Jenkins**
+  job name.
 - **Assets**: `guide.html` and both logos (`LOGO_URLS`).
 
 ## Invariants and conventions
@@ -581,7 +584,7 @@ modes:
 
 | Task | Where |
 | --- | --- |
-| Add a product / release | `releaseNames` (+ `epicID`), `titlePrefixes`, `availablePatchVersions`, optionally `buildChangesPipelineMap` |
+| Add a product / release | `releaseNames` (+ `epicID`), `titlePrefixes`, `availablePatchVersions`, optionally `buildChangesPipelineMap` + `buildChangesBranchYearMap` |
 | Add a patch version to a picker | `availablePatchVersions` |
 | Add / remove an assignee | `assignees` |
 | Change allowed statuses | `statusOptions` |
