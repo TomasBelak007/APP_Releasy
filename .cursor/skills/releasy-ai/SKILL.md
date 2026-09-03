@@ -74,7 +74,8 @@ done - or any other Task added to a ticket after the fact. No plan file needed.
    Task - a Task cannot itself have child Tasks.
 2. Gather just the Task's own fields - prefix (validate against `titlePrefixesTask`), title,
    description, optional assignee. No product/release/epic/priority questions; those only apply
-   to the parent. Draft the description using **Child task content (DEV vs TEST)** below.
+   to the parent. Draft the description using **Child task content (DEV vs TEST)** below. If
+   this is a TEST task and the parent is Xeelo, ask the Xeelo Admin question there first.
 3. Print the summary and confirm, then run:
    `node scripts/create-task.mjs <parentId> --prefix DEV --title "..." [--description "..."] [--assignee email]`
 
@@ -118,6 +119,14 @@ add regression of unrelated existing behaviour, "while you're there" checks, or 
 exercise screens, fields, or flows that were not part of the change. If a step is not needed to
 confirm the change works, leave it out.
 
+**Xeelo + Xeelo Admin.** Xeelo and XeeloAdmin are separate products with separate releases.
+Settings the tester needs (object, fields, export, …) often live in Xeelo Admin, so a Xeelo
+fix is sometimes untestable until a matching Admin change is shipped. When drafting a TEST
+task whose parent is **Xeelo**, **always ask** whether a specific Xeelo Admin change or
+version is required for the setup. Do not assume yes or no. If yes, ask which change and
+which Admin version/patch (e.g. `Odra-01.005`) and put it in **Príprava** so the tester
+waits for that Admin build. If no, omit any Admin mention.
+
 **Always use this structure** (this order, these headings). Write the body in the language of
 the parent ticket / tester (typically Czech or Slovak).
 
@@ -133,7 +142,8 @@ Issue nájdené pri teste, ktoré priamo nesúvisia s touto zmenou, tento TEST t
 ```
 
 - **Príprava** — include only when data or settings are needed; omit the whole section if the
-  tester can start from a normal screen with nothing extra prepared.
+  tester can start from a normal screen with nothing extra prepared. For a Xeelo TEST, also
+  put the required Xeelo Admin version/change here when the requester said one is needed.
 - **Kroky** — always present. Numbered steps that test only the change. Put the expected UI
   result in the step itself (no extra Pass/Fail section, no unrelated checks).
 - **Disclaimer** — always last, verbatim. Issues found during the test that are **not a direct
