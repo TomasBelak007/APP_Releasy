@@ -17,6 +17,11 @@ Azure DevOps Release Overview Application
 - 👁️ **Detail work itemu** - Zobrazení detailních informací včetně popisu a komentářů
 - 📋 **Kopírování** - Zkopírování názvu nebo odkazu na work item do schránky
 - 🔀 **Build Changes** - Přehled změn v buildu pro patch verze s namapovanou pipeline. Vedle tlačítka je ikona stavu posledního Jenkins buildu (tyrkysová = běží, zelená = prošel, červená = spadl, šedá = žádný build). Stav se na zobrazených patchích obnovuje na pozadí každou minutu
+- 🟢 **Cursor/Grok status** - Plovoucí ikona vpravo nahoře (vedle nápovědy) hlídá oficiální stavovou
+  stránku Cursoru a barvou signalizuje, zda právě probíhá incident týkající se modelu Grok nebo
+  obecně Cursoru (zelená = vše v pořádku, oranžová = oprava nasazená a sleduje se stabilita,
+  červená = aktivní incident). Najetí myší zobrazí názvy dotčených incidentů s odkazem na jejich
+  stránku; stav se na pozadí obnovuje každých 5 minut
 - 📄 **Export do Markdown** - Export patch verzí do Markdown dokumentu
 - 🎨 **Témata** - Světlý režim, tmavý režim a automatický režim podle nastavení systému
 - 🔄 **Reload dat** - Aktualizace dat z Azure DevOps včetně informace o posledním načtení
@@ -188,6 +193,8 @@ Podrobná uživatelská příručka je dostupná přímo v aplikaci:
 - Token není odesílán na žádný server kromě Azure DevOps API
 - Všechna komunikace probíhá přes HTTPS
 - Aplikace neukládá žádná citlivá data na externí servery
+- Ikona stavu Cursor/Grok načítá pouze veřejný, neautentizovaný RSS feed
+  (`status.cursor.com/history.atom`) - PAT se při tomto volání nikam neposílá
 
 ## Podpora
 

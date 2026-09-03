@@ -400,7 +400,7 @@
         .theme-switcher {
             position: fixed;
             top: 20px;
-            right: 70px;
+            right: 116px;
             background-color: var(--bg-panel);
             border: 2px solid var(--border-color);
             border-radius: 20px;
@@ -436,30 +436,134 @@
             color: white;
         }
         
-        /* ===== Help Icon ===== */
-        .help-icon {
+        /* ===== Help Icon / Cursor Status Icon ===== */
+        .help-icon,
+        .cursor-status-icon {
             position: fixed;
             top: 20px;
-            right: 20px;
             width: 40px;
             height: 40px;
-            background-color: var(--color-resolved);
-            color: white;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
+            color: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            z-index: 999;
+        }
+        .help-icon {
+            right: 20px;
+            background-color: var(--color-resolved);
             cursor: pointer;
             font-size: 1.5em;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
             transition: all 0.3s ease;
-            z-index: 999;
         }
         .help-icon:hover {
             background-color: #0b5ed7;
             transform: scale(1.1);
         }
-        
+
+        /* ===== Cursor/Grok Status Icon ===== */
+        .cursor-status-icon {
+            right: 68px;
+            font-size: 1.2em;
+            cursor: default;
+            transition: background-color 0.3s ease;
+        }
+        .cursor-status-icon.is-green { background-color: var(--color-closed); }
+        .cursor-status-icon.is-orange { background-color: var(--color-high); }
+        .cursor-status-icon.is-red { background-color: var(--color-critical); }
+        .cursor-status-icon.is-checking { background-color: #adb5bd; }
+        .cursor-status-tooltip {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            z-index: 2000;
+            padding-top: 12px;
+            flex-direction: column;
+            cursor: default;
+        }
+        .cursor-status-icon:hover .cursor-status-tooltip {
+            display: flex;
+        }
+        .cursor-status-tooltip-panel {
+            min-width: 280px;
+            max-width: 420px;
+            max-height: 260px;
+            overflow-y: auto;
+            padding: 10px 12px;
+            background: var(--bg-panel);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-shadow: 0 4px 16px var(--shadow-color);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            text-align: left;
+            font-size: 0.95rem;
+        }
+        .cursor-status-tooltip-header {
+            font-weight: 600;
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+        .cursor-status-tooltip-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border-radius: 4px;
+            padding: 4px 6px;
+            margin: 0 -6px;
+            color: inherit;
+            text-decoration: none;
+        }
+        .cursor-status-tooltip-row:hover,
+        .cursor-status-tooltip-row:focus {
+            background: var(--hover-bg);
+            outline: none;
+        }
+        .cursor-status-tooltip-title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+            flex: 1;
+            font-size: 0.85em;
+            text-align: left;
+        }
+        .cursor-status-tooltip-status {
+            flex-shrink: 0;
+            font-size: 0.75em;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 10px;
+            background: rgba(220, 53, 69, 0.15);
+            color: var(--color-critical);
+            white-space: nowrap;
+        }
+        .cursor-status-tooltip-status.status-monitoring {
+            background: rgba(253, 126, 20, 0.15);
+            color: var(--color-high);
+        }
+        .cursor-status-tooltip-empty {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+        }
+        .cursor-status-tooltip-footer {
+            font-size: 0.8em;
+            color: var(--color-resolved);
+            text-decoration: none;
+            margin-top: 2px;
+        }
+        .cursor-status-tooltip-footer:hover {
+            text-decoration: underline;
+        }
+
         /* ===== Last Reload Info ===== */
         .last-reload-info {
             font-size: 0.9em;
@@ -2180,6 +2284,29 @@
         </button>
     </div>
     
+    <!-- Cursor / Grok status ikona -->
+    <div id="cursorStatusApp" v-cloak>
+        <div class="cursor-status-icon" :class="'is-' + store.cursorStatus.state"
+             :aria-label="CURSOR_STATUS_LABELS[store.cursorStatus.state]">
+            <i class="fa-solid fa-bolt"></i>
+            <div class="cursor-status-tooltip">
+                <div class="cursor-status-tooltip-panel">
+                    <div class="cursor-status-tooltip-header">Cursor / Grok status</div>
+                    <template v-if="store.cursorStatus.incidents.length">
+                        <a v-for="inc in store.cursorStatus.incidents" :key="inc.id" :href="inc.link"
+                           target="_blank" rel="noopener" class="cursor-status-tooltip-row">
+                            <span class="cursor-status-tooltip-title">{{ inc.title }}</span>
+                            <span class="cursor-status-tooltip-status"
+                                  :class="'status-' + inc.latestStatus.toLowerCase()">{{ inc.latestStatus }}</span>
+                        </a>
+                    </template>
+                    <div v-else class="cursor-status-tooltip-empty">{{ CURSOR_STATUS_LABELS[store.cursorStatus.state] }}</div>
+                    <a class="cursor-status-tooltip-footer" href="https://status.cursor.com" target="_blank" rel="noopener">status.cursor.com &rarr;</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Help ikona -->
     <div id="helpIconApp">
         <div class="help-icon" title="Help" @click="open">
@@ -3228,7 +3355,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-03T11:50:37.000Z'
+            updatedAt: '2026-09-03T17:15:00.000Z'
         };
 
         // ===== API Configuration =====
@@ -3249,6 +3376,23 @@
             'Microsoft.VSTS.Common.Severity',
             'Custom.Shirtsize'
         ].join(',');
+
+        // ===== Cursor Status Feed Configuration =====
+        // Floating Cursor/Grok icon. The Atom feed has no component tags, so relevance is a
+        // keyword heuristic: mention Grok, or mention none of the other-model names below.
+        const CURSOR_STATUS_FEED_URL = 'https://status.cursor.com/history.atom';
+        const CURSOR_STATUS_POLL_INTERVAL_MS = 5 * 60 * 1000;
+        const CURSOR_STATUS_OTHER_MODEL_KEYWORDS = [
+            'claude', 'anthropic', 'composer', 'gpt', 'openai', 'chatgpt', 'opus', 'fable',
+            'sonnet', 'mythos', 'gemini', 'deepseek', 'o1', 'o3'
+        ];
+        const CURSOR_STATUS_ALERT_STATUSES = new Set(['investigating', 'identified', 'update']);
+        const CURSOR_STATUS_LABELS = {
+            green: 'No known Cursor/Grok issues',
+            orange: 'Cursor/Grok: fix deployed, monitoring',
+            red: 'Cursor/Grok: active incident',
+            checking: 'Checking Cursor status...'
+        };
 
         // ===== Error Messages =====
         const ERROR_MESSAGES = {
@@ -4374,6 +4518,88 @@
                     store.jenkinsStatus[key] = { state: 'none', build: null, fetchedAt: Date.now() };
                 }
             }));
+        }
+
+        // ===== Cursor Status Feed =====
+        // Public Atom feed, no PAT / product. getElementsByTagName (not querySelector) because
+        // the feed is namespaced Atom XML and CSS selectors miss those nodes in some browsers.
+        function atomText(el, tag) {
+            return el.getElementsByTagName(tag)[0]?.textContent?.trim() || '';
+        }
+
+        function atomAlternateHref(entryEl) {
+            const links = entryEl.getElementsByTagName('link');
+            for (const link of links) {
+                if ((link.getAttribute('rel') || 'alternate') === 'alternate') {
+                    return link.getAttribute('href') || '';
+                }
+            }
+            return links[0]?.getAttribute('href') || '';
+        }
+
+        function parseCursorStatusEntry(entryEl) {
+            const title = atomText(entryEl, 'title');
+            const contentHtml = atomText(entryEl, 'content');
+            const contentDoc = new DOMParser().parseFromString(contentHtml, 'text/html');
+            // Updates are newest-first: the first <p><strong> is the current status.
+            const latestStatus = contentDoc.querySelector('p strong')?.textContent?.trim() || 'Investigating';
+            return {
+                id: atomText(entryEl, 'id'),
+                title,
+                link: atomAlternateHref(entryEl),
+                latestStatus,
+                active: latestStatus.toLowerCase() !== 'resolved',
+                _haystack: `${title} ${contentDoc.body?.textContent || ''}`.toLowerCase()
+            };
+        }
+
+        function parseCursorStatusFeed(xmlText) {
+            const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+            if (doc.getElementsByTagName('parsererror').length) {
+                throw new Error('Failed to parse Cursor status feed');
+            }
+            return Array.from(doc.getElementsByTagName('entry')).map(parseCursorStatusEntry);
+        }
+
+        // Short tokens (o1 / o3) need a word boundary so they do not match inside "auto1" etc.
+        function cursorHaystackHasKeyword(haystack, keyword) {
+            return keyword.length <= 2
+                ? new RegExp(`\\b${keyword}\\b`).test(haystack)
+                : haystack.includes(keyword);
+        }
+
+        function isRelevantCursorIncident(entry) {
+            if (entry._haystack.includes('grok')) return true;
+            return !CURSOR_STATUS_OTHER_MODEL_KEYWORDS.some(keyword => cursorHaystackHasKeyword(entry._haystack, keyword));
+        }
+
+        function computeCursorStatusState(incidents) {
+            if (incidents.length === 0) return 'green';
+            return incidents.some(i => CURSOR_STATUS_ALERT_STATUSES.has(i.latestStatus.toLowerCase()))
+                ? 'red' : 'orange';
+        }
+
+        let cursorStatusInFlight = false;
+        async function refreshCursorStatus() {
+            if (cursorStatusInFlight) return;
+            cursorStatusInFlight = true;
+            try {
+                const response = await fetch(CURSOR_STATUS_FEED_URL);
+                if (!response.ok) {
+                    throw new Error(`Failed to load Cursor status feed: ${response.statusText}`);
+                }
+                const entries = parseCursorStatusFeed(await response.text());
+                const activeRelevant = entries.filter(e => e.active && isRelevantCursorIncident(e));
+                store.cursorStatus = {
+                    state: computeCursorStatusState(activeRelevant),
+                    incidents: activeRelevant.map(({ id, title, link, latestStatus }) => ({ id, title, link, latestStatus })),
+                    fetchedAt: Date.now()
+                };
+            } catch (error) {
+                Logger.error('Error loading Cursor status feed:', error);
+            } finally {
+                cursorStatusInFlight = false;
+            }
         }
 
         // ===== Modal Functions =====
@@ -6802,6 +7028,8 @@
             // Jenkins last-build status per `${product}:${patchId}` (product is part of the key
             // because Odra-01.xxx exists on both Xeelo and XeeloAdmin).
             jenkinsStatus: {},
+            // Cursor/Grok icon. Independent of product/PAT; see refreshCursorStatus().
+            cursorStatus: { state: 'checking', incidents: [], fetchedAt: 0 },
             loadingTaskDotIds: [],
             // Bumped on full reload so an in-flight background fetch cannot merge stale results.
             taskDotFetchGen: 0,
@@ -7724,6 +7952,15 @@
         }, '#appHeader');
 
         mountApp({ methods: { open: openHelpModal } }, '#helpIconApp');
+
+        mountApp({
+            computed: {
+                store: () => store,
+                CURSOR_STATUS_LABELS: () => CURSOR_STATUS_LABELS
+            }
+        }, '#cursorStatusApp');
+        refreshCursorStatus();
+        setInterval(refreshCursorStatus, CURSOR_STATUS_POLL_INTERVAL_MS);
 
         // ===== Work Item Detail modal =====
         mountApp({

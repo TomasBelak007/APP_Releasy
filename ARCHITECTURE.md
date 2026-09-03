@@ -72,7 +72,8 @@ reactive layer. Plain functions mutate `store` and never touch the DOM to expres
    `initializePermissionBadge()` -> `activateProduct(store.activeProduct)` -> `checkAndOpenWorkItemFromUrl()`.
    Only the active tab's data is fetched; child tasks for that tab load in the background for the
    status dots (and Task Mode). The other 4 products load lazily the first time the user switches
-   to them (see [Load / reload](#flows-what-calls-what)).
+   to them (see [Load / reload](#flows-what-calls-what)). The Cursor/Grok status poll starts
+   right after `#cursorStatusApp` is mounted, not from this handler - it does not need a PAT.
 4. `popstate` opens or closes the detail modal from the `?workitem=<id>` query parameter.
 
 ## Configuration
@@ -92,6 +93,7 @@ it first.
 | `releaseNames` | The 5 products: `{ product, release, epicID }`. Drives both the WIQL loop and the parent Epic link when creating work items |
 | `buildChangesPipelineMap` | product -> Jenkins pipeline name; a product missing here has no Build Changes button and no Jenkins status icon |
 | `buildChangesBranchYearMap` | product -> year in `rel-<year>-<major>.<patch>`; missing products fall back to `2025`. Shared by Build Changes and Jenkins status via `jenkinsReleaseBranch()` |
+| `CURSOR_STATUS_FEED_URL`, `CURSOR_STATUS_POLL_INTERVAL_MS`, `CURSOR_STATUS_OTHER_MODEL_KEYWORDS`, `CURSOR_STATUS_ALERT_STATUSES`, `CURSOR_STATUS_LABELS` | Drive the floating Cursor/Grok status icon: public Atom feed URL, 5 min poll, other-model exclusion keywords, statuses that light the icon red, and the aria/empty-state labels |
 | `assignees` | Assignee list (`{ email, name }`) for the "Change Assigned To" picker, create forms, **and** `store.availableAssignees` (see below) |
 | `titlePrefixes`, `titlePrefixesTask` | Allowed title prefixes per product / for tasks |
 | `TASK_PREFIX_BADGES` | Unique letter + color for each `titlePrefixesTask` prefix pill (D/X/I/A/U/T/C/K/O) |
@@ -150,7 +152,7 @@ derived is a computed assigned onto the store afterwards (`reactive()` unwraps t
 templates and plain JS read `store.x`).
 
 Raw state: `theme`, `systemPrefersDark`, `releaseResults`, `loadingProducts`, `childTasks`,
-`jenkinsStatus`, `loadingTaskDotIds`, `taskDotFetchGen`, `taskMode`,
+`jenkinsStatus`, `cursorStatus`, `loadingTaskDotIds`, `taskDotFetchGen`, `taskMode`,
 `permission`, `activeProduct`, `search`,
 `expanded`, `hidden`, `filters`, `filterModalOpen`, `unhideModalOpen`, `notifications`,
 `closeDetailAfterCreate`, `lastReloadAt`, `clockTick`, plus **one slice per modal**: `picker`,
@@ -161,6 +163,11 @@ Raw state: `theme`, `systemPrefersDark`, `releaseResults`, `loadingProducts`, `c
 `refreshJenkinsStatusForProduct()` for **visible** patches only (parent major expanded, patch
 not hidden, not `999`). A 60s background interval re-fetches those same visible keys; expanding
 a major fetches any newly shown patch immediately (`onlyMissing`).
+
+`store.cursorStatus` is `{ state, incidents, fetchedAt }` with `state` one of `checking` /
+`green` / `orange` / `red`, filled by `refreshCursorStatus()` - unlike every other piece of state
+here it is not scoped to a product or gated on a PAT at all, since it reads a public feed. See
+[Cursor/Grok status](#flows-what-calls-what) under Flows.
 
 `loadingProducts` (products currently being fetched) exists purely to drive the lazy-loading
 functions in [Load / reload](#flows-what-calls-what); there is no more single `loading` boolean,
@@ -228,6 +235,7 @@ the root element** in `<body>`; only the components below use `x-template`.
 | `#themeApp` | Three theme buttons from `THEMES` | Sets `store.theme` |
 | `#appHeader` | Logo bound to `LOGO_URLS[resolvedTheme]` | |
 | `#helpIconApp` | Help icon | `openHelpModal` |
+| `#cursorStatusApp` | Floating Cursor/Grok status icon (green/orange/red), hover tooltip lists active relevant incidents | `store.cursorStatus`, `CURSOR_STATUS_LABELS`; not a modal, no `MODAL_STACK` entry |
 | `#appVersionFooter` | Version + "updated x ago" | `APP_RELEASE` |
 | `#notificationApp` | `store.notifications` in a `<transition-group>` | Fed by `showNotification()` |
 | `#filterApp` | Filter modal (assignee + status checkboxes) | `store.setFilters()`, no reload |
@@ -457,6 +465,19 @@ proxy and fills `store.buildChanges.changes`.
 Click opens the same Build Changes modal. A 60s background poll refreshes those visible
 patches; expanding a major fetches any patch that does not have a status yet.
 
+**Cursor/Grok status** - global, no PAT. `refreshCursorStatus()` starts right after
+`#cursorStatusApp` is mounted and then every `CURSOR_STATUS_POLL_INTERVAL_MS` (5 min), with an
+in-flight guard so overlapping polls do not stack. It fetches `CURSOR_STATUS_FEED_URL` (CORS-open
+Atom). `parseCursorStatusFeed()` reads namespaced `<entry>` nodes via `getElementsByTagName` and
+maps each to `{ id, title, link, latestStatus, active }` - `active` is the first `<p><strong>` in
+`<content>` (updates are newest-first; `Resolved` means over). `isRelevantCursorIncident()` keeps
+an entry that mentions "Grok", or that mentions none of `CURSOR_STATUS_OTHER_MODEL_KEYWORDS`
+(short tokens like `o1`/`o3` use a word boundary). `computeCursorStatusState()` reduces the
+active+relevant subset via `CURSOR_STATUS_ALERT_STATUSES` to `green` / `red` / `orange`. A
+fetch/parse failure is logged and the last known state is kept (`checking` only until the first
+success). The icon uses `CURSOR_STATUS_LABELS` as `aria-label` (no native `title`, which would
+fight the hover panel).
+
 **Help** - `openHelpModal()` sets `store.help.open`, and on first open `fetchHelpGuide()` loads
 `guide.html` locally (only on `127.0.0.1`) or from the Integray provisioning endpoint. Result goes
 into `store.help.html` and is injected with `v-html`; `showHelpSection()` then scopes its DOM work
@@ -496,7 +517,8 @@ these helpers. Create, comments and attachments still build the full URL and cal
 | Attachments | `POST /wit/attachments?fileName=...&api-version=6.0` on paste/upload; images in descriptions and comments are re-fetched authenticated and swapped for blob URLs (`replaceImagesWithAuthenticatedBlobs`) |
 | Token check | `GET https://dev.azure.com/{org}/_apis/connectionData` |
 
-Two calls do **not** go to Azure DevOps, both to `provisioning.integray.app`:
+Three calls do **not** go to Azure DevOps: two to `provisioning.integray.app`, one to
+`status.cursor.com`:
 
 - **Build Changes**: `GET .../jenkins/build-changes?pipeline=<buildChangesPipelineMap[product]>&branch=rel-<year>-<major>.<patch>`,
   and the response's `[0].changes` is what the modal lists. `year` comes from
@@ -506,6 +528,9 @@ Two calls do **not** go to Azure DevOps, both to `provisioning.integray.app`:
   Changes). Response `[0]` is `{ pipeline, branch, building, result, build }`; a missing branch
   is **200** with `result: null, build: null` (not 400). Mapped in `mapJenkinsBuildState()`.
 - **Assets**: `guide.html` and both logos (`LOGO_URLS`).
+- **Cursor status**: `GET https://status.cursor.com/history.atom` (public, unauthenticated,
+  `access-control-allow-origin: *`) - the Atom incident-history feed powering the Cursor/Grok
+  status icon (see [Cursor/Grok status](#flows-what-calls-what)).
 
 ## Invariants and conventions
 
@@ -607,6 +632,7 @@ modes:
 | Add a product / release | `releaseNames` (+ `epicID`), `titlePrefixes`, `availablePatchVersions`, optionally `buildChangesPipelineMap` + `buildChangesBranchYearMap` |
 | Add a patch version to a picker | `availablePatchVersions` |
 | Add / remove an assignee | `assignees` |
+| Change Cursor/Grok status relevance rules | `CURSOR_STATUS_OTHER_MODEL_KEYWORDS`, `CURSOR_STATUS_ALERT_STATUSES`, `isRelevantCursorIncident()`, `computeCursorStatusState()` |
 | Change allowed statuses | `statusOptions` |
 | Change which items load | the WIQL query in `loadProductData()` (types, `Closed` window) |
 | Change which fields the grid fetches | `GRID_WORK_ITEM_FIELDS` (keep Description out; detail/export fetch full items) |
