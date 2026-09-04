@@ -2679,7 +2679,7 @@
                         <p v-if="d.commentsLoading" class="work-item-detail-comments-loading">Loading comments…</p>
                         <p v-else-if="d.commentsError" class="work-item-detail-comments-empty">{{ d.commentsError }}</p>
                         <p v-else-if="!d.comments.length" class="work-item-detail-comments-empty">No comments.</p>
-                        <div v-else v-for="(comment, index) in d.comments" :key="index" class="work-item-detail-comment">
+                        <div v-else v-for="(comment, index) in d.comments" :key="comment.id ?? index" class="work-item-detail-comment">
                             <div class="work-item-detail-comment-meta">
                                 <span class="work-item-detail-comment-author">{{ comment.author }}</span>
                                 <span class="work-item-detail-comment-meta-sep" aria-hidden="true">·</span>
@@ -3356,7 +3356,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-04T05:55:00.000Z'
+            updatedAt: '2026-09-04T13:39:40.000Z'
         };
 
         // ===== API Configuration =====
@@ -6301,6 +6301,9 @@
                 ? (comment.renderedText || (comment.text ? marked.parse(comment.text) : ''))
                 : (comment.text || comment.renderedText || '');
             return {
+                // Stable v-for key so a newly posted comment does not reuse an existing row's
+                // DOM (and its already-authenticated blob: image URLs) via :key="index".
+                id: comment.id,
                 author: comment.createdBy?.displayName || comment.createdBy?.uniqueName || 'Unknown',
                 when,
                 whenLabel: formatRelativeDate(when).text || when,
@@ -6381,8 +6384,12 @@
                 if (d.id !== workItemId) return true; // modal moved on to another item meanwhile
                 
                 // Comments sort newest-first (see fetchWorkItemCommentsAll()), so the one just
-                // posted belongs at the top, right below the composer.
-                d.comments.unshift(mapCommentForDisplay(created));
+                // posted belongs at the top, right below the composer. Replace the array rather
+                // than unshift(): Vue 3's watcher on `d.comments` is not deep, so an in-place
+                // mutation would never run normalizeCommentAttachmentImages() /
+                // replaceImagesWithAuthenticatedBlobs() and embedded images would stay broken
+                // until the ticket was closed and reopened.
+                d.comments = [mapCommentForDisplay(created), ...d.comments];
                 // Blank the composer and flip back to the default format for the next comment - the
                 // caller re-renders the mounted editor off these once this returns true.
                 d.newComment.descriptionHtml = '';
@@ -7995,15 +8002,20 @@
                     }
                 },
                 // Comment bodies are injected with v-html, so the attachment fix-ups that used to
-                // run while building the nodes now run after Vue has rendered them
-                'd.comments'() {
-                    this.$nextTick(() => {
-                        const root = this.$refs.comments;
-                        if (!root) return;
-                        normalizeCommentAttachmentImages(root);
-                        replaceImagesWithAuthenticatedBlobs(root)
-                            .catch(e => Logger.warn('Comment images:', e));
-                    });
+                // run while building the nodes now run after Vue has rendered them. deep so an
+                // in-place push/unshift would still fire; submitNewWorkItemComment() also replaces
+                // the array so this runs even without deep.
+                'd.comments': {
+                    deep: true,
+                    handler() {
+                        this.$nextTick(() => {
+                            const root = this.$refs.comments;
+                            if (!root) return;
+                            normalizeCommentAttachmentImages(root);
+                            replaceImagesWithAuthenticatedBlobs(root)
+                                .catch(e => Logger.warn('Comment images:', e));
+                        });
+                    }
                 }
             },
             methods: {

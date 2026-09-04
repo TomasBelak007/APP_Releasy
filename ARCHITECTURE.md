@@ -407,8 +407,12 @@ nested object instead of `d` itself. `submitNewWorkItemComment()` reads back the
 runs it through the same `processImagesForDevOps()`/`processImagesForDevOpsMarkdown()` used for
 descriptions (both are already generic, not tied to a specific field), then `POST`s to
 `/wit/workItems/{id}/comments?format=markdown|html` (format is a query param here, not a
-`/multilineFieldsFormat` op, since Add Comment takes it per-request) and unshifts the response -
-mapped through the same `mapCommentForDisplay()` the initial load uses - onto `d.comments`. Clearing
+`/multilineFieldsFormat` op, since Add Comment takes it per-request) and prepends the response -
+mapped through the same `mapCommentForDisplay()` the initial load uses (`id` included so the
+comments `v-for` can key by comment id) - by replacing `d.comments` with a new array. An in-place
+`unshift()` would not fire the `#workItemDetailApp` watcher that runs
+`normalizeCommentAttachmentImages()` / `replaceImagesWithAuthenticatedBlobs()`, so a just-posted
+markdown image would stay broken until the ticket was closed and reopened. Clearing
 `d.newComment.descriptionHtml` afterwards is enough to blank whichever editor is mounted, since both
 already watch their own `html`/`markdown` prop and re-render on change.
 
@@ -626,6 +630,11 @@ modes:
 - `exportPatchToMarkdown()` still runs every description through the HTML-oriented `htmlToText()`
   regardless of `multilineFieldsFormat` - for an already-Markdown description this is a mostly
   harmless no-op today, but it is not format-aware.
+- **Vue 3 does not fire a non-deep watcher on array mutation.** `#workItemDetailApp`'s
+  `d.comments` watcher authenticates attachment `<img>`s after render; `submitNewWorkItemComment()`
+  must assign a new array (and the watcher is `deep`) so a just-posted image comment is processed
+  without closing the ticket. The comments `v-for` keys by `comment.id` so existing rows keep
+  their blob URLs instead of being reused by index.
 
 ## Where to change what
 
