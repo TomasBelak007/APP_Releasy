@@ -183,7 +183,9 @@ Store methods: `isExpanded`, `toggleExpanded`, `expandAll`, `collapseAll`, `togg
 `isExpanded` / `toggleExpanded` / `expandAll` / `collapseAll` / `visibleParentIds` go through
 `expandedOf(store)` so they only read/write `store.expanded[activeProduct]`. Switching tabs
 therefore restores that product's last expand tree instead of looking fully collapsed. `expandAll`
-and `collapseAll` never wipe another product's slice.
+opens every non-hidden major and patch (Bugs/Features visible). `collapseAll` keeps those majors
+open and clears `patches`, so the tree stops at patch headers. Neither wipes another product's
+slice.
 
 Derived (`VUE LAYER > Derived state`):
 

@@ -2340,7 +2340,8 @@
                     </button>
                     <button class="btn btn-outline-primary" @click="store.expandAll()"
                             title="Expand all majors and patches of the current product">Expand All</button>
-                    <button class="btn btn-outline-secondary" @click="store.collapseAll()">Collapse All</button>
+                    <button class="btn btn-outline-secondary" @click="store.collapseAll()"
+                            title="Collapse all patches of the current product, leaving patch headers visible">Collapse All</button>
                 </div>
                 <div class="grid-search-container">
                     <i class="fa-solid fa-magnifying-glass grid-search-icon"></i>
@@ -3355,7 +3356,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-03T17:15:00.000Z'
+            updatedAt: '2026-09-04T05:55:00.000Z'
         };
 
         // ===== API Configuration =====
@@ -7167,7 +7168,9 @@
                 slice.patches = this.allPatchIds.slice();
             },
             collapseAll() {
-                this.expanded[this.activeProduct] = emptyExpandedSlice();
+                const slice = expandedOf(this);
+                slice.majors = this.allMajorIds.filter(id => !this.hidden.majors.includes(id));
+                slice.patches = [];
             },
 
             // --- hidden versions ---

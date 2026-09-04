@@ -26,7 +26,7 @@ Azure DevOps Release Overview Application
 - 🎨 **Témata** - Světlý režim, tmavý režim a automatický režim podle nastavení systému
 - 🔄 **Reload dat** - Aktualizace dat z Azure DevOps včetně informace o posledním načtení
 - 👁️ **Skrývání verzí** - Možnost skrýt major nebo patch verze pro lepší přehled
-- 📂 **Expand All / Collapse All** - Expand All rozbalí major i patch verze aktuálního produktu, takže jsou vidět Bugs a Features; Collapse All sbalí jen aktuální produkt. Stav rozbalení se pamatuje per produkt v localStorage.
+- 📂 **Expand All / Collapse All** - Expand All rozbalí major i patch verze aktuálního produktu, takže jsou vidět Bugs a Features; Collapse All nechá major verze rozbalené a sbalí jen patche, takže zůstanou vidět jejich hlavičky. Stav rozbalení se pamatá per produkt v localStorage.
 
 ### Read-Write funkce (rozšířený režim)
 Všechny read-only funkce plus:
