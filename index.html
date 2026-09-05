@@ -3360,7 +3360,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-05T09:49:22.000Z'
+            updatedAt: '2026-09-05T12:56:00.000Z'
         };
 
         // ===== API Configuration =====
@@ -7076,8 +7076,9 @@
             return picked.slice(0, TASK_DOT_MAX);
         }
 
-        // Prefixes that still have at least one non-Closed child. Tasks without a known
-        // titlePrefixesTask prefix (empty fallback) are ignored. Order follows titlePrefixesTask.
+        // Prefixes that still have at least one assigned, non-Closed child. Unassigned tasks
+        // and tasks without a known titlePrefixesTask prefix (empty fallback) are ignored.
+        // Order follows titlePrefixesTask.
         function openTaskPrefixes(tasks) {
             const groups = new Map();
             for (const prefix of titlePrefixesTask) {
@@ -7086,7 +7087,9 @@
             for (const task of tasks) {
                 const { prefix } = splitTitleIntoPrefixAndSuffix(task.title, titlePrefixesTask, '');
                 if (!prefix || !groups.has(prefix)) continue;
-                if (task.state !== 'Closed') groups.set(prefix, groups.get(prefix) + 1);
+                if (task.state === 'Closed') continue;
+                if (!task.assignedTo || task.assignedTo === 'Unassigned') continue;
+                groups.set(prefix, groups.get(prefix) + 1);
             }
             const result = [];
             for (const prefix of titlePrefixesTask) {
