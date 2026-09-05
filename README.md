@@ -14,7 +14,7 @@ Azure DevOps Release Overview Application
 - 📈 **Progress bary** - Vizuální indikátory průběhu podle statusů (Closed, Resolved, Active, New, Evaluation)
 - 🔍 **Filtrování** - Filtrování work items podle assignee a statusu
 - 🔎 **Fulltextové hledání** - Hledání v gridu podle ID a názvu work itemů
-- 👁️ **Detail work itemu** - Zobrazení detailních informací včetně popisu a komentářů
+- 👁️ **Detail work itemu** - Zobrazení detailních informací včetně popisu a komentářů; tlačítko Refresh znovu načte daný work item i jeho child tasky z Azure DevOps (bez reloadu celé stránky)
 - 📋 **Kopírování** - Zkopírování názvu nebo odkazu na work item do schránky
 - 🔀 **Build Changes** - Přehled změn v buildu pro patch verze s namapovanou pipeline. Vedle tlačítka je ikona stavu posledního Jenkins buildu (tyrkysová = běží, zelená = prošel, červená = spadl, šedá = žádný build). Stav se na zobrazených patchích obnovuje na pozadí každou minutu
 - 🟢 **Cursor/Grok status** - Plovoucí ikona vpravo nahoře (vedle nápovědy) hlídá oficiální stavovou

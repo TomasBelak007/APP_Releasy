@@ -2695,6 +2695,10 @@
                 </div>
             </div>
             <div class="modal-footer">
+                <button class="btn btn-secondary" :disabled="d.loading" @click="refresh"
+                        title="Reload this work item and its child tasks from Azure DevOps">
+                    <i class="fa-solid fa-rotate"></i> Refresh
+                </button>
                 <button class="btn btn-secondary" @click="close()">Close</button>
                 <button v-if="store.canWrite" class="btn btn-primary" @click="copyWorkItemFromDetail()"><i class="fa-solid fa-clone"></i> Create copy</button>
                 <button v-if="store.canWrite" class="btn btn-primary" @click="save"><i class="fa-solid fa-save"></i> Update</button>
@@ -3356,7 +3360,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-05T09:20:27.000Z'
+            updatedAt: '2026-09-05T09:49:22.000Z'
         };
 
         // ===== API Configuration =====
@@ -6174,6 +6178,81 @@
         };
         
         // Everything the modal shows now lives in store.detail; the component re-renders from it.
+        // Shared by openWorkItemDetailModal() and refreshWorkItemDetail() - both land the same
+        // $expand=Relations payload into the detail slice (title split, description field/format,
+        // format lock). Returns the work item type so the caller can decide whether to load tasks.
+        function applyWorkItemDetailPayload(workItemId, data) {
+            const d = store.detail;
+            const fields = data.fields || {};
+            d.fields = fields;
+            d.relations = data.relations || [];
+            d.title = fields['System.Title'] || `#${workItemId}`;
+            
+            const type = fields['System.WorkItemType'] || '';
+            
+            // Every type gets the same prefix-select + free-text editing the create forms use;
+            // an unrecognized prefix is left blank rather than guessed (see
+            // splitTitleIntoPrefixAndSuffix()). Tasks use the fixed titlePrefixesTask list,
+            // Features/Bugs use the prefix list of the product resolved from their fields.
+            d.titlePrefixOptions = type === 'Task'
+                ? titlePrefixesTask
+                : titlePrefixes[resolveProductForWorkItem(fields, fields['Custom.PlatformRelease'])] || [];
+            const { prefix, suffix } = splitTitleIntoPrefixAndSuffix(d.title, d.titlePrefixOptions, '');
+            d.titlePrefix = prefix;
+            d.title = suffix;
+            
+            // Prefer ReproSteps for Bug if present, else System.Description
+            const reproStepsPath = 'Microsoft.VSTS.TCM.ReproSteps';
+            const descriptionPath = 'System.Description';
+            const descriptionFieldPath = (type === 'Bug' && fields[reproStepsPath]) ? reproStepsPath : descriptionPath;
+            d.descriptionFieldPath = descriptionFieldPath;
+            d.descriptionHtml = fields[descriptionFieldPath] || '<em>No description</em>';
+            d.descriptionHtmlCache = null;
+            d.descriptionMarkdownCache = null;
+            // multilineFieldsFormat is only present when the request has no `fields=` projection
+            // (ours doesn't); check the format of whichever field actually supplied the content.
+            // Azure DevOps returns the value lower-cased ("markdown"/"html"), so compare
+            // case-insensitively rather than against the capitalized 'Markdown' literal.
+            const serverFormat = String(data.multilineFieldsFormat?.[descriptionFieldPath] || '').toLowerCase();
+            d.descriptionFormat = serverFormat === 'markdown' ? 'Markdown' : 'Html';
+            // Once Azure DevOps has a field saved as Markdown it can never go back to HTML - lock
+            // the toggle so the user can only convert Html -> Markdown, never the other way.
+            d.descriptionFormatLocked = d.descriptionFormat === 'Markdown';
+            return type;
+        }
+        
+        // After a detail refresh, push the grid-visible fields into releaseResults / childTasks
+        // so the row (title, state, assignee, dots) matches Azure DevOps without a full reload.
+        // PlatformRelease is the one field that relocates the item in the hierarchy.
+        function syncGridFromRefreshedWorkItem(workItemId, fields) {
+            const id = Number(workItemId);
+            let existingPatch = null;
+            store.forEachWorkItem(item => {
+                if (item.id === id) existingPatch = item.fields['Custom.PlatformRelease'] || null;
+            });
+            const newPatch = fields['Custom.PlatformRelease'] || '';
+            if (existingPatch != null && newPatch && existingPatch !== newPatch) {
+                store.moveWorkItemPatch(id, newPatch);
+            }
+            const syncFields = [
+                'System.Title',
+                'System.AssignedTo',
+                'System.State',
+                'System.CreatedDate',
+                'Custom.Epictitle',
+                'Microsoft.VSTS.Common.Priority',
+                'Microsoft.VSTS.Common.Severity',
+                'Custom.Shirtsize'
+            ];
+            for (const field of syncFields) {
+                if (fields[field] !== undefined) {
+                    store.applyFieldUpdate(id, `/fields/${field}`, fields[field]);
+                } else if (field === 'Custom.Shirtsize') {
+                    store.applyFieldUpdate(id, `/fields/${field}`, '');
+                }
+            }
+        }
+        
         // Gone with the old version: the read-only/read-write DOM toggling (both branches),
         // the manual "reset content" pass, the meta badge HTML built by string concatenation and
         // the six updateXEditVisibility() calls that re-attached click handlers afterwards.
@@ -6216,40 +6295,7 @@
                 const data = await devOpsGet(`/wit/workitems/${workItemId}?$expand=Relations&api-version=7.1`);
                 if (d.id !== workItemId) return; // a different work item was opened meanwhile
                 
-                const fields = data.fields || {};
-                d.fields = fields;
-                d.relations = data.relations || [];
-                d.title = fields['System.Title'] || `#${workItemId}`;
-                
-                const type = fields['System.WorkItemType'] || '';
-                
-                // Every type gets the same prefix-select + free-text editing the create forms use;
-                // an unrecognized prefix is left blank rather than guessed (see
-                // splitTitleIntoPrefixAndSuffix()). Tasks use the fixed titlePrefixesTask list,
-                // Features/Bugs use the prefix list of the product resolved from their fields.
-                d.titlePrefixOptions = type === 'Task'
-                    ? titlePrefixesTask
-                    : titlePrefixes[resolveProductForWorkItem(fields, fields['Custom.PlatformRelease'])] || [];
-                const { prefix, suffix } = splitTitleIntoPrefixAndSuffix(d.title, d.titlePrefixOptions, '');
-                d.titlePrefix = prefix;
-                d.title = suffix;
-                
-                // Prefer ReproSteps for Bug if present, else System.Description
-                const reproStepsPath = 'Microsoft.VSTS.TCM.ReproSteps';
-                const descriptionPath = 'System.Description';
-                const descriptionFieldPath = (type === 'Bug' && fields[reproStepsPath]) ? reproStepsPath : descriptionPath;
-                d.descriptionFieldPath = descriptionFieldPath;
-                d.descriptionHtml = fields[descriptionFieldPath] || '<em>No description</em>';
-                // multilineFieldsFormat is only present when the request has no `fields=` projection
-                // (ours doesn't); check the format of whichever field actually supplied the content.
-                // Azure DevOps returns the value lower-cased ("markdown"/"html"), so compare
-                // case-insensitively rather than against the capitalized 'Markdown' literal.
-                const serverFormat = String(data.multilineFieldsFormat?.[descriptionFieldPath] || '').toLowerCase();
-                d.descriptionFormat = serverFormat === 'markdown' ? 'Markdown' : 'Html';
-                // Once Azure DevOps has a field saved as Markdown it can never go back to HTML - lock
-                // the toggle so the user can only convert Html -> Markdown, never the other way.
-                d.descriptionFormatLocked = d.descriptionFormat === 'Markdown';
-                
+                const type = applyWorkItemDetailPayload(workItemId, data);
                 loadWorkItemDetailTasks(workItemId, type, pat);
             } catch (err) {
                 Logger.error(err);
@@ -6259,10 +6305,49 @@
             }
         };
         
+        // Re-fetches the open work item (fields, description, comments) and its child tasks from
+        // Azure DevOps without closing the modal or pushing history. Child tasks always hit the
+        // network (the open path may reuse store.childTasks) and replace that parent's cache so
+        // deleted tasks disappear from the cards and the grid dots. Unsaved description edits
+        // are discarded; a draft in the new-comment composer is left alone.
+        window.refreshWorkItemDetail = async function() {
+            const d = store.detail;
+            const workItemId = d.id;
+            if (!workItemId || d.loading) return false;
+            
+            d.loading = true;
+            d.tasksError = '';
+            d.commentsError = '';
+            d.commentsLoading = true;
+            d.tasksLoading = true;
+            
+            try {
+                const pat = await getPAT();
+                if (!pat || d.id !== workItemId) return false;
+                
+                loadWorkItemDetailComments(workItemId, pat);
+                const data = await devOpsGet(`/wit/workitems/${workItemId}?$expand=Relations&api-version=7.1`);
+                if (d.id !== workItemId) return false;
+                
+                const type = applyWorkItemDetailPayload(workItemId, data);
+                syncGridFromRefreshedWorkItem(workItemId, data.fields || {});
+                await loadWorkItemDetailTasks(workItemId, type, pat, { force: true });
+                showNotification('Work item refreshed', 'success');
+                return true;
+            } catch (err) {
+                Logger.error(err);
+                showNotification(err.message || 'Failed to refresh work item', 'error');
+                return false;
+            } finally {
+                if (d.id === workItemId) d.loading = false;
+            }
+        };
+        
         // Child task cards inside the detail modal. Reuses store.childTasks when the grid's
         // lazy fetch already has this parent; otherwise fetches once and merges so the dots
-        // pick it up too.
-        async function loadWorkItemDetailTasks(workItemId, workItemType, pat) {
+        // pick it up too. `force` (Refresh) always re-fetches and replaces that parent's
+        // cache so tasks removed in Azure DevOps disappear from the cards and the dots.
+        async function loadWorkItemDetailTasks(workItemId, workItemType, pat, { force = false } = {}) {
             const d = store.detail;
             if (workItemType === 'Task') {
                 d.tasksLoading = false;
@@ -6271,12 +6356,12 @@
             try {
                 const key = String(workItemId);
                 let tasks;
-                if (Object.prototype.hasOwnProperty.call(store.childTasks, key)) {
+                if (!force && Object.prototype.hasOwnProperty.call(store.childTasks, key)) {
                     tasks = store.childTasks[key];
                 } else {
                     const fetched = await fetchChildTasksForWorkItems([workItemId]);
                     if (d.id !== workItemId) return;
-                    mergeChildTasksBatch(fetched);
+                    mergeChildTasksBatch(fetched, { replace: force });
                     tasks = fetched[key] || [];
                 }
                 if (d.id !== workItemId) return;
@@ -7498,15 +7583,19 @@
             return [...ids];
         });
 
-        function mergeChildTasksBatch(fetched) {
+        function mergeChildTasksBatch(fetched, { replace = false } = {}) {
             const next = { ...store.childTasks };
             for (const [parentId, list] of Object.entries(fetched)) {
-                const existing = next[parentId] || [];
-                const byId = new Map(list.map(t => [t.id, t]));
-                for (const t of existing) {
-                    if (!byId.has(t.id)) byId.set(t.id, t);
+                if (replace) {
+                    next[parentId] = list.slice();
+                } else {
+                    const existing = next[parentId] || [];
+                    const byId = new Map(list.map(t => [t.id, t]));
+                    for (const t of existing) {
+                        if (!byId.has(t.id)) byId.set(t.id, t);
+                    }
+                    next[parentId] = [...byId.values()];
                 }
-                next[parentId] = [...byId.values()];
                 next[parentId].forEach(attachSearchText);
             }
             store.childTasks = next;
@@ -8049,6 +8138,13 @@
                 copyTitle: copyWorkItemTitle,
                 copyLink: copyWorkItemLink,
                 save: updateWorkItemDescription,
+                // The description editor is uncontrolled, so a refresh that lands the same
+                // html/markdown prop would not overwrite unsaved local edits - force render
+                // after a successful fetch (same reason submitNewComment re-renders).
+                async refresh() {
+                    const ok = await refreshWorkItemDetail();
+                    if (ok) this.$nextTick(() => this.$refs.editor?.render());
+                },
                 close() { closeWorkItemDetailModal(); },
                 shortDate(value) { return formatRelativeDate(value).text || value; },
                 editState() {

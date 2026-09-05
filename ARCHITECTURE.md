@@ -245,7 +245,7 @@ the root element** in `<body>`; only the components below use `x-template`.
 | `#filterApp` | Filter modal (assignee + status checkboxes) | `store.setFilters()`, no reload |
 | `#hiddenVersionsApp` | Unhide modal | `store.unhide()`, no reload |
 | `#valuePickerApp` | **All six "change X" modals** | `PICKER_KINDS[kind]` |
-| `#workItemDetailApp` | Work item detail | Meta badges, `<html-editor>`/`<markdown-editor>` (picked by `d.descriptionFormat`, with an HTML->Markdown conversion toggle when `store.canWrite`, disabled once already Markdown - `d.descriptionFormatLocked`), tasks, comments; title splits into a prefix `<select>` + text (options from `d.titlePrefixOptions`), see [Detail modal](#flows-what-calls-what) |
+| `#workItemDetailApp` | Work item detail | Meta badges, `<html-editor>`/`<markdown-editor>` (picked by `d.descriptionFormat`, with an HTML->Markdown conversion toggle when `store.canWrite`, disabled once already Markdown - `d.descriptionFormatLocked`), tasks, comments; title splits into a prefix `<select>` + text (options from `d.titlePrefixOptions`); footer **Refresh** re-fetches the open item + comments + child tasks (`refreshWorkItemDetail()`), see [Detail modal](#flows-what-calls-what) |
 | `#patApp` | PAT modal | `savePAT`, autofocus on open |
 | `#helpApp` | Help modal, `v-html` of the fetched guide | `showHelpSection('help-pat')` after render |
 | `#workItemCreatedApp` | Success modal after create | Close just hides it - the new item was already inserted into the store when it was created |
@@ -319,7 +319,9 @@ time, without awaiting from `activateProduct` or touching `isActiveProductLoadin
 not on screen). Each batch goes through `fetchChildTasksForWorkItems()` (parents: `$expand=relations` only — Azure DevOps
 rejects `fields` together with `$expand`; children:
 `fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo`) and is merged
-into `childTasks`, including empty arrays for parents with no tasks. The row renders at most
+into `childTasks`, including empty arrays for parents with no tasks. The default merge keeps
+cached tasks that the new batch did not return; a detail Refresh passes `{ replace: true }` so
+deleted children disappear. The row renders at most
 `TASK_DOT_MAX` (6) dots via `taskDotView()` / `pickVisibleTaskDots()` / `allocateTaskDotQuota()`:
 every present status gets at least one dot (when there are ≤ 6 statuses); leftover slots are split
 proportionally by remaining task counts (largest remainder), so 10 New / 3 Active / 15 Closed
@@ -342,12 +344,24 @@ cached for other tabs.
 
 **Detail modal** - `openWorkItemDetailModal(id, returnToParentId)` resets `store.detail`, pushes
 `?workitem=<id>`, starts `loadWorkItemDetailComments()` (parallel), awaits the work item with
-`$expand=Relations`, then starts `loadWorkItemDetailTasks()`. That helper reuses
-`store.childTasks[id]` when the grid's lazy fetch already has the parent; otherwise it calls
-`fetchChildTasksForWorkItems([id])` and merges the result into `childTasks` so the dots pick it
-up too. Every callback re-checks
+`$expand=Relations`, then starts `loadWorkItemDetailTasks()`. The fetched item is applied through
+`applyWorkItemDetailPayload()` (title split, description field/format, format lock). That helper
+reuses `store.childTasks[id]` when the grid's lazy fetch already has the parent; otherwise it
+calls `fetchChildTasksForWorkItems([id])` and merges the result into `childTasks` so the dots
+pick it up too. Every callback re-checks
 `d.id === workItemId` before writing, so a fast second open cannot be overwritten by a slow first
 response. `closeWorkItemDetailModal(forceFullClose)` re-opens `returnTo` unless forced.
+
+**Detail refresh** - the footer's Refresh button calls `refreshWorkItemDetail()` (not
+`openWorkItemDetailModal()`): it keeps `d.id` / `d.returnTo` / the new-comment draft, does not
+push history, and re-fetches the item (`$expand=Relations`), comments, and child tasks. Child
+tasks always hit the network (`loadWorkItemDetailTasks(..., { force: true })`) and
+`mergeChildTasksBatch(fetched, { replace: true })` so tasks deleted in Azure DevOps disappear
+from the cards and the grid dots (the default merge keeps leftover cached tasks). After the item
+lands, `syncGridFromRefreshedWorkItem()` copies grid-visible fields into `releaseResults` /
+`childTasks` via `applyFieldUpdate()`, and `moveWorkItemPatch()` if `Custom.PlatformRelease`
+changed. Unsaved description edits are discarded; the component then force-renders the
+uncontrolled editor because the `html`/`markdown` prop may not have changed.
 
 The title field is split the same way the create forms split it, for every work item type: on
 open, `d.titlePrefixOptions` is set to `titlePrefixesTask` for a Task, or to
