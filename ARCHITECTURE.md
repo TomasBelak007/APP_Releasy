@@ -142,8 +142,10 @@ tree recompute.
 Detail/export additionally read `System.Tags`, `System.ChangedDate`, `System.Description`,
 `Microsoft.VSTS.TCM.ReproSteps`, `Microsoft.VSTS.Common.ClosedDate` (WIQL Closed window only).
 
-T-shirt size is read through `getTshirtFieldKey()` / `getTshirtSizeFromFields()` because the field
-name is not identical across projects.
+T-shirt size is read through `getTshirtSizeFromFields()`, which always reads
+`fields['Custom.Shirtsize']` (even when the key is missing). Azure DevOps omits an empty
+Shirtsize from the payload; a `hasOwnProperty` check does not subscribe Vue to that key, so a
+computed that only tested existence would stay stale after `applyFieldUpdate()` added it.
 
 ## The store
 
@@ -635,6 +637,10 @@ modes:
   must assign a new array (and the watcher is `deep`) so a just-posted image comment is processed
   without closing the ticket. The comments `v-for` keys by `comment.id` so existing rows keep
   their blob URLs instead of being reused by index.
+- **Always read optional Azure fields by key, never via `hasOwnProperty`.** Azure omits empty
+  custom fields from the payload. `hasOwnProperty` does not subscribe a Vue computed to that key,
+  so after `applyFieldUpdate()` adds it the grid/detail stay stale until reload. T-shirt size is
+  the known case (`getTshirtSizeFromFields()`).
 
 ## Where to change what
 

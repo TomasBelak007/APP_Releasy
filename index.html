@@ -3356,7 +3356,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-04T13:39:40.000Z'
+            updatedAt: '2026-09-05T09:20:27.000Z'
         };
 
         // ===== API Configuration =====
@@ -4026,10 +4026,8 @@
             return match ? match[1] : value;
         }
         
-        function getTshirtFieldKey(fields = {}) {
-            return Object.prototype.hasOwnProperty.call(fields, 'Custom.Shirtsize')
-                ? 'Custom.Shirtsize'
-                : null;
+        function getTshirtFieldKey() {
+            return 'Custom.Shirtsize';
         }
         
         function normalizeTshirtSize(value) {
@@ -4047,8 +4045,10 @@
         }
         
         function getTshirtSizeFromFields(fields = {}) {
-            const key = getTshirtFieldKey(fields);
-            return normalizeTshirtSize(key ? fields[key] : '');
+            // Always read the key. Azure omits an empty Shirtsize from the payload, and
+            // hasOwnProperty does not subscribe Vue to it — so a computed that only checked
+            // existence would stay stale after applyFieldUpdate() added the field.
+            return normalizeTshirtSize(fields['Custom.Shirtsize']);
         }
 
         // Format dates as relative time (min/hours/days) with age-based color class
