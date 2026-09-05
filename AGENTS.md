@@ -40,10 +40,14 @@ Full reasoning and the remaining conventions are in `ARCHITECTURE.md`.
 There are no automated tests. After editing:
 
 1. Syntax-check the script block, e.g. extract it and run `node --check`.
-2. Serve the folder (`python3 -m http.server 8000`) and exercise the affected flow in the browser -
-   `file://` blocks the local `guide.html` fetch.
-3. Check the console: it must stay clean (the production Vue build hides warnings, so a broken
-   render shows up as missing UI, not as an error).
+2. **Do not start a local server by default.** Never run `python3 -m http.server 8000` (or open
+   `http://localhost:8000`) unless the user explicitly asked in this turn. After a change, always
+   ask whether they want the app started on localhost:8000, then wait — start it only if they say
+   yes. If they decline or do not answer, skip the server and finish.
+3. If they asked to start it: serve the folder (`python3 -m http.server 8000`), exercise the
+   affected flow in the browser (`file://` blocks the local `guide.html` fetch), and check the
+   console — it must stay clean (the production Vue build hides warnings, so a broken render shows
+   up as missing UI, not as an error).
 
 ## Testing against the real Azure DevOps instance
 
