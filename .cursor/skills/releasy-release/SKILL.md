@@ -43,13 +43,14 @@ If the user already named a ticket, `node ../releasy-ai/scripts/get-ticket.mjs <
 
 ## 2. Assignees
 
+This is the exception to releasy-ai's Unassigned-unless-named rule. Keep these unless the user
+overrides. Validate every email against live `assignees`.
+
 | Role | Default |
 |---|---|
 | Parent Feature | `tomas.kocyan@intelstudios.com` (Tomáš Kocyan) |
 | Tasks 01-05 | `tomas.kocyan@intelstudios.com` (Tomáš Kocyan) |
 | Task 06 (set production) | `tomas@intelstudios.com` (Tomas Belak) |
-
-Keep these unless the user overrides. Validate every email against live `assignees`.
 
 ## 3. What gets created
 

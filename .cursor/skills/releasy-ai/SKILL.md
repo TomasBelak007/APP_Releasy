@@ -48,16 +48,19 @@ current fields, child Tasks, and comments before doing anything else with it.
 5. Always ask: Priority (1-4), and Severity (Bug) or T-shirt size (Feature) - never silently
    default. If the user has no preference, fall back to Releasy's own defaults: Priority/Severity
    `3 - Medium`, T-shirt `M`.
-6. Ask for an assignee (validate against the live `assignees` list) - optional, unassigned is fine.
+6. Assignee: **Unassigned** unless the user named someone when asking to create the ticket.
+   Do not ask. If they named someone, validate against the live `assignees` list.
 7. Description format defaults to Markdown unless the user asks for HTML.
 8. If the ticket needs Tasks created right away, nest them under the item in the plan - see
    reference.md's Task fields and **Child task content (DEV vs TEST)** below. Split DEV work
    (SQL vs back-end + front-end) only as the requester asked — do not invent extra DEV tasks.
+   Same assignee rule as the parent: omit `assigneeEmail` unless the user named someone for
+   that Task. Do not copy the parent's assignee.
    A Task added *later* (e.g. a TEST task once the DEV tasks are done) does not belong here -
    use step 2 below instead.
 9. Build the JSON plan (schema in reference.md), print a human-readable summary - type, product,
-   title, release/patch or "Backlog", priority/severity or t-shirt, assignee, nested tasks, any
-   related links - and **stop for explicit confirmation**.
+   title, release/patch or "Backlog", priority/severity or t-shirt, assignee (Unassigned
+   unless named), nested tasks, any related links - and **stop for explicit confirmation**.
 10. On confirmation, write the plan to a temp file and run:
     `node scripts/create-ticket.mjs <planfile>`
     Report back the created IDs and their DevOps URLs.
@@ -73,11 +76,14 @@ done - or any other Task added to a ticket after the fact. No plan file needed.
 1. Confirm the parent (via `get-ticket.mjs` if not already loaded) is a Bug or Feature, not a
    Task - a Task cannot itself have child Tasks.
 2. Gather just the Task's own fields - prefix (validate against `titlePrefixesTask`), title,
-   description, optional assignee. No product/release/epic/priority questions; those only apply
-   to the parent. Draft the description using **Child task content (DEV vs TEST)** below. If
-   this is a TEST task and the parent is Xeelo, ask the Xeelo Admin question there first.
+   description. **Unassigned** unless the user named someone when asking to create it
+   (then validate against the live `assignees` list). Do not copy the parent's assignee and
+   do not ask. No product/release/epic/priority questions; those only apply to the parent.
+   Draft the description using **Child task content (DEV vs TEST)** below. If this is a TEST
+   task and the parent is Xeelo, ask the Xeelo Admin question there first.
 3. Print the summary and confirm, then run:
    `node scripts/create-task.mjs <parentId> --prefix DEV --title "..." [--description "..."] [--assignee email]`
+   Omit `--assignee` unless the user named someone.
 
 ## Child task content (DEV vs TEST)
 
@@ -216,7 +222,9 @@ The **release-container** Feature (`Release: Labe-07.014 (25/08/2026)` + the 6 n
 checklist Tasks, no product/DEV prefix) is also a different skill:
 [releasy-release](../releasy-release/SKILL.md). It calls `scripts/create-release.mjs` in this
 folder. Do not try to create that shape with `create-ticket.mjs` / `create-task.mjs` — they
-require prefixes and will reject it.
+require prefixes and will reject it. Assignee defaults there stay as originally:
+Feature + tasks 01-05 → Tomáš Kocyan, task 06 → Tomas Belak — not the Unassigned-unless-named
+rule above.
 
 ## Maintenance
 

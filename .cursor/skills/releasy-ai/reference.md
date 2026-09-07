@@ -28,7 +28,7 @@ dedicated PAT for this skill, separate from the repo's own `dev.env` (see `AGENT
 | Description format | `/multilineFieldsFormat/<field>` | Only added when the description is Markdown; op `add`, value `"Markdown"`. Once a field is saved as Markdown in Azure DevOps it cannot revert to HTML - this skill never attempts that. |
 | Severity (Bug only) | `Microsoft.VSTS.Common.Severity` | Label string, e.g. `"2 - High"` (`resolveSeverityLabel()` in `releasy-config.mjs` accepts either the digit or the full label). |
 | T-shirt size (Feature only) | `Custom.Shirtsize` | One of `S`, `M`, `L`. Optional. |
-| Assignee | `System.AssignedTo` | Email string; must be one of the live `assignees`. |
+| Assignee | `System.AssignedTo` | Optional. Omit unless the user named someone when creating the ticket (then must be one of the live `assignees`). Unassigned is the default — do not ask. |
 | Parent Epic | relation | `System.LinkTypes.Hierarchy-Reverse` -> `.../wit/workitems/<epicID>`, `epicID` resolved from `releaseNames` by release name. |
 | Status | `System.State` | One of the live `statusOptions.Bug` / `statusOptions.Feature`. |
 
@@ -39,7 +39,7 @@ dedicated PAT for this skill, separate from the repo's own `dev.env` (see `AGENT
 | Title | `System.Title` | `"<prefix> - <text>"`, `prefix` must be one of `titlePrefixesTask`. |
 | Description | `System.Description` | No ReproSteps variant. Draft per **Child task content (DEV vs TEST)** in SKILL.md: DEV may be technical and split SQL vs back-end+front-end as the requester asked; TEST is a front-end manual scenario for a medior tester (console/network ok, no DB, no back-end API testing) covering **only the change**, always structured as **Príprava** (data/settings, omit if none; for Xeelo ask whether a specific Xeelo Admin version is required and put it here if yes) → **Kroky** → the unrelated-findings disclaimer (new Bug/Feature on the correct product). |
 | Description format | `/multilineFieldsFormat/System.Description` | Same Markdown-only rule as above. |
-| Assignee | `System.AssignedTo` | Optional. |
+| Assignee | `System.AssignedTo` | Optional. Same rule as Bug/Feature: omit unless the user named someone for this Task. Do not copy the parent's assignee. |
 | Parent | relation | `System.LinkTypes.Hierarchy-Reverse` -> `.../wit/workitems/<parentId>`. |
 | Status | `System.State` | One of the live `statusOptions.Task` (no `Evaluation`). |
 
@@ -105,9 +105,8 @@ items in the plan.
       "release": "Labe",
       "major": "07",
       "patch": "999",
-      "assigneeEmail": "foo@bar.com",
       "tasks": [
-        { "prefix": "DEV", "title": "...", "descriptionMarkdown": "...", "assigneeEmail": "..." }
+        { "prefix": "DEV", "title": "...", "descriptionMarkdown": "..." }
       ]
     },
     {
@@ -138,6 +137,8 @@ Field notes:
 - `severity` is Bug-only, `tshirtSize` is Feature-only - `create-ticket.mjs` rejects the wrong one
   for the type.
 - `patch: "999"` is exactly what "add to backlog" means.
+- `assigneeEmail` (item or `tasks[]`): omit unless the user named someone when creating the
+  ticket. Omitted = Unassigned. Do not ask and do not copy a parent assignee onto a Task.
 - `tasks[]` items follow the Task field mapping above; no product/release/priority fields (Tasks
   don't have them).
 - `relatedRefIds`: array of other `refId`s in the same plan to `System.LinkTypes.Related`-link
@@ -153,7 +154,7 @@ node scripts/create-task.mjs <parentId-or-url> --prefix DEV --title "..." \
 ```
 
 Rejects the parent if it is a Task (a Task cannot itself have child Tasks). `--format` defaults to
-`markdown`.
+`markdown`. Omit `--assignee` unless the user named someone — the Task is then created unassigned.
 
 ## `list-tickets.mjs` (querying Bugs/Features + their Tasks for a release or the backlog)
 
@@ -235,8 +236,9 @@ node scripts/create-release.mjs --product Xeelo --release Labe --major 07 --patc
 
 `--date` is stored in the title as `DD/MM/YYYY` (also accepts `YYYY-MM-DD` / `D.M.YYYY`).
 Defaults: `--owner` and `--steps-assignee` (tasks 01-05) `tomas.kocyan@intelstudios.com`;
-`--production-assignee` (task 06) `tomas@intelstudios.com`. Refuses backlog patch `999` and
-refuses to create a second container for the same
+`--production-assignee` (task 06) `tomas@intelstudios.com`. This is the exception to the
+Unassigned-unless-named rule used by `create-ticket.mjs` / `create-task.mjs`. Refuses backlog
+patch `999` and refuses to create a second container for the same
 `Custom.PlatformRelease`. Feature is Priority 4, no t-shirt, no description.
 
 ## Other script flag references

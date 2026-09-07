@@ -6,7 +6,7 @@
 // Usage:
 //   node create-task.mjs <parentId-or-url> --prefix DEV --title "..."
 //                         [--description "..." | --description-file path]
-//                         [--assignee email]
+//                         [--assignee email]   omit to create the Task unassigned
 
 import { loadReleasyConfig, isValidPrefix, isValidAssignee } from './releasy-config.mjs';
 import { loadPat, getWorkItemType, createWorkItemApi, releasyWorkItemUrl, parseWorkItemId, parseArgs, readTextFlag, fail } from './lib.mjs';
