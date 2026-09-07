@@ -54,7 +54,7 @@ Všechny read-only funkce plus:
 ## Požadavky
 
 - Moderní webový prohlížeč (Chrome, Firefox, Edge, Safari)
-- Připojení k internetu - knihovny (Vue, Bootstrap, Font Awesome, marked.js, Turndown) se načítají
+- Připojení k internetu - knihovny (Vue, Bootstrap, Font Awesome, marked.js, mermaid.js, Turndown) se načítají
   z CDN
 - Azure DevOps účet s přístupem k projektu
 - Personal Access Token (PAT) s příslušnými oprávněními:
@@ -123,8 +123,8 @@ APP_Releasy/
   kompilátorem, takže aplikace zůstává jediný soubor bez build stepu)
 - **Bootstrap 5.3.0** - UI komponenty a grid systém
 - **Font Awesome 6.5.0** - Ikony
-- **marked.js 18.0.9** - Vykreslení Markdown popisu work itemu do náhledu (pouze pro popisy, které
-  jsou v Azure DevOps uložené ve formátu Markdown)
+- **marked.js 18.0.9** - Vykreslení Markdown popisu work itemu a Markdown komentářů do náhledu (pouze pro obsah, který je v Azure DevOps uložený ve formátu Markdown), včetně GFM tabulek
+- **mermaid.js 10.9.3** - Vykreslení Mermaid diagramů (fenced `mermaid` code blocks a Azure DevOps `::: mermaid`) v Markdown náhledu popisu a komentářů
 - **Turndown 7.2.4** - Převod HTML popisu na Markdown syntaxi při přepnutí formátu popisu z HTML na
   Markdown (v detailu work itemu i v zakládacích formulářích)
 - **Web Crypto API** - Šifrování Personal Access Tokenu (AES-GCM) před uložením do localStorage
@@ -156,7 +156,7 @@ Aplikace zobrazuje pouze work items, které splňují následující kritéria:
 - **Platform Release**: Musí mít vyplněné pole `Custom.PlatformRelease` s odpovídající verzí (např. "Labe-07.006")
 - **Status**: 
   - Všechny statusy kromě `Removed`
-  - Work items se statusem `Closed` jsou zobrazeny pouze pokud byly uzavřeny v posledních **180 dnech**
+  - Work items se statusem `Closed` jsou zobrazeny pouze pokud byly uzavřeny v posledních **100 dnech**
 
 ## Hierarchie zobrazení
 

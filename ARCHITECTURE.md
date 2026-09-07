@@ -32,7 +32,7 @@ Rough layout (line numbers as of app version 1.0.44, for orientation only):
 
 | Range | Content |
 | --- | --- |
-| 1-10 | `<head>`, CDN dependencies |
+| 1-11 | `<head>`, CDN dependencies (Vue, marked, mermaid, Turndown, Bootstrap, Font Awesome) |
 | 11-2031 | `<style>` - all CSS, themed via CSS custom properties on `[data-theme]` |
 | 2033-2790 | `<body>` markup - one `<div id="...App">` per Vue root, each with an **in-DOM template** |
 | 2790-2984 | `<script type="text/x-template">` blocks - templates for reusable components |
@@ -44,7 +44,7 @@ Order of `// ===== ... =====` sections inside the script:
 2. `Build Changes Pipeline Mapping`, `Assignees Configuration`, `Title Prefixes ...`,
    `Available patch versions Configuration` - business configuration
 3. `DevOps API Helper`, `PAT Encryption/Decryption`, `Helper Functions`
-4. `Data Parsing & Grouping`, `Last Reload Time Management`, `Permission Management`,
+4. `Markdown Preview`, `Data Parsing & Grouping`, `Last Reload Time Management`, `Permission Management`,
    `Task Mode Management`, `Child Tasks Management`
 5. `Priority & Severity Handling`, `Work Item Rendering`, `Sorting Functions`
 6. `PAT Modal Management`, `Azure DevOps API Integration`, `Token Permissions Check`,
@@ -260,7 +260,7 @@ Defined in `VUE LAYER > Components`, templates from `<script type="text/x-templa
 | Component | Template id | Props | Notes |
 | --- | --- | --- | --- |
 | `HtmlEditor` | `tpl-html-editor` | `editorId`, `toolbarId`, `html`, `editable`, `minHeight` | Toolbar from `MD_TOOLBAR_BUTTONS`; **uncontrolled** - `html` is pushed in on change, content is read back with `readEditorHtml(editorId)`; emits `rendered` |
-| `MarkdownEditor` | `tpl-markdown-editor` | `editorId`, `toolbarId`, `markdown`, `editable`, `minHeight` | Markdown counterpart of `HtmlEditor`. In the detail modal it is used when `d.descriptionFormat === 'Markdown'`, either detected from the server or chosen via the format toggle's HTML->Markdown conversion (see [Detail modal](#flows-what-calls-what)); in both create forms it is used when the user picks Markdown in the format toggle (`form.descriptionFormat`). Edit/Preview toggle - opens in Preview if there is content, straight into Edit if the field is empty (`render()`); edit mode is a plain `<textarea>` (Markdown source, toolbar from `MARKDOWN_TOOLBAR_BUTTONS`), preview mode renders `marked.parse()` output into a `v-html` div; **uncontrolled** like `HtmlEditor` - content read back with `readMarkdownEditorText(editorId)`; emits `rendered` (with the preview container, so image auth fix-up runs the same way) |
+| `MarkdownEditor` | `tpl-markdown-editor` | `editorId`, `toolbarId`, `markdown`, `editable`, `minHeight` | Markdown counterpart of `HtmlEditor`. In the detail modal it is used when `d.descriptionFormat === 'Markdown'`, either detected from the server or chosen via the format toggle's HTML->Markdown conversion (see [Detail modal](#flows-what-calls-what)); in both create forms it is used when the user picks Markdown in the format toggle (`form.descriptionFormat`). Edit/Preview toggle - opens in Preview if there is content, straight into Edit if the field is empty (`render()`); edit mode is a plain `<textarea>` (Markdown source, toolbar from `MARKDOWN_TOOLBAR_BUTTONS`), preview mode runs `renderMarkdownToHtml()` (GFM tables, Azure/Excel TSV tables, fenced mermaid blocks and Azure `::: mermaid` fences turned into `.mermaid` divs) into the preview div then `renderMermaidIn()` (mermaid.js SVG); **uncontrolled** like `HtmlEditor` - content read back with `readMarkdownEditorText(editorId)`; emits `rendered` (with the preview container, so image auth fix-up runs the same way) |
 | `ProgressBar` | `tpl-progress-bar` | `items` | Segments per state in `PROGRESS_ORDER`, colors from `STATE_COLORS` |
 | `PriorityCell` | `tpl-priority-cell` | `item` | Priority / severity (Bug) / t-shirt (Feature) badges, each opening its picker |
 | `WorkItemRow` | `tpl-work-item-row` | `item`, `isChild`, `parentId` | Icon by type, clickable state/assignee badges; the row header opens the detail modal; parent rows show at most 6 task-status dots (`pickVisibleTaskDots` / `allocateTaskDotQuota`: ≥1 per present status, leftover proportional) in a fixed-width slot left of the status badge; hover lists every child task, each row opening that task's detail modal. Title column also shows a one-letter prefix pill (`openTaskPrefixes` / `TASK_PREFIX_BADGES`) for each `titlePrefixesTask` prefix that still has an assigned, non-`Closed` child (`Unassigned` tasks do not show a letter) |
@@ -392,7 +392,7 @@ are uncontrolled) and snapshots it into `descriptionHtmlCache`/`descriptionMarkd
 matches the format being left) before switching. If the format being switched *into* already has a
 cached snapshot - typically because the user was just there - that snapshot is restored verbatim;
 otherwise `convertDescriptionContent()` runs the lossy conversion (Turndown for Html -> Markdown,
-`marked.parse()` for the reverse, only reachable pre-save while the field isn't locked yet). This
+`renderMarkdownToHtml()` for the reverse, only reachable pre-save while the field isn't locked yet). This
 makes toggling non-destructive: flipping Html -> Markdown -> Html with no edits returns the exact
 original HTML instead of a freshly-regenerated (and likely different) one, and edits made in either
 format survive further toggling instead of being silently discarded by a fresh conversion. The
@@ -529,11 +529,11 @@ these helpers. Create, comments and attachments still build the full URL and cal
 
 | Purpose | Call |
 | --- | --- |
-| Hierarchy query | `POST /wit/wiql?api-version=6.0` - Feature/Bug, `Custom.PlatformRelease CONTAINS '<release>-'`, not `Removed`, `Closed` only within `@startOfDay('-180d')` |
+| Hierarchy query | `POST /wit/wiql?api-version=6.0` - Feature/Bug, `Custom.PlatformRelease CONTAINS '<release>-'`, not `Removed`, `Closed` only within `@startOfDay('-100d')` |
 | Work item batch | `GET /wit/workitems?ids=...&fields=<GRID_WORK_ITEM_FIELDS>&api-version=6.0` via `fetchWorkItemsInBatches` (200 ids per request). Markdown export still uses `$expand=fields&api-version=7.1` so it receives Description / ReproSteps |
 | Detail | `GET /wit/workitems/{id}?$expand=Relations&api-version=7.1` - no `fields=` projection, so the response's `multilineFieldsFormat` map (read into `d.descriptionFormat`) is populated |
 | Child tasks (dots, Task Mode, detail cards) | `GET /wit/workitems?ids=...&$expand=relations&api-version=6.0` for parents (no `fields` — Azure DevOps returns `ConflictingParametersException` if `$expand` is combined with `fields`), then `GET /wit/workitems?ids=...&fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo&api-version=6.0` for children (`fetchChildTasksForWorkItems`) |
-| Comments | `GET /wit/workItems/{id}/comments?api-version=7.1-preview.4&$expand=renderedText` (paged, see `fetchWorkItemCommentsAll`) - `$expand` gets each comment's server-rendered HTML alongside its raw `text`, needed because each comment independently carries its own `format` (`"markdown"`/`"html"`, same lower-cased convention as `multilineFieldsFormat`); `mapCommentForDisplay()` picks `renderedText` for Markdown comments (falling back to `marked.parse()` if ever absent) and `text` for HTML ones. Existing comments are still read-only (never editable/deletable); `POST /wit/workItems/{id}/comments?format=markdown\|html&api-version=7.1-preview.4` (`submitNewWorkItemComment()`) adds a brand-new one from the detail modal's composer, format chosen per-comment via the same query param (not a field-level op like descriptions) |
+| Comments | `GET /wit/workItems/{id}/comments?api-version=7.1-preview.4&$expand=renderedText` (paged, see `fetchWorkItemCommentsAll`) - `$expand` still fetches each comment's server-rendered HTML alongside its raw `text`; `mapCommentForDisplay()` renders Markdown comments locally via `renderMarkdownToHtml(comment.text)` (GFM/TSV tables + mermaid placeholders; `renderedText` is only a fallback if `text` is empty) and uses `text` for HTML ones. After Vue injects the HTML, the comments watcher also calls `renderMermaidIn()` so diagrams become SVGs. Existing comments are still read-only (never editable/deletable); `POST /wit/workItems/{id}/comments?format=markdown\|html&api-version=7.1-preview.4` (`submitNewWorkItemComment()`) adds a brand-new one from the detail modal's composer, format chosen per-comment via the same query param (not a field-level op like descriptions) |
 | Field update | `PATCH /wit/workitems/{id}?api-version=7.1`, `application/json-patch+json` |
 | Create | `POST /wit/workitems/${type}?api-version=7.1` (must be 7.1+ - the `/multilineFieldsFormat/<field>` op used for Markdown descriptions on create is silently ignored on older versions) |
 | Attachments | `POST /wit/attachments?fileName=...&api-version=6.0` on paste/upload; images in descriptions and comments are re-fetched authenticated and swapped for blob URLs (`replaceImagesWithAuthenticatedBlobs`) |
@@ -673,6 +673,7 @@ modes:
 | Add a new "change X" modal | a new entry in `PICKER_KINDS` (`build` + `apply`) - no new markup |
 | Add a new modal | markup root in `<body>`, store slice, `mountApp`, `MODAL_STACK` entry |
 | Change a filter rule | `itemPasses()` / `store.tree` |
+| Change markdown preview (tables, mermaid) | `renderMarkdownToHtml()` / `renderMermaidIn()` in `Markdown Preview` |
 | Change the Markdown layout | `exportPatchToMarkdown()` |
 | Change theming | CSS custom properties under `[data-theme]`, `THEMES`, `LOGO_URLS` |
 | Release a version | `APP_RELEASE.version` + `updatedAt` |
