@@ -20,11 +20,11 @@ dedicated PAT for this skill, separate from the repo's own `dev.env` (see `AGENT
 
 | Field | Path | Notes |
 |---|---|---|
-| Title | `System.Title` | `"<prefix> - <text>"`. `prefix` must be one of `titlePrefixes[product]`. |
+| Title | `System.Title` | `"<prefix> - <text>"`. `prefix` must be one of `titlePrefixes[product]`. Free-text after the prefix is always **English**. |
 | Priority | `Microsoft.VSTS.Common.Priority` | Integer 1-4. Required. |
 | Product | `System.Tags` | The product name itself (e.g. `"Xeelo"`), not a tag list. |
 | Platform release | `Custom.PlatformRelease` | `"<Release>-<major>.<patch>"`, e.g. `"Labe-07.999"`. `patch` must be one of `availablePatchVersions[product].versions[...].patches`; `"999"` is backlog. |
-| Description | `Microsoft.VSTS.TCM.ReproSteps` (Bug) or `System.Description` (Feature) | Plain text/HTML/Markdown string. |
+| Description | `Microsoft.VSTS.TCM.ReproSteps` (Bug) or `System.Description` (Feature) | Plain text/HTML/Markdown string. Always **Czech**. |
 | Description format | `/multilineFieldsFormat/<field>` | Only added when the description is Markdown; op `add`, value `"Markdown"`. Once a field is saved as Markdown in Azure DevOps it cannot revert to HTML - this skill never attempts that. |
 | Severity (Bug only) | `Microsoft.VSTS.Common.Severity` | Label string, e.g. `"2 - High"` (`resolveSeverityLabel()` in `releasy-config.mjs` accepts either the digit or the full label). |
 | T-shirt size (Feature only) | `Custom.Shirtsize` | One of `S`, `M`, `L`. Optional. |
@@ -36,8 +36,8 @@ dedicated PAT for this skill, separate from the repo's own `dev.env` (see `AGENT
 
 | Field | Path | Notes |
 |---|---|---|
-| Title | `System.Title` | `"<prefix> - <text>"`, `prefix` must be one of `titlePrefixesTask`. |
-| Description | `System.Description` | No ReproSteps variant. Draft per **Child task content (DEV vs TEST)** in SKILL.md: DEV may be technical and split SQL vs back-end+front-end as the requester asked; TEST is a front-end manual scenario for a medior tester (console/network ok, no DB, no back-end API testing) covering **only the change**, always structured as **Príprava** (data/settings, omit if none; for Xeelo ask whether a specific Xeelo Admin version is required and put it here if yes) → **Kroky** → the unrelated-findings disclaimer (new Bug/Feature on the correct product). |
+| Title | `System.Title` | `"<prefix> - <text>"`, `prefix` must be one of `titlePrefixesTask`. Free-text after the prefix is always **English**. |
+| Description | `System.Description` | Always **Czech**. No ReproSteps variant. Draft per **Child task content (DEV vs TEST)** in SKILL.md: DEV may be technical and split SQL vs back-end+front-end as the requester asked; TEST is a front-end manual scenario for a medior tester (console/network ok, no DB, no back-end API testing) covering **only the change**, always structured as **Příprava** (data/settings, omit if none; for Xeelo ask whether a specific Xeelo Admin version is required and put it here if yes) → **Kroky** → the unrelated-findings disclaimer (new Bug/Feature on the correct product). |
 | Description format | `/multilineFieldsFormat/System.Description` | Same Markdown-only rule as above. |
 | Assignee | `System.AssignedTo` | Optional. Same rule as Bug/Feature: omit unless the user named someone for this Task. Do not copy the parent's assignee. |
 | Parent | relation | `System.LinkTypes.Hierarchy-Reverse` -> `.../wit/workitems/<parentId>`. |
@@ -57,7 +57,7 @@ Bug/Feature only - never a Task. Every script that touches an existing item's co
 first and refuses on a Task.
 
 `POST /wit/workitems/{id}/comments?format=markdown|html&api-version=7.1-preview.4`, body
-`{ "text": "..." }`. `format` is per-request, not per-field like `multilineFieldsFormat` - each
+`{ "text": "..." }`. Comment text is always **Czech**. `format` is per-request, not per-field like `multilineFieldsFormat` - each
 comment on the same item can independently be Markdown or HTML.
 
 Reading comments back: `GET /wit/workitems/{id}/comments?api-version=7.1-preview.4&$expand=renderedText`
@@ -98,15 +98,15 @@ items in the plan.
       "type": "Bug",
       "product": "Xeelo",
       "prefix": "Xeelo",
-      "title": "Free-text title",
-      "descriptionMarkdown": "...",
+      "title": "Hide inactive records in the list",
+      "descriptionMarkdown": "V seznamu se stále zobrazují neaktivní záznamy.",
       "priority": 2,
       "severity": "2 - High",
       "release": "Labe",
       "major": "07",
       "patch": "999",
       "tasks": [
-        { "prefix": "DEV", "title": "...", "descriptionMarkdown": "..." }
+        { "prefix": "DEV", "title": "Filter inactive records in the list query", "descriptionMarkdown": "Upravit seznam tak, aby nevracel neaktivní záznamy." }
       ]
     },
     {
@@ -133,7 +133,8 @@ Field notes:
 - `type`: `"Bug"` or `"Feature"` only. A standalone Task on an *already-existing* parent does not
   use this schema at all - see `create-task.mjs` below.
 - `descriptionMarkdown` xor `descriptionHtml` - pick one; Markdown is the default per your
-  instruction unless HTML was explicitly requested.
+  instruction unless HTML was explicitly requested. Title free-text is **English**; description
+  body is **Czech** (see **Language** in SKILL.md). The same split applies to `tasks[]`.
 - `severity` is Bug-only, `tshirtSize` is Feature-only - `create-ticket.mjs` rejects the wrong one
   for the type.
 - `patch: "999"` is exactly what "add to backlog" means.

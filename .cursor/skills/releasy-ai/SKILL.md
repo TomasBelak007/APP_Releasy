@@ -20,6 +20,18 @@ in them. Full field mappings, the JSON plan schema, and relation types are in
 waiting for the user to confirm before any script that writes to Azure DevOps is run. Read-only
 calls (`get-ticket.mjs`, `releasy-config.mjs`) don't need confirmation.
 
+## Language
+
+Always, including the draft shown in the confirmation summary. Do not mix languages unless the
+user explicitly overrides this for a specific field.
+
+- **Titles** (Bug, Feature, and Task — the free-text after the prefix): **English**. If the
+  requester wrote in Czech or Slovak, translate the title; keep the live prefix as-is
+  (`Xeelo`, `DEV`, `TEST`, …).
+- **Descriptions** (Bug ReproSteps, Feature/Task `System.Description`, including DEV and TEST
+  bodies): **Czech**.
+- **Comments**: **Czech**.
+
 ## Credentials
 
 `AZURE_DEVOPS_PAT` from `.env` in this folder (copy `.env.example`) or an exported env var. If
@@ -39,7 +51,8 @@ current fields, child Tasks, and comments before doing anything else with it.
 1. Resolve product from the request. If the change spans multiple products (e.g. a Xeelo change
    that also needs a XeeloAdmin change), plan one item per product - each resolves its own
    release/epic independently - and link them with `relatedRefIds` (see reference.md).
-2. Resolve the title prefix against `titlePrefixes[product]`.
+2. Resolve the title prefix against `titlePrefixes[product]`. Title text after the prefix is
+   **English**; the description is **Czech** (see **Language**).
 3. Resolve release/major: look up the product's active series in `availablePatchVersions`. If a
    product has more than one active series (e.g. Xeelo currently has both `Labe-07` and
    `Odra-01`), list them and ask the user which one - never guess.
@@ -75,8 +88,8 @@ done - or any other Task added to a ticket after the fact. No plan file needed.
 
 1. Confirm the parent (via `get-ticket.mjs` if not already loaded) is a Bug or Feature, not a
    Task - a Task cannot itself have child Tasks.
-2. Gather just the Task's own fields - prefix (validate against `titlePrefixesTask`), title,
-   description. **Unassigned** unless the user named someone when asking to create it
+2. Gather just the Task's own fields - prefix (validate against `titlePrefixesTask`), English
+   title, Czech description. **Unassigned** unless the user named someone when asking to create it
    (then validate against the live `assignees` list). Do not copy the parent's assignee and
    do not ask. No product/release/epic/priority questions; those only apply to the parent.
    Draft the description using **Child task content (DEV vs TEST)** below. If this is a TEST
@@ -130,24 +143,24 @@ Settings the tester needs (object, fields, export, …) often live in Xeelo Admi
 fix is sometimes untestable until a matching Admin change is shipped. When drafting a TEST
 task whose parent is **Xeelo**, **always ask** whether a specific Xeelo Admin change or
 version is required for the setup. Do not assume yes or no. If yes, ask which change and
-which Admin version/patch (e.g. `Odra-01.005`) and put it in **Príprava** so the tester
+which Admin version/patch (e.g. `Odra-01.005`) and put it in **Příprava** so the tester
 waits for that Admin build. If no, omit any Admin mention.
 
-**Always use this structure** (this order, these headings). Write the body in the language of
-the parent ticket / tester (typically Czech or Slovak).
+**Always use this structure** (this order, these headings). Title of the TEST task stays
+**English**; the body is **Czech** (see **Language**).
 
 ```
-**Príprava**
+**Příprava**
 - data and/or settings needed before the steps (object, fields, sample values, language, …)
 
 **Kroky**
 1. …
 2. …
 
-Issue nájdené pri teste, ktoré priamo nesúvisia s touto zmenou, tento TEST task nefailujú. Zadaj ich ako nový Bug alebo Feature na správny produkt (Xeelo, XeeloAdmin, Integray, Repository, Connectors).
+Issue nalezené při testu, které přímo nesouvisejí s touto změnou, tento TEST task nefailují. Zadej je jako nový Bug nebo Feature na správný produkt (Xeelo, XeeloAdmin, Integray, Repository, Connectors).
 ```
 
-- **Príprava** — include only when data or settings are needed; omit the whole section if the
+- **Příprava** — include only when data or settings are needed; omit the whole section if the
   tester can start from a normal screen with nothing extra prepared. For a Xeelo TEST, also
   put the required Xeelo Admin version/change here when the requester said one is needed.
 - **Kroky** — always present. Numbered steps that test only the change. Put the expected UI
@@ -170,6 +183,7 @@ Issue nájdené pri teste, ktoré priamo nesúvisia s touto zmenou, tento TEST t
 2. Only propose fields valid for that item's type - same per-type rules as creation: no Severity
    on a Feature, no Priority/Severity/T-shirt/PlatformRelease on a Task, etc.
 3. Validate new values against live config exactly as in creation (prefix, patch, assignee...).
+   New titles stay **English**; new descriptions stay **Czech** (see **Language**).
 4. Print a before/after summary and confirm, then run:
    `node scripts/update-ticket.mjs <id> [--title ...] [--priority ...] [--severity ...] [--tshirt ...] [--release ... --major ... --patch ...] [--assignee ... | --unassign] [--description ... | --description-file ...]`
 
@@ -182,7 +196,7 @@ HTML<->Markdown conversion here (browser-only Releasy-UI feature, see reference.
 refuses on a Task, but say so upfront rather than let the user hit that error.
 
 1. Load the ticket if not already loaded, confirm it's a Bug or Feature.
-2. Draft the comment text - Markdown by default unless HTML is requested.
+2. Draft the comment text in **Czech** - Markdown by default unless HTML is requested.
 3. Confirm with the user, then run:
    `node scripts/add-comment.mjs <id> --format markdown --text "..."`
    (use `--file path` instead of `--text` for long comments)
