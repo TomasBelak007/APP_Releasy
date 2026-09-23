@@ -1,7 +1,7 @@
 # Releasy - Architecture Reference
 
 Working map of `index.html` for AI agents and developers, so that a change does not require
-reading all ~7200 lines. **The whole application is one file**: markup, CSS, Vue templates and all
+reading all ~8900 lines. **The whole application is one file**: markup, CSS, Vue templates and all
 logic live in `index.html`. There is no build step and no module system - everything is in one
 `<script>` in a single function-less top-level scope.
 
@@ -32,11 +32,11 @@ Rough layout (line numbers as of app version 1.0.44, for orientation only):
 
 | Range | Content |
 | --- | --- |
-| 1-11 | `<head>`, CDN dependencies (Vue, marked, mermaid, Turndown, Bootstrap, Font Awesome) |
-| 11-2031 | `<style>` - all CSS, themed via CSS custom properties on `[data-theme]` |
-| 2033-2790 | `<body>` markup - one `<div id="...App">` per Vue root, each with an **in-DOM template** |
-| 2790-2984 | `<script type="text/x-template">` blocks - templates for reusable components |
-| 2984-7262 | The single `<script>` with all logic |
+| 1-12 | `<head>`, CDN dependencies (Vue, marked, mermaid, Turndown, Bootstrap, Font Awesome) |
+| 13-2346 | `<style>` - all CSS, themed via CSS custom properties on `[data-theme]` |
+| 2348-3202 | `<body>` markup - one `<div id="...App">` per Vue root, each with an **in-DOM template** |
+| 3203-3430 | `<script type="text/x-template">` blocks - templates for reusable components |
+| 3431-8903 | The single `<script>` with all logic |
 
 Order of `// ===== ... =====` sections inside the script:
 
@@ -44,10 +44,10 @@ Order of `// ===== ... =====` sections inside the script:
 2. `Build Changes Pipeline Mapping`, `Assignees Configuration`, `Title Prefixes ...`,
    `Available patch versions Configuration` - business configuration
 3. `DevOps API Helper`, `PAT Encryption/Decryption`, `Helper Functions`
-4. `Markdown Preview`, `Data Parsing & Grouping`, `Last Reload Time Management`, `Permission Management`,
+4. `Markdown Preview`, `Data Parsing & Grouping`, `Last modified`, `Last Reload Time Management`, `Permission Management`,
    `Task Mode Management`, `Child Tasks Management`
 5. `Priority & Severity Handling`, `Work Item Rendering`, `Sorting Functions`
-6. `PAT Modal Management`, `Azure DevOps API Integration`, `Token Permissions Check`,
+6. `PAT Modal Management`, `Azure DevOps API Integration`, `Token Permissions Check`, `Product load`,
    `Jenkins Build Status`
 7. `Modal Functions` ... `Work Item Created Success modal` - modal open/close/submit functions
 8. `Markdown Export`, `Theme Management`
@@ -70,9 +70,9 @@ reactive layer. Plain functions mutate `store` and never touch the DOM to expres
    silently renders nothing.
 3. `DOMContentLoaded` (registered just above `VUE LAYER`) runs:
    `initializePermissionBadge()` -> `activateProduct(store.activeProduct)` -> `checkAndOpenWorkItemFromUrl()`.
-   Only the active tab's data is fetched; child tasks for that tab load in the background for the
-   status dots (and Task Mode). The other 4 products load lazily the first time the user switches
-   to them (see [Load / reload](#flows-what-calls-what)). The Cursor/Grok status poll starts
+   `activateProduct` loads the active product and, in the background, every other product that is
+   not in the store yet. Child tasks for the visible tab load in the background for the status dots
+   (and Task Mode). See [Load / reload](#flows-what-calls-what). The Cursor/Grok status poll starts
    right after `#cursorStatusApp` is mounted, not from this handler - it does not need a PAT.
 4. `popstate` opens or closes the detail modal from the `?workitem=<id>` query parameter.
 
@@ -138,9 +138,9 @@ Each grid item also carries `_searchText`, a cached haystack from `attachSearchT
 `buildWorkItemSearchText()`, refreshed on load and on `applyFieldUpdate()`. Feature and Bug rows
 also carry `_lastModified` (epoch ms): `max(parent System.ChangedDate, child task ChangedDate…)`.
 `rollupLastModified()` sets it in `groupWorkItems()` / `insertWorkItem()` from the parent alone
-when tasks are not cached yet, then again from `mergeChildTasksBatch()` (lazy load and detail
-Refresh), `addChildTask()`, and `syncGridFromRefreshedWorkItem()` (which also copies
-`System.ChangedDate` onto the grid item; a refreshed Task rolls up its parent). A successful local
+when tasks are not cached yet, then again from `mergeChildTasksBatch()` (background child fetch and detail
+Refresh) and `addChildTask()`. `syncGridFromRefreshedWorkItem()` copies the refreshed fields through
+`applyFieldUpdate()`, which rollups the feature/bug (or its parent, when the refreshed item is a task). A successful local
 edit (`applyFieldUpdate()` and `moveWorkItemPatch()`) sets that item's `System.ChangedDate` to now
 and calls `refreshWorkItemModified()`, so a changed task also recomputes its parent's
 `_lastModified`. The grid badge and the detail modal's Changed label both read those store fields.
@@ -205,7 +205,8 @@ Derived (`VUE LAYER > Derived state`):
 | Computed | Meaning |
 | --- | --- |
 | `products` | Product tabs, from `releaseNames` **configuration** - static, so all 5 tabs are always visible/clickable regardless of what has been fetched |
-| `isActiveProductLoading` | `true` while `activeProduct` has no entry in `releaseResults` yet, or is in `loadingProducts` — but only when a PAT is stored (`store.pat.configured`) and the PAT modal is not open; drives the grid's loading spinner (which must never cover the PAT form) |
+| `isActiveProductLoading` | `true` only while `releaseResults` is still empty, a PAT is stored (`store.pat.configured`), and the PAT modal is not open. Drives the full-page grid spinner. Once any product has rows, switching tabs never covers the app |
+| `isBackgroundReloading` | `true` while `releaseResults` already has rows and `loadingProducts` is non-empty (any product). Drives the spinner next to Last reload; the grid and tabs stay up |
 | `allMajorIds` | All `release-major` ids **for `activeProduct` only** (for Expand All) |
 | `allPatchIds` | All `release-major.patch` ids **for `activeProduct` only**, skipping hidden majors/patches (so Expand All can open Bugs/Features) |
 | `canWrite` | `permission === 'write'` - **the single gate for every edit affordance** |
@@ -236,11 +237,10 @@ Persistence (`VUE LAYER > Persistence`) - one `watch` per key:
 (encrypted), `tokenHasWriteCapability`, `tokenPermission`, `current_user_email`.
 
 Also there: a `watchEffect` that mirrors `resolvedTheme` onto `<html data-theme>`, a
-`darkModeQuery` listener, `watch(() => store.activeProduct, activateProduct)` (fires
-`ensureProductLoaded` for a tab the moment it becomes active - see
+`darkModeQuery` listener, `watch(() => store.activeProduct, activateProduct)` (loads the active tab and prefetches every product that is not in the store yet - see
 [Load / reload](#flows-what-calls-what)), `watch(() => store.visibleParentIds, scheduleTaskDotFetch)`
-(background slim child-task fetch into `childTasks`, used by both the dots and Task Mode), and a 60s interval bumping `clockTick` so every relative
-timestamp refreshes. `activeProduct` itself is initialized from `lastActiveTab` only if that saved
+(background slim child-task fetch into `childTasks`, used by both the dots and Task Mode), a 60s interval bumping `clockTick` so every relative
+timestamp refreshes, and a 5-minute interval calling `refreshAllProducts()`. `activeProduct` itself is initialized from `lastActiveTab` only if that saved
 value is still one of the configured products, else it falls back to the first product - so a
 stale/removed product name in `localStorage` can never leave the app on a non-existent tab.
 
@@ -252,7 +252,7 @@ the root element** in `<body>`; only the components below use `x-template`.
 | Root | Renders | Notable methods / state |
 | --- | --- | --- |
 | `#content` | The grid, via `<patch-section>`; loading spinner and empty state | `store.tree` |
-| `#toolbarApp` | Reload, Unhide, Filter, Task Mode, Expand/Collapse, search box, permission badge, last reload | Debounced (200 ms) write into `store.search`; `reload()` -> `resetAndReloadActiveProduct()` |
+| `#toolbarApp` | Reload, Unhide, Filter, Task Mode, Expand/Collapse, search box, permission badge, last reload | Debounced (200 ms) write into `store.search`; `reload()` -> `refreshAllProducts()` (background, every product; spinner beside Last reload). A new PAT still calls `resetAndReloadAllProducts()` |
 | `#themeApp` | Three theme buttons from `THEMES` | Sets `store.theme` |
 | `#appHeader` | Logo bound to `LOGO_URLS[resolvedTheme]` | |
 | `#helpIconApp` | Help icon | `openHelpModal` |
@@ -286,38 +286,50 @@ Defined in `VUE LAYER > Components`, templates from `<script type="text/x-templa
 
 ## Flows: what calls what
 
-**Load / reload - data is lazy, per product.** Only `activeProduct` is ever fetched automatically;
-the other 4 products load the first time the user switches to their tab. The functions:
+**Load / reload - every product is fetched in the background.** The active tab is awaited so its
+Jenkins poll starts after its rows exist; the other products load in parallel and land in
+`releaseResults` as each fetch finishes. Switching tabs does not show the full-page loader once
+any product is cached. The functions:
 
 - `loadProductData(product)` - the only function that actually talks to Azure DevOps for the main
-  hierarchy. `getPAT()` (returns immediately if the user cancels the PAT modal, so no WIQL with a
-  null token) -> once (`window.tokenPermissionsChecked`) `checkTokenPermissions(pat)` ->
-  looks up `releaseConfig` for `product` -> WIQL via `handleUnauthorized(fetchWIQL)` ->
-  `fetchWorkItems(ids)` (batched at 200, `fields=GRID_WORK_ITEM_FIELDS`, no Description) ->
-  `groupWorkItems()` (attaches `_searchText` and sorts each patch) -> replaces just that
-  product's entry in `store.releaseResults` (`[...filter(r => r.product !== product), entry]`) ->
-  `saveLastReloadTime()` -> `refreshJenkinsStatusForProduct(product)` (fire-and-forget, not
-  awaited, so the grid loader does not wait on Jenkins). Tracks itself in `store.loadingProducts` for the duration (drives
-  `isActiveProductLoading`); on failure, logs + `showNotification()` and leaves the product
-  absent so the next visit/reload retries.
-- `ensureProductLoaded(product)` - no-op if `product` is already in `releaseResults` or
-  `loadingProducts`, else `loadProductData(product)`. **Lazy** fetch.
-- `activateProduct(product)` - `ensureProductLoaded(product)`, then restarts the 60s Jenkins
-  status poll for the new tab (`stopJenkinsStatusPoll` + `syncJenkinsStatusPoll`). Child tasks
-  are not awaited here; `scheduleTaskDotFetch()` fills `childTasks` in the background once
-  `visibleParentIds` updates. Called by `DOMContentLoaded` (for the initial `activeProduct`) and
-  by `watch(() => store.activeProduct, activateProduct)` (on every tab click).
-- `reloadActiveProduct()` - **force** refresh of just `activeProduct`: `loadProductData()`. No
-  write flow triggers this anymore - creating an item inserts it locally
-  (`addWorkItem()`/`addChildTask()`) and a patch-version change relocates it locally
-  (`moveWorkItemPatch()`); it now exists solely as the building block for
-  `resetAndReloadActiveProduct()`.
-- `resetAndReloadActiveProduct()` - clears `releaseResults`, `childTasks`, `jenkinsStatus` and
+  hierarchy. Concurrent callers share one in-flight promise (`productLoadJobs`). Marks
+  `store.loadingProducts` before the first await. `getPAT()` (returns immediately if the user
+  cancels the PAT modal, so no WIQL with a null token) -> once (`window.tokenPermissionsChecked`)
+  `checkTokenPermissions(pat)` -> looks up `releaseConfig` for `product` -> WIQL via
+  `handleUnauthorized(fetchWIQL)` -> `fetchWorkItems(ids)` (batched at 200,
+  `fields=GRID_WORK_ITEM_FIELDS`, no Description) -> `groupWorkItems()` (attaches `_searchText`
+  and sorts each patch) -> replaces just that product's entry in `store.releaseResults`
+  (`[...filter(r => r.product !== product), entry]`) -> `saveLastReloadTime()` ->
+  `refreshJenkinsStatusForProduct(product)` (fire-and-forget, not awaited). `loadingProducts`
+  drives `isBackgroundReloading` once any rows are on screen. It does **not** drive
+  `isActiveProductLoading` (the full-grid spinner is only while `releaseResults` is empty).
+  On failure, logs + `showNotification()` and leaves the previous entry in place on a reload,
+  or leaves the product absent on a first load so the next visit/reload retries. Returns `true`
+  when the entry was replaced.
+- `loadProducts(products)` - starts `loadProductData` for each product that is not already in
+  flight and returns `{ product, ok }` for each one this call actually started.
+- `ensureProductLoaded(product)` - no-op if `product` is already in `releaseResults`, else awaits
+  `loadProductData(product)` (joining an in-flight fetch).
+- `prefetchUnloadedProducts()` - `loadProducts` for every configured product that is not in
+  `releaseResults`.
+- `activateProduct(product)` - `prefetchUnloadedProducts()`, then `ensureProductLoaded(product)`,
+  then restarts the 60s Jenkins status poll for the new tab (`stopJenkinsStatusPoll` +
+  `syncJenkinsStatusPoll`). Child tasks are not awaited here; `scheduleTaskDotFetch()` fills
+  `childTasks` in the background once `visibleParentIds` updates. Called by `DOMContentLoaded`
+  (for the initial `activeProduct`) and by `watch(() => store.activeProduct, activateProduct)`
+  (on every tab click).
+- `refreshAllProducts()` - toolbar Reload, and a 5-minute interval (`AUTO_RELOAD_MS`).
+  `loadProducts` for every configured product that is not already in flight. Does not clear
+  `releaseResults`. After the fetches land, `invalidateChildTasks()` runs once for the parent ids
+  those products had before the refresh, so dots and `_lastModified` are fetched again. The grid
+  keeps showing the old rows until each product's entry is replaced. The interval does not run
+  until some product is already on screen, and it does not run while the PAT modal is open.
+- `resetAndReloadAllProducts()` - clears `releaseResults`, `childTasks`, `jenkinsStatus` and
   `loadingTaskDotIds`, stops the Jenkins status poll, bumps `taskDotFetchGen` so an in-flight
-  child-task fetch cannot merge stale results, then `reloadActiveProduct()`. Used by the
-  toolbar's `reload()` and by `savePAT()` (a new PAT can mean
-  different access, so the whole cache is invalidated). Other tabs simply go back to loading
-  lazily on their next visit.
+  child-task fetch cannot merge stale results, then `refreshAllProducts()` and restarts the
+  Jenkins poll. Used by `savePAT()` (a new PAT can mean different access, so the whole cache
+  is invalidated). Creating an item still inserts it locally (`addWorkItem()`/`addChildTask()`)
+  and a patch-version change still relocates it locally (`moveWorkItemPatch()`).
 
 A 401 clears `devops_pat` and `store.pat.configured`, then re-prompts once through
 `handleUnauthorized()`.
@@ -466,9 +478,8 @@ never re-reads it back from Azure DevOps.
 removes the item from wherever it currently sits in `store.releaseResults` (deleting any
 major/patch/release keys it leaves empty), updates its `Custom.PlatformRelease` field, and
 re-inserts it into the `releaseResults` entry whose `release` matches the new version's release
-name - creating the destination major/patch bucket if needed. If that destination product has not
-been loaded yet (lazy loading), the item is simply dropped; it appears correctly the first time
-that tab is visited. No network reload either way.
+name - creating the destination major/patch bucket if needed. If that destination product is not
+in the store yet, the item is dropped. No network reload either way.
 
 **Create work item** - `openCreateWorkItemModal(product, release, major, patch, prefill)` fills
 `store.createWorkItem` (including `descriptionFormat`, reset to `'Markdown'` unless `prefill`
@@ -533,7 +544,7 @@ not hang). `store.pat.configured` is the reactive mirror of whether `devops_pat`
 cleared); `isActiveProductLoading` stays false while the PAT modal is open or no token is stored,
 so the full-screen loader cannot cover the form. `savePAT()` encrypts with AES-GCM (`encryptPAT`),
 stores the self-declared capability, then `checkTokenPermissions()` +
-`resetAndReloadActiveProduct()` (a new PAT can mean different access entirely, so the whole cache
+`resetAndReloadAllProducts()` (a new PAT can mean different access entirely, so the whole cache
 is invalidated, same as Reload).
 
 **Modals: ESC and scroll lock** - `MODAL_STACK` (end of file) lists every modal as
@@ -592,7 +603,7 @@ modes:
 5. **After a successful write, update the store in memory** - `applyFieldUpdate()` for a plain
    field, `moveWorkItemPatch()` when the change relocates the item in the hierarchy,
    `addWorkItem()`/`addChildTask()` for a newly created item - rather than reloading. A full reload
-   (`resetAndReloadActiveProduct()`) is reserved for cases the app cannot reconcile locally at all,
+   (`resetAndReloadAllProducts()`) is reserved for cases the app cannot reconcile locally at all,
    currently only a new PAT (different access entirely).
 6. **Register new modals in `MODAL_STACK`** and drive visibility from a `store.<modal>.open` flag
    (`:class="{ show: ... }"`); do not call `lockBodyScroll()` per modal.

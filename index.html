@@ -585,6 +585,9 @@
             color: var(--text-primary);
             transition: color 0.3s ease;
         }
+        .last-reload-spinner {
+            color: var(--color-low);
+        }
         
         /* ===== Permission Badge ===== */
         .permission-badge {
@@ -2392,7 +2395,7 @@
         <div id="toolbarApp" class="controls-panel" v-cloak>
             <div class="button-container">
                 <div class="button-group">
-                    <button class="btn btn-primary" @click="reload">Reload</button>
+                    <button class="btn btn-primary" @click="reload" :disabled="store.isBackgroundReloading">Reload</button>
                     <button class="btn btn-secondary" :class="{ disabled: !store.hiddenCount }"
                             :disabled="!store.hiddenCount" @click="store.openUnhideModal()">
                         {{ store.hiddenCount ? 'Unhide (' + store.hiddenCount + ')' : 'Unhide' }}
@@ -2431,7 +2434,8 @@
                     <button class="change-pat-btn" @click="openPATModal()" title="Change Personal Access Token">
                         <i class="fa-solid fa-key"></i>
                     </button>
-                    <span style="font-style: italic;">
+                    <i v-if="store.isBackgroundReloading" class="fa-solid fa-spinner fa-spin last-reload-spinner" title="Reloading"></i>
+                    <span>
                         <template v-if="lastReloadText">Last reload: <span class="time-value">{{ lastReloadText }} ago</span></template>
                         <template v-else>Loading data for the first time...</template>
                     </span>
@@ -3439,7 +3443,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-22T11:11:00.000Z'
+            updatedAt: '2026-09-23T10:10:49.000Z'
         };
 
         // ===== API Configuration =====
@@ -4114,6 +4118,63 @@
             return releases;
         }
 
+        // ===== Last modified =====
+        function changedTimeMs(item) {
+            const raw = item && item.fields && item.fields['System.ChangedDate'];
+            const t = raw ? new Date(raw).getTime() : NaN;
+            return Number.isFinite(t) ? t : 0;
+        }
+
+        // Max ChangedDate of a feature/bug and the child tasks already in the cache. Missing
+        // childTasks means "not fetched yet", so the max is just the parent's own date until
+        // mergeChildTasksBatch() / addChildTask() runs this again.
+        function rollupLastModified(parent) {
+            if (!parent) return;
+            let max = changedTimeMs(parent);
+            const tasks = store.childTasks[String(parent.id)];
+            if (Array.isArray(tasks)) {
+                for (const task of tasks) max = Math.max(max, changedTimeMs(task));
+            }
+            parent._lastModified = max;
+        }
+
+        function rollupLastModifiedById(parentId) {
+            const id = Number(parentId);
+            if (!id) return;
+            for (const { releases } of store.releaseResults) {
+                for (const byMajor of Object.values(releases)) {
+                    for (const byPatch of Object.values(byMajor)) {
+                        for (const items of Object.values(byPatch)) {
+                            for (const item of items) {
+                                if (item.id !== id) continue;
+                                rollupLastModified(item);
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // A local edit bumps the edited item's ChangedDate and recomputes the feature/bug
+        // _lastModified (the item itself, or its parent when the edit was a task). Refresh sync
+        // passes touchChangedDate: false so the server's ChangedDate is kept.
+        function refreshWorkItemModified(workItemId, { touchChangedDate = true } = {}) {
+            const id = Number(workItemId);
+            if (!id) return;
+            if (touchChangedDate) {
+                const changedAt = new Date().toISOString();
+                store.forEachWorkItem(item => {
+                    if (item.id === id) item.fields['System.ChangedDate'] = changedAt;
+                });
+                if (Number(store.detail.id) === id) store.detail.fields['System.ChangedDate'] = changedAt;
+            }
+            rollupLastModifiedById(id);
+            for (const [parentId, tasks] of Object.entries(store.childTasks)) {
+                if ((tasks || []).some(task => Number(task.id) === id)) rollupLastModifiedById(parentId);
+            }
+        }
+
         // ===== Last Reload Time Management =====
         function saveLastReloadTime() {
             store.lastReloadAt = Date.now();
@@ -4362,62 +4423,6 @@
             return item;
         }
 
-        function changedTimeMs(item) {
-            const raw = item && item.fields && item.fields['System.ChangedDate'];
-            const t = raw ? new Date(raw).getTime() : NaN;
-            return Number.isFinite(t) ? t : 0;
-        }
-
-        // Max ChangedDate of a feature/bug and the child tasks already in the cache. Missing
-        // childTasks means "not fetched yet", so the max is just the parent's own date until
-        // mergeChildTasksBatch() / addChildTask() runs this again.
-        function rollupLastModified(parent) {
-            if (!parent) return;
-            let max = changedTimeMs(parent);
-            const tasks = store.childTasks[String(parent.id)];
-            if (Array.isArray(tasks)) {
-                for (const task of tasks) max = Math.max(max, changedTimeMs(task));
-            }
-            parent._lastModified = max;
-        }
-
-        function rollupLastModifiedById(parentId) {
-            const id = Number(parentId);
-            if (!id) return;
-            for (const { releases } of store.releaseResults) {
-                for (const byMajor of Object.values(releases)) {
-                    for (const byPatch of Object.values(byMajor)) {
-                        for (const items of Object.values(byPatch)) {
-                            for (const item of items) {
-                                if (item.id !== id) continue;
-                                rollupLastModified(item);
-                                return;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // A local edit bumps the edited item's ChangedDate and recomputes the feature/bug
-        // _lastModified (the item itself, or its parent when the edit was a task). Refresh sync
-        // passes touchChangedDate: false so the server's ChangedDate is kept.
-        function refreshWorkItemModified(workItemId, { touchChangedDate = true } = {}) {
-            const id = Number(workItemId);
-            if (!id) return;
-            if (touchChangedDate) {
-                const changedAt = new Date().toISOString();
-                store.forEachWorkItem(item => {
-                    if (item.id === id) item.fields['System.ChangedDate'] = changedAt;
-                });
-                if (Number(store.detail.id) === id) store.detail.fields['System.ChangedDate'] = changedAt;
-            }
-            rollupLastModifiedById(id);
-            for (const [parentId, tasks] of Object.entries(store.childTasks)) {
-                if ((tasks || []).some(task => Number(task.id) === id)) rollupLastModifiedById(parentId);
-            }
-        }
-
         const SORT_FIELDS = new Set([
             'System.State',
             'System.WorkItemType',
@@ -4508,8 +4513,8 @@
             
             await checkTokenPermissions(pat);
             // A new PAT can mean a different user/access level entirely, so the whole cache is
-            // invalidated - other tabs go back to loading lazily on next visit, same as Reload.
-            resetAndReloadActiveProduct();
+            // invalidated and every product is loaded again.
+            resetAndReloadAllProducts();
         };
 
         // ===== Azure DevOps API Integration =====
@@ -4629,25 +4634,40 @@
             }
         }
 
+        // ===== Product load =====
         // Fetches exactly one product's work items and replaces just that product's entry in
         // store.releaseResults - other products already in the store are left untouched. This is
         // the only place that talks to Azure DevOps for the main hierarchy; every other loading
-        // helper below (ensureProductLoaded, reloadActiveProduct, ...) is a thin wrapper around it.
-        async function loadProductData(product) {
+        // helper below is a thin wrapper around it. Concurrent callers share one in-flight
+        // promise per product.
+        const productLoadJobs = new Map();
+
+        function loadProductData(product) {
+            const existing = productLoadJobs.get(product);
+            if (existing) return existing;
+            const job = loadProductDataJob(product);
+            productLoadJobs.set(product, job);
+            job.finally(() => {
+                if (productLoadJobs.get(product) === job) productLoadJobs.delete(product);
+            });
+            return job;
+        }
+
+        async function loadProductDataJob(product) {
             const releaseConfig = releaseNames.find(r => r.product === product);
-            if (!releaseConfig) return;
-
-            let pat = await getPAT();
-            if (!pat) return;
-
-            // Kontrola práv tokenu (pouze při prvním načtení)
-            if (!window.tokenPermissionsChecked) {
-                await checkTokenPermissions(pat);
-                window.tokenPermissionsChecked = true;
-            }
+            if (!releaseConfig) return false;
 
             store.loadingProducts.push(product);
             try {
+                let pat = await getPAT();
+                if (!pat) return false;
+
+                // Kontrola práv tokenu (pouze při prvním načtení)
+                if (!window.tokenPermissionsChecked) {
+                    await checkTokenPermissions(pat);
+                    window.tokenPermissionsChecked = true;
+                }
+
                 const tshirtFieldSelect = `,\n                        [Custom.Shirtsize]`;
                 const wiqlQuery = `SELECT
                         [System.Id],
@@ -4692,44 +4712,106 @@
             } catch (error) {
                 Logger.error(`Error loading data for ${product}:`, error);
                 showNotification(`Failed to load ${product}: ${error.message || error}`, 'error');
+                return false;
             } finally {
                 store.loadingProducts = store.loadingProducts.filter(p => p !== product);
             }
+            return true;
         }
 
-        // Lazy: fetches `product` only if it is not already cached and not already in flight.
+        // Starts a fetch for each product that is not already in flight. Returns one
+        // { product, ok } per product that this call actually started.
+        function loadProducts(products) {
+            const pending = products.filter(product => !productLoadJobs.has(product));
+            return Promise.all(pending.map(async (product) => ({
+                product,
+                ok: await loadProductData(product)
+            })));
+        }
+
+        // Joins an in-flight fetch instead of starting a second one.
         async function ensureProductLoaded(product) {
             if (store.releaseResults.some(r => r.product === product)) return;
-            if (store.loadingProducts.includes(product)) return;
             await loadProductData(product);
         }
 
-        // Makes sure the tab the user is looking at has its work items. Child tasks for the
-        // dots (and Task Mode) are filled in the background by scheduleTaskDotFetch(). Runs on
-        // the very first load and again every time activeProduct changes.
+        // Loads the tab the user is looking at and starts a background fetch for every product
+        // that is not in the store yet, so switching tabs does not wait on a full-page loader.
         async function activateProduct(product) {
+            const rest = prefetchUnloadedProducts();
             await ensureProductLoaded(product);
             stopJenkinsStatusPoll();
             syncJenkinsStatusPoll();
+            await rest;
         }
 
-        // Force-refreshes just the active tab. Used after a write that we know made the active
-        // tab's cached data stale (a new item was created, or a patch version changed) - other
-        // tabs are untouched since nothing about them changed.
-        async function reloadActiveProduct() {
-            await loadProductData(store.activeProduct);
+        function prefetchUnloadedProducts() {
+            const pending = releaseNames
+                .map(r => r.product)
+                .filter(product => !store.releaseResults.some(r => r.product === product));
+            return loadProducts(pending);
         }
 
-        // Full reset: drops every product's cached data and tasks, then reloads just the active
-        // tab. Other tabs go back to being fetched lazily the next time they are visited.
-        async function resetAndReloadActiveProduct() {
+        function workItemIdsForProduct(product) {
+            const ids = [];
+            for (const entry of store.releaseResults) {
+                if (entry.product !== product) continue;
+                const byMajor = entry.releases[entry.release] || {};
+                for (const byPatch of Object.values(byMajor)) {
+                    for (const items of Object.values(byPatch)) {
+                        for (const item of items) ids.push(item.id);
+                    }
+                }
+            }
+            return ids;
+        }
+
+        // Drops cached child tasks so the background fetch fills them again. Bumps the generation
+        // first so a request already in flight cannot merge the snapshot we just discarded.
+        function invalidateChildTasks(ids) {
+            const drop = new Set(ids.map(id => String(id)));
+            const next = { ...store.childTasks };
+            let changed = false;
+            for (const key of drop) {
+                if (!Object.prototype.hasOwnProperty.call(next, key)) continue;
+                delete next[key];
+                changed = true;
+            }
+            if (changed) store.childTasks = next;
+            if (drop.size === 0) return;
+            store.taskDotFetchGen += 1;
+            store.loadingTaskDotIds = store.loadingTaskDotIds.filter(id => !drop.has(String(id)));
+            scheduleTaskDotFetch();
+        }
+
+        // Toolbar Reload and the 5-minute timer. Every product is refreshed. Products already on
+        // screen stay visible; each entry is swapped when its own fetch lands. Child-task caches
+        // for the products that refreshed are dropped once, then fetched again.
+        async function refreshAllProducts() {
+            const pending = releaseNames
+                .map(r => r.product)
+                .filter(product => !productLoadJobs.has(product));
+            if (pending.length === 0) return;
+            const previousByProduct = new Map(pending.map(product => [product, workItemIdsForProduct(product)]));
+            const results = await loadProducts(pending);
+            const stale = [];
+            for (const { product, ok } of results) {
+                if (ok) stale.push(...(previousByProduct.get(product) || []));
+            }
+            if (stale.length) invalidateChildTasks(stale);
+        }
+
+        // Full reset: drops every product's cached data and tasks, then loads every product again.
+        // Used when the PAT changes, because the new token may see a different set of items.
+        async function resetAndReloadAllProducts() {
             store.releaseResults = [];
             store.childTasks = {};
             store.jenkinsStatus = {};
             store.loadingTaskDotIds = [];
             store.taskDotFetchGen += 1;
             stopJenkinsStatusPoll();
-            await reloadActiveProduct();
+            await refreshAllProducts();
+            syncJenkinsStatusPoll();
         }
 
         // ===== Jenkins Build Status =====
@@ -6550,10 +6632,6 @@
                     store.applyFieldUpdate(id, `/fields/${field}`, '', { touchChangedDate: false });
                 }
             }
-            rollupLastModifiedById(id);
-            for (const [parentId, tasks] of Object.entries(store.childTasks)) {
-                if ((tasks || []).some(task => Number(task.id) === id)) rollupLastModifiedById(parentId);
-            }
         }
         
         // Gone with the old version: the read-only/read-write DOM toggling (both branches),
@@ -7661,8 +7739,7 @@
             },
             // Shared by moveWorkItemPatch() and addWorkItem(): places `item` into whichever
             // loaded product's entry matches its Custom.PlatformRelease, creating major/patch
-            // buckets as needed. A no-op (item dropped) if that product has not been fetched yet
-            // - lazy loading picks it up correctly the first time that tab is visited.
+            // buckets as needed. A no-op (item dropped) if that product is not in the store yet.
             insertWorkItem(item) {
                 const version = parseReleaseVersion(item.fields['Custom.PlatformRelease']);
                 if (!version) return;
@@ -7720,19 +7797,20 @@
         // ===== Derived state =====
         // Assigned as computed refs; reactive() unwraps them on property access, so templates and
         // plain JS both read them as store.x.
-        // Tabs come from configuration, not from what has been fetched - so every tab is
-        // clickable (and can trigger its own lazy load) from the very first render.
+        // Tabs come from configuration, not from what has been fetched, so every tab is
+        // clickable from the first render. activateProduct fills any product that is still missing.
         store.products = computed(() => releaseNames.map(r => r.product));
 
-        // Data for a product is fetched lazily (see activateProduct()); this reflects whether
-        // the currently visible tab still needs to show the loader. Hidden while the PAT modal
-        // is open, and when no token is stored, so the loader cannot cover the PAT form.
+        // Full-page loader only before the first product arrives. Switching tabs never covers
+        // the app: a product that is still loading shows the corner spinner instead.
         store.isActiveProductLoading = computed(() =>
             !store.pat.open &&
-            store.pat.configured && (
-                !store.releaseResults.some(r => r.product === store.activeProduct) ||
-                store.loadingProducts.includes(store.activeProduct)
-            ));
+            store.pat.configured &&
+            store.releaseResults.length === 0);
+
+        store.isBackgroundReloading = computed(() =>
+            store.releaseResults.length > 0 &&
+            store.loadingProducts.length > 0);
 
         // Scoped to the active product only: other products may have been visited (and cached)
         // earlier in the session, but "Expand All" should only ever affect what is on screen.
@@ -8010,6 +8088,17 @@
 
         // Drives every relative timestamp in the UI ("last reload", "updated x ago")
         setInterval(() => { store.clockTick = Date.now(); }, 60000);
+
+        // Same path as the Reload button: refresh every product in the background.
+        // Skipped while the PAT modal is open or before a token is stored, so the timer never
+        // raises the token prompt. The full-page loader is only used when nothing is on screen yet.
+        const AUTO_RELOAD_MS = 5 * 60 * 1000;
+        function autoReloadActiveProduct() {
+            if (!store.pat.configured || store.pat.open) return;
+            if (store.releaseResults.length === 0) return;
+            refreshAllProducts();
+        }
+        setInterval(autoReloadActiveProduct, AUTO_RELOAD_MS);
 
         // ===== Components =====
         const MD_TOOLBAR_BUTTONS = [
@@ -8561,7 +8650,7 @@
             methods: {
                 openPATModal,
                 toggleTaskMode,
-                reload() { resetAndReloadActiveProduct(); },
+                reload() { refreshAllProducts(); },
                 clearSearch() {
                     this.query = '';
                     store.search = '';

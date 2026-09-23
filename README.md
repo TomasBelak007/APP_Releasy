@@ -24,7 +24,7 @@ Azure DevOps Release Overview Application
   stránku; stav se na pozadí obnovuje každých 5 minut
 - 📄 **Export do Markdown** - Export patch verzí do Markdown dokumentu
 - 🎨 **Témata** - Světlý režim, tmavý režim a automatický režim podle nastavení systému
-- 🔄 **Reload dat** - Aktualizace dat z Azure DevOps včetně informace o posledním načtení
+- 🔄 **Reload dat** - Načte všechny produkty znovu na pozadí, a totéž samo každých 5 minut. Grid i záložky zůstanou zobrazené a po dokončení se vymění data ve store, takže přepnutí záložky nezakryje aplikaci načítací obrazovkou. Průběh ukazuje spinner vedle textu Last reload vpravo nahoře
 - 👁️ **Skrývání verzí** - Možnost skrýt major nebo patch verze pro lepší přehled
 - 📂 **Expand All / Collapse All** - Expand All rozbalí major i patch verze aktuálního produktu, takže jsou vidět Bugs a Features; Collapse All nechá major verze rozbalené a sbalí jen patche, takže zůstanou vidět jejich hlavičky. Stav rozbalení se pamatá per produkt v localStorage.
 
