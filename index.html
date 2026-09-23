@@ -1372,7 +1372,7 @@
             z-index: 1;
         }
         
-        /* Created badge in work item title */
+        /* Last-modified badge in the work item title (max of the parent and its tasks) */
         .work-item-created-badge {
             flex-shrink: 0;
             margin-left: 6px;
@@ -2319,6 +2319,27 @@
         }
         .filter-bulk-on { background-color: var(--color-closed); }
         .filter-bulk-off { background-color: var(--color-critical); }
+
+        .last-modified-btn {
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-width: 42px;
+            height: 32px;
+            padding: 0 10px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .last-modified-btn:hover {
+            border-color: var(--color-low);
+            color: var(--color-low);
+        }
+        .last-modified-btn.active {
+            background-color: var(--color-low);
+            border-color: var(--color-low);
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -2488,6 +2509,41 @@
                 </div>
                 <div class="modal-body" style="max-height: 600px; overflow-y: auto;">
                     <div style="margin-bottom: 25px;">
+                        <h5 style="color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-clock" style="color: #6c757d;"></i> Last modified
+                        </h5>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px;">
+                            <button v-for="option in lastModifiedOptions" :key="option.id || 'any'" type="button"
+                                    class="last-modified-btn" :class="{ active: lastModified === option.id }"
+                                    @click="lastModified = option.id">{{ option.label }}</button>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 25px;">
+                        <h5 style="color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; justify-content: space-between;">
+                            <span style="display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-flag" style="color: #ffc107;"></i> Status
+                            </span>
+                            <span style="display: flex; gap: 6px;">
+                                <button @click="selectAllStatuses(true)" title="Select All" class="filter-bulk-btn filter-bulk-on">
+                                    <i class="fa-solid fa-check-double" style="font-size: 0.85em;"></i>
+                                </button>
+                                <button @click="selectAllStatuses(false)" title="Deselect All" class="filter-bulk-btn filter-bulk-off">
+                                    <i class="fa-solid fa-xmark" style="font-size: 1em;"></i>
+                                </button>
+                            </span>
+                        </h5>
+                        <div style="max-height: 200px; overflow-y: auto; padding: 8px; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px;">
+                            <div v-for="state in availableStatuses" :key="state" class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" :id="'status-' + state" :value="state" v-model="visibleStatuses">
+                                <label class="form-check-label" :for="'status-' + state" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                                    <span class="badge bg-secondary state-badge" :data-state="state" style="min-width: 90px; text-align: center;">{{ state }}</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
                         <h5 style="color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; justify-content: space-between;">
                             <span style="display: flex; align-items: center; gap: 8px;">
                                 <i class="fa-solid fa-user" style="color: #0d6efd;"></i> Assignee
@@ -2508,30 +2564,6 @@
                                     <i class="fa-solid" :class="name === 'Unassigned' ? 'fa-user-slash' : 'fa-user'"
                                        :style="{ color: name === 'Unassigned' ? '#6c757d' : '#0d6efd' }"></i>
                                     {{ name }}
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <h5 style="color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; justify-content: space-between;">
-                            <span style="display: flex; align-items: center; gap: 8px;">
-                                <i class="fa-solid fa-flag" style="color: #ffc107;"></i> Status
-                            </span>
-                            <span style="display: flex; gap: 6px;">
-                                <button @click="selectAllStatuses(true)" title="Select All" class="filter-bulk-btn filter-bulk-on">
-                                    <i class="fa-solid fa-check-double" style="font-size: 0.85em;"></i>
-                                </button>
-                                <button @click="selectAllStatuses(false)" title="Deselect All" class="filter-bulk-btn filter-bulk-off">
-                                    <i class="fa-solid fa-xmark" style="font-size: 1em;"></i>
-                                </button>
-                            </span>
-                        </h5>
-                        <div style="max-height: 200px; overflow-y: auto; padding: 8px; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px;">
-                            <div v-for="state in availableStatuses" :key="state" class="form-check mb-2">
-                                <input class="form-check-input" type="checkbox" :id="'status-' + state" :value="state" v-model="visibleStatuses">
-                                <label class="form-check-label" :for="'status-' + state" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                                    <span class="badge bg-secondary state-badge" :data-state="state" style="min-width: 90px; text-align: center;">{{ state }}</span>
                                 </label>
                             </div>
                         </div>
@@ -3256,8 +3288,8 @@
                 </span>
                 <span class="work-item-title">
                     <span class="work-item-title-text" :title="title">{{ title }}</span>
-                    <span v-if="!isChild && createdInfo.text" class="meta-badge work-item-created-badge"
-                          :class="createdInfo.class" :title="'Created: ' + createdDate">{{ createdInfo.text }}</span>
+                    <span v-if="!isChild && modifiedInfo.text" class="meta-badge work-item-created-badge"
+                          :class="modifiedInfo.class" :title="'Modified: ' + modifiedTitle">{{ modifiedInfo.text }}</span>
                     <span v-for="badge in openTaskPrefixBadges" :key="badge.prefix"
                           class="task-prefix-open-badge"
                           :style="{ backgroundColor: badge.color }"
@@ -3422,12 +3454,25 @@
             'System.AssignedTo',
             'System.State',
             'System.CreatedDate',
+            'System.ChangedDate',
             'Custom.PlatformRelease',
             'Custom.Epictitle',
             'Microsoft.VSTS.Common.Priority',
             'Microsoft.VSTS.Common.Severity',
             'Custom.Shirtsize'
         ].join(',');
+
+        // Single-select windows for the Last modified filter. Nested on purpose (1h is inside 4h),
+        // so the modal offers one active button, not checkboxes. `1w` is seven days.
+        const LAST_MODIFIED_WINDOWS = [
+            { id: '1h', label: '1h', ms: 60 * 60 * 1000 },
+            { id: '4h', label: '4h', ms: 4 * 60 * 60 * 1000 },
+            { id: '8h', label: '8h', ms: 8 * 60 * 60 * 1000 },
+            { id: '16h', label: '16h', ms: 16 * 60 * 60 * 1000 },
+            { id: '24h', label: '24h', ms: 24 * 60 * 60 * 1000 },
+            { id: '48h', label: '48h', ms: 48 * 60 * 60 * 1000 },
+            { id: '1w', label: '1w', ms: 7 * 24 * 60 * 60 * 1000 }
+        ];
 
         // ===== Cursor Status Feed Configuration =====
         // Floating Cursor/Grok icon. The Atom feed has no component tags, so relevance is a
@@ -4057,7 +4102,10 @@
             for (const byMajor of Object.values(releases)) {
                 for (const byPatch of Object.values(byMajor)) {
                     for (const [patch, items] of Object.entries(byPatch)) {
-                        items.forEach(attachSearchText);
+                        items.forEach(item => {
+                            attachSearchText(item);
+                            rollupLastModified(item);
+                        });
                         byPatch[patch] = sortWorkItems(items);
                     }
                 }
@@ -4156,7 +4204,8 @@
         }
         
         // Slim child-task fetch for the grid (dots + Task Mode rows) and the detail modal cards:
-        // parent id + relations, then each child's id / title / state / type / assignedTo.
+        // parent id + relations, then each child's id / title / state / type / assignedTo /
+        // changedDate. ChangedDate feeds the parent's _lastModified rollup.
         // Always returns a key for every requested parent (empty array = no tasks), so the UI
         // can tell "not loaded yet" from "loaded, none". AssignedTo stays the ADO identity object.
         async function fetchChildTasksForWorkItems(workItemIds) {
@@ -4190,7 +4239,7 @@
 
                 const children = await fetchWorkItemsInBatches(
                     [...childIds],
-                    'fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo',
+                    'fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,System.ChangedDate',
                     'Child tasks'
                 );
                 const byId = new Map();
@@ -4311,6 +4360,62 @@
             if (!item) return item;
             item._searchText = buildWorkItemSearchText(item.fields || {}, item.id);
             return item;
+        }
+
+        function changedTimeMs(item) {
+            const raw = item && item.fields && item.fields['System.ChangedDate'];
+            const t = raw ? new Date(raw).getTime() : NaN;
+            return Number.isFinite(t) ? t : 0;
+        }
+
+        // Max ChangedDate of a feature/bug and the child tasks already in the cache. Missing
+        // childTasks means "not fetched yet", so the max is just the parent's own date until
+        // mergeChildTasksBatch() / addChildTask() runs this again.
+        function rollupLastModified(parent) {
+            if (!parent) return;
+            let max = changedTimeMs(parent);
+            const tasks = store.childTasks[String(parent.id)];
+            if (Array.isArray(tasks)) {
+                for (const task of tasks) max = Math.max(max, changedTimeMs(task));
+            }
+            parent._lastModified = max;
+        }
+
+        function rollupLastModifiedById(parentId) {
+            const id = Number(parentId);
+            if (!id) return;
+            for (const { releases } of store.releaseResults) {
+                for (const byMajor of Object.values(releases)) {
+                    for (const byPatch of Object.values(byMajor)) {
+                        for (const items of Object.values(byPatch)) {
+                            for (const item of items) {
+                                if (item.id !== id) continue;
+                                rollupLastModified(item);
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // A local edit bumps the edited item's ChangedDate and recomputes the feature/bug
+        // _lastModified (the item itself, or its parent when the edit was a task). Refresh sync
+        // passes touchChangedDate: false so the server's ChangedDate is kept.
+        function refreshWorkItemModified(workItemId, { touchChangedDate = true } = {}) {
+            const id = Number(workItemId);
+            if (!id) return;
+            if (touchChangedDate) {
+                const changedAt = new Date().toISOString();
+                store.forEachWorkItem(item => {
+                    if (item.id === id) item.fields['System.ChangedDate'] = changedAt;
+                });
+                if (Number(store.detail.id) === id) store.detail.fields['System.ChangedDate'] = changedAt;
+            }
+            rollupLastModifiedById(id);
+            for (const [parentId, tasks] of Object.entries(store.childTasks)) {
+                if ((tasks || []).some(task => Number(task.id) === id)) rollupLastModifiedById(parentId);
+            }
         }
 
         const SORT_FIELDS = new Set([
@@ -6432,6 +6537,7 @@
                 'System.AssignedTo',
                 'System.State',
                 'System.CreatedDate',
+                'System.ChangedDate',
                 'Custom.Epictitle',
                 'Microsoft.VSTS.Common.Priority',
                 'Microsoft.VSTS.Common.Severity',
@@ -6439,10 +6545,14 @@
             ];
             for (const field of syncFields) {
                 if (fields[field] !== undefined) {
-                    store.applyFieldUpdate(id, `/fields/${field}`, fields[field]);
+                    store.applyFieldUpdate(id, `/fields/${field}`, fields[field], { touchChangedDate: false });
                 } else if (field === 'Custom.Shirtsize') {
-                    store.applyFieldUpdate(id, `/fields/${field}`, '');
+                    store.applyFieldUpdate(id, `/fields/${field}`, '', { touchChangedDate: false });
                 }
+            }
+            rollupLastModifiedById(id);
+            for (const [parentId, tasks] of Object.entries(store.childTasks)) {
+                if ((tasks || []).some(task => Number(task.id) === id)) rollupLastModifiedById(parentId);
             }
         }
         
@@ -7332,8 +7442,9 @@
             expanded: readExpandedSections(),
             hidden: readHiddenVersions(),
             filters: (() => {
-                const f = readJSON('workItemFilters', { hiddenAssignees: [], hiddenStatuses: [] });
+                const f = readJSON('workItemFilters', { hiddenAssignees: [], hiddenStatuses: [], lastModified: null });
                 f.hiddenStatuses = (f.hiddenStatuses || []).filter(s => s !== 'Removed');
+                if (!LAST_MODIFIED_WINDOWS.some(w => w.id === f.lastModified)) f.lastModified = null;
                 return f;
             })(),
             filterModalOpen: false,
@@ -7480,20 +7591,22 @@
             openFilterModal() {
                 this.filterModalOpen = true;
             },
-            setFilters(visibleAssignees, visibleStatuses) {
+            setFilters(visibleAssignees, visibleStatuses, lastModified) {
                 this.filters.hiddenAssignees = this.availableAssignees.filter(a => !visibleAssignees.includes(a));
                 this.filters.hiddenStatuses = this.availableStatuses.filter(s => !visibleStatuses.includes(s));
+                this.filters.lastModified = LAST_MODIFIED_WINDOWS.some(w => w.id === lastModified) ? lastModified : null;
             },
             clearFilters() {
                 this.filters.hiddenAssignees = [];
                 this.filters.hiddenStatuses = [];
+                this.filters.lastModified = null;
             },
 
             // --- writes coming back from Azure DevOps ---
             // The single place a successful write lands in app state. The grid, the detail modal
             // and every derived count re-render from it, which is what replaced the per-modal
             // updateUI callbacks that used to patch badges by querySelector.
-            applyFieldUpdate(workItemId, fieldPath, value) {
+            applyFieldUpdate(workItemId, fieldPath, value, { touchChangedDate = true } = {}) {
                 const field = String(fieldPath).replace(/^\/fields\//, '');
                 const id = Number(workItemId);
                 let sortTouched = false;
@@ -7505,6 +7618,7 @@
                 });
                 if (Number(this.detail.id) === id) this.detail.fields[field] = value;
                 if (sortTouched) this.resortPatchContaining(id);
+                refreshWorkItemModified(id, { touchChangedDate: touchChangedDate && field !== 'System.ChangedDate' });
             },
             // Patch version changes move the item to a different major/patch bucket, unlike
             // every other field - applyFieldUpdate() alone is not enough because the hierarchy
@@ -7536,8 +7650,12 @@
                 if (!item) return;
 
                 item.fields['Custom.PlatformRelease'] = newPatchVersion;
+                item.fields['System.ChangedDate'] = new Date().toISOString();
                 attachSearchText(item);
-                if (Number(this.detail.id) === id) this.detail.fields['Custom.PlatformRelease'] = newPatchVersion;
+                if (Number(this.detail.id) === id) {
+                    this.detail.fields['Custom.PlatformRelease'] = newPatchVersion;
+                    this.detail.fields['System.ChangedDate'] = item.fields['System.ChangedDate'];
+                }
 
                 this.insertWorkItem(item);
             },
@@ -7551,6 +7669,7 @@
                 const dest = this.releaseResults.find(r => r.release === version.name);
                 if (!dest) return;
                 attachSearchText(item);
+                rollupLastModified(item);
                 const list = (((dest.releases[version.name] ??= {})[version.major] ??= {})[version.patch] ??= []);
                 if (!list.some(existing => existing.id === item.id)) list.push(item);
                 dest.releases[version.name][version.major][version.patch] = sortWorkItems(list);
@@ -7570,6 +7689,7 @@
                 const key = String(parentId);
                 attachSearchText(task);
                 this.childTasks = { ...this.childTasks, [key]: [...(this.childTasks[key] || []), task] };
+                rollupLastModifiedById(parentId);
             },
             resortPatchContaining(workItemId) {
                 const id = Number(workItemId);
@@ -7656,7 +7776,7 @@
         });
 
         store.activeFilterCount = computed(() =>
-            store.filters.hiddenAssignees.length + store.filters.hiddenStatuses.length);
+            store.filters.hiddenAssignees.length + store.filters.hiddenStatuses.length + (store.filters.lastModified ? 1 : 0));
 
         // Filter options come from configuration (assignees / statusOptions), not from the
         // loaded work items - so a filter option is offered even if nobody currently matches it.
@@ -7676,6 +7796,17 @@
         });
 
         store.searchTerms = computed(() => store.search.split(/\s+/).filter(Boolean));
+
+        function parentPassesLastModified(item) {
+            store.clockTick;
+            const windowId = store.filters.lastModified;
+            if (!windowId) return true;
+            const window = LAST_MODIFIED_WINDOWS.find(w => w.id === windowId);
+            if (!window) return true;
+            const at = Number(item._lastModified) || 0;
+            if (!at) return false;
+            return (Date.now() - at) <= window.ms;
+        }
 
         function itemPasses(item) {
             if (store.filters.hiddenAssignees.includes(assigneeOf(item))) return false;
@@ -7721,6 +7852,7 @@
                         const items = [];
                         const childRowsByParent = {};
                         for (const item of allItems) {
+                            if (!parentPassesLastModified(item)) continue;
                             const childRows = visibleChildTasksFor(item.id);
                             if (!itemPasses(item) && childRows.length === 0) continue;
                             items.push(item);
@@ -7794,6 +7926,7 @@
                 next[parentId].forEach(attachSearchText);
             }
             store.childTasks = next;
+            for (const parentId of Object.keys(fetched)) rollupLastModifiedById(parentId);
         }
 
         function releaseTaskDotLoading(ids) {
@@ -8094,8 +8227,20 @@
                 type() { return this.fields['System.WorkItemType']; },
                 state() { return this.fields['System.State']; },
                 assignedTo() { return assigneeOf(this.item); },
-                createdDate() { return this.fields['System.CreatedDate'] || ''; },
-                createdInfo() { return formatRelativeDate(this.createdDate); },
+                modifiedInfo() {
+                    this.store.clockTick;
+                    const ms = Number(this.item._lastModified) || 0;
+                    return formatRelativeDate(ms ? new Date(ms).toISOString() : '');
+                },
+                modifiedTitle() {
+                    const ms = Number(this.item._lastModified) || 0;
+                    if (!ms) return '';
+                    try {
+                        return new Date(ms).toLocaleString();
+                    } catch {
+                        return '';
+                    }
+                },
                 isReleaseFeature() {
                     return this.type === 'Feature' && (this.fields['System.Title'] || '').startsWith('Release');
                 },
@@ -8444,13 +8589,16 @@
         // ===== Filter modal =====
         mountApp({
             data() {
-                return { visibleAssignees: [], visibleStatuses: [] };
+                return { visibleAssignees: [], visibleStatuses: [], lastModified: '' };
             },
             computed: {
                 store: () => store,
                 open() { return store.filterModalOpen; },
                 availableAssignees() { return store.availableAssignees; },
-                availableStatuses() { return store.availableStatuses; }
+                availableStatuses() { return store.availableStatuses; },
+                lastModifiedOptions() {
+                    return [{ id: '', label: 'Any' }, ...LAST_MODIFIED_WINDOWS.map(w => ({ id: w.id, label: w.label }))];
+                }
             },
             watch: {
                 open(isOpen) {
@@ -8458,6 +8606,7 @@
                     // Seed the draft from the committed filters every time the modal opens
                     this.visibleAssignees = this.availableAssignees.filter(a => !store.filters.hiddenAssignees.includes(a));
                     this.visibleStatuses = this.availableStatuses.filter(s => !store.filters.hiddenStatuses.includes(s));
+                    this.lastModified = store.filters.lastModified || '';
                 }
             },
             methods: {
@@ -8468,7 +8617,7 @@
                     this.visibleStatuses = all ? [...this.availableStatuses] : [];
                 },
                 apply() {
-                    store.setFilters(this.visibleAssignees, this.visibleStatuses);
+                    store.setFilters(this.visibleAssignees, this.visibleStatuses, this.lastModified || null);
                     this.close();
                 },
                 removeFilter() {

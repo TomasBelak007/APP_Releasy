@@ -122,24 +122,35 @@ active one). A **missing key** means that parent has not been fetched yet (rende
 **empty array** means it was fetched and has no child tasks (hollow ring). Filled in the
 background by `scheduleTaskDotFetch()` / `fetchChildTasksForWorkItems()`, independently of Task
 Mode. Each Task is a slim work-item object (`{ id, fields }` with Title, State, WorkItemType,
-AssignedTo). Task Mode rows, the status dots, and the detail-modal task cards all read this map.
+AssignedTo, ChangedDate). Task Mode rows, the status dots, and the detail-modal task cards all read this map.
 
 Work items in `releaseResults` are slim Azure DevOps objects (`{ id, fields }`) from the grid
 projection (`GRID_WORK_ITEM_FIELDS`). The detail modal re-fetches the full item (`$expand=Relations`)
 when opened. Grid fields:
 
 - `System.Id`, `System.WorkItemType`, `System.Title`, `System.State`, `System.AssignedTo`,
-  `System.CreatedDate`
+  `System.CreatedDate`, `System.ChangedDate`
 - `Custom.PlatformRelease` (hierarchy key), `Custom.Epictitle`, `Custom.Shirtsize`
 - `Microsoft.VSTS.Common.Priority` (number), `Microsoft.VSTS.Common.Severity` (**label**, e.g.
   `"3 - Medium"`)
 
 Each grid item also carries `_searchText`, a cached haystack from `attachSearchText()` /
-`buildWorkItemSearchText()`, refreshed on load and on `applyFieldUpdate()`. Patch arrays are
+`buildWorkItemSearchText()`, refreshed on load and on `applyFieldUpdate()`. Feature and Bug rows
+also carry `_lastModified` (epoch ms): `max(parent System.ChangedDate, child task ChangedDate…)`.
+`rollupLastModified()` sets it in `groupWorkItems()` / `insertWorkItem()` from the parent alone
+when tasks are not cached yet, then again from `mergeChildTasksBatch()` (lazy load and detail
+Refresh), `addChildTask()`, and `syncGridFromRefreshedWorkItem()` (which also copies
+`System.ChangedDate` onto the grid item; a refreshed Task rolls up its parent). A successful local
+edit (`applyFieldUpdate()` and `moveWorkItemPatch()`) sets that item's `System.ChangedDate` to now
+and calls `refreshWorkItemModified()`, so a changed task also recomputes its parent's
+`_lastModified`. The grid badge and the detail modal's Changed label both read those store fields.
+Sync from a detail Refresh passes `touchChangedDate: false` so the server date is kept. Collapsed patches
+are not in `visibleParentIds`, so their max stays the parent's own date until the patch is expanded
+and the batch lands. Patch arrays are
 sorted once in `groupWorkItems()` / `insertWorkItem()` / `resortPatchContaining()`, not on every
 tree recompute.
 
-Detail/export additionally read `System.Tags`, `System.ChangedDate`, `System.Description`,
+Detail/export additionally read `System.Tags`, `System.Description`,
 `Microsoft.VSTS.TCM.ReproSteps`, `Microsoft.VSTS.Common.ClosedDate` (WIQL Closed window only).
 
 T-shirt size is read through `getTshirtSizeFromFields()`, which always reads
@@ -203,15 +214,21 @@ Derived (`VUE LAYER > Derived state`):
 | `lastReloadText` | Relative label; depends on `clockTick` |
 | `availableAssignees`, `availableStatuses` | Filter options, from the `assignees` / `statusOptions` **configuration** - not from loaded items. `availableStatuses` omits `Removed` (the status picker still offers it via `statusOptions`) |
 | `searchTerms` | `search` split on whitespace |
-| `tree` | **The rendered hierarchy.** One pass over `releaseResults` for `activeProduct`: skips hidden majors/patches, filters via `itemPasses()`, keeps a parent whose child task matches, attaches `childRowsByParent` (Task Mode), prunes empty branches. Sort is already on the patch arrays. |
+| `tree` | **The rendered hierarchy.** One pass over `releaseResults` for `activeProduct`: skips hidden majors/patches, drops a parent that fails `parentPassesLastModified()`, then filters via `itemPasses()`, keeps a parent whose child task matches, attaches `childRowsByParent` (Task Mode), prunes empty branches. Sort is already on the patch arrays. Depends on `clockTick` so a Last modified window ages out once a minute. |
 | `visibleResultCount` | Result counter in the toolbar (parents + `childRowsByParent`) |
 | `visibleParentIds` | Parent ids to fetch child tasks for, **scoped to expanded (and not hidden) majors/patches of `activeProduct`** |
 | `taskModeBusy` | `true` while Task Mode is on and a background child-task batch for a visible parent is still in flight (spinner on the Task Mode button) |
 
 `itemPasses(item)` = assignee filter + status filter + all search terms found in the cached
-`item._searchText` (fallback `buildWorkItemSearchText()`). `visibleChildTasksFor(parentId)` returns
+`item._searchText` (fallback `buildWorkItemSearchText()`). `parentPassesLastModified(item)` is a
+separate hard gate on the parent only: when `filters.lastModified` is set (`1h`, `4h`, `8h`,
+`16h`, `24h`, `48h`, `1w` = 7 days, from `LAST_MODIFIED_WINDOWS`), the parent is hidden unless
+`now - item._lastModified` is inside that window. Child task rows are not filtered by the window.
+`visibleChildTasksFor(parentId)` returns
 sorted, non-`Removed`, filtered child tasks (empty unless Task Mode). The Filter modal does not
-offer `Removed`, even though it remains in `statusOptions` for the status picker.
+offer `Removed`, even though it remains in `statusOptions` for the status picker. Sections are
+Last modified (buttons, default Any), then Status, then Assignee. `filters.lastModified` is `null`
+or a window id and lives in the same `workItemFilters` object; it counts as one active filter.
 
 Persistence (`VUE LAYER > Persistence`) - one `watch` per key:
 `expanded_sections`, `hidden_versions`, `workItemFilters`, `taskMode`, `lastActiveTab`,
@@ -242,7 +259,7 @@ the root element** in `<body>`; only the components below use `x-template`.
 | `#cursorStatusApp` | Floating Cursor/Grok status icon (green/orange/red), hover tooltip lists active relevant incidents | `store.cursorStatus`, `CURSOR_STATUS_LABELS`; not a modal, no `MODAL_STACK` entry |
 | `#appVersionFooter` | Version + "updated x ago" | `APP_RELEASE` |
 | `#notificationApp` | `store.notifications` in a `<transition-group>` | Fed by `showNotification()` |
-| `#filterApp` | Filter modal (assignee + status checkboxes) | `store.setFilters()`, no reload |
+| `#filterApp` | Filter modal (Last modified buttons, then status, then assignee checkboxes) | `store.setFilters()`, no reload |
 | `#hiddenVersionsApp` | Unhide modal | `store.unhide()`, no reload |
 | `#valuePickerApp` | **All six "change X" modals** | `PICKER_KINDS[kind]` |
 | `#workItemDetailApp` | Work item detail | Meta badges, `<html-editor>`/`<markdown-editor>` (picked by `d.descriptionFormat`, with an HTML->Markdown conversion toggle when `store.canWrite`, disabled once already Markdown - `d.descriptionFormatLocked`), tasks, comments; title splits into a prefix `<select>` + text (options from `d.titlePrefixOptions`); footer **Refresh** re-fetches the open item + comments + child tasks (`refreshWorkItemDetail()`), see [Detail modal](#flows-what-calls-what) |
@@ -263,7 +280,7 @@ Defined in `VUE LAYER > Components`, templates from `<script type="text/x-templa
 | `MarkdownEditor` | `tpl-markdown-editor` | `editorId`, `toolbarId`, `markdown`, `editable`, `minHeight` | Markdown counterpart of `HtmlEditor`. In the detail modal it is used when `d.descriptionFormat === 'Markdown'`, either detected from the server or chosen via the format toggle's HTML->Markdown conversion (see [Detail modal](#flows-what-calls-what)); in both create forms it is used when the user picks Markdown in the format toggle (`form.descriptionFormat`). Edit/Preview toggle - opens in Preview if there is content, straight into Edit if the field is empty (`render()`); edit mode is a plain `<textarea>` (Markdown source, toolbar from `MARKDOWN_TOOLBAR_BUTTONS`), preview mode runs `renderMarkdownToHtml()` (GFM tables, Azure/Excel TSV tables, fenced mermaid blocks and Azure `::: mermaid` fences turned into `.mermaid` divs) into the preview div then `renderMermaidIn()` (mermaid.js SVG); **uncontrolled** like `HtmlEditor` - content read back with `readMarkdownEditorText(editorId)`; emits `rendered` (with the preview container, so image auth fix-up runs the same way) |
 | `ProgressBar` | `tpl-progress-bar` | `items` | Segments per state in `PROGRESS_ORDER`, colors from `STATE_COLORS` |
 | `PriorityCell` | `tpl-priority-cell` | `item` | Priority / severity (Bug) / t-shirt (Feature) badges, each opening its picker |
-| `WorkItemRow` | `tpl-work-item-row` | `item`, `isChild`, `parentId` | Icon by type, clickable state/assignee badges; the row header opens the detail modal; parent rows show at most 6 task-status dots (`pickVisibleTaskDots` / `allocateTaskDotQuota`: ≥1 per present status, leftover proportional) in a fixed-width slot left of the status badge; hover lists every child task, each row opening that task's detail modal. Title column also shows a one-letter prefix pill (`openTaskPrefixes` / `TASK_PREFIX_BADGES`) for each `titlePrefixesTask` prefix that still has an assigned, non-`Closed` child (`Unassigned` tasks do not show a letter) |
+| `WorkItemRow` | `tpl-work-item-row` | `item`, `isChild`, `parentId` | Icon by type, clickable state/assignee badges; the row header opens the detail modal; parent rows show a relative last-modified badge (`item._lastModified` via `formatRelativeDate`, same `age-*` classes, tooltip `Modified:`) where the created-date badge used to be, and at most 6 task-status dots (`pickVisibleTaskDots` / `allocateTaskDotQuota`: ≥1 per present status, leftover proportional) in a fixed-width slot left of the status badge; hover lists every child task, each row opening that task's detail modal. Title column also shows a one-letter prefix pill (`openTaskPrefixes` / `TASK_PREFIX_BADGES`) for each `titlePrefixesTask` prefix that still has an assigned, non-`Closed` child (`Unassigned` tasks do not show a letter) |
 | `PatchSection` | `tpl-patch-section` | `node` | A patch: header, progress bar, Markdown export, Jenkins status icon + Build Changes (when the product has a pipeline), create; work-item rows mount only while the patch is expanded (`v-if`); `rows` interleaves parents with `node.childRowsByParent` as siblings |
 | grid root | `tpl-releasy-grid` | - | Product tabs + releases + majors, mounted on `#content`; patch sections mount only while the major is expanded |
 
@@ -318,7 +335,7 @@ time, without awaiting from `activateProduct` or touching `isActiveProductLoadin
 `visibleParentIds` is only the parents in **expanded** majors and patches (collapsed rows are
 not on screen). Each batch goes through `fetchChildTasksForWorkItems()` (parents: `$expand=relations` only — Azure DevOps
 rejects `fields` together with `$expand`; children:
-`fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo`) and is merged
+`fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,System.ChangedDate`) and is merged
 into `childTasks`, including empty arrays for parents with no tasks. The default merge keeps
 cached tasks that the new batch did not return; a detail Refresh passes `{ replace: true }` so
 deleted children disappear. The row renders at most
@@ -333,7 +350,9 @@ I red, A blue, U sky, T green, C amber, K orange, O gray) next to the title for 
 The dots slot
 and status badge have fixed widths so assignee/status columns stay aligned across rows. `addWorkItem()` seeds an empty array
 so a brand-new item does not wait for a fetch; `addChildTask()` / `applyFieldUpdate()` keep the
-map in sync (`title`, `state`, and `assignedTo` live on `fields`).
+map in sync (`title`, `state`, `assignedTo`, and `changedDate` live on `fields`). `mergeChildTasksBatch()`
+and `addChildTask()` call `rollupLastModifiedById()` after the cache write so the parent's
+`_lastModified` includes the new task dates.
 
 **Task Mode** - `toggleTaskMode()` only flips `store.taskMode`. No network call: rows are
 `visibleChildTasksFor()` over the same `childTasks` map the dots already use. Parents still in
@@ -435,7 +454,9 @@ already watch their own `html`/`markdown` prop and re-render on change.
 **Change a single field** - `open*ChangeModal(...)` -> `openValuePicker(kind, context)` (no-op
 unless `store.canWrite`) -> the `#valuePickerApp` option click -> `PICKER_KINDS[kind].apply()` ->
 `changeWorkItem*()` -> `updateWorkItemField()` -> `PATCH /wit/workitems/{id}` ->
-`store.applyFieldUpdate()` (updates grid + detail in memory) -> `showNotification()` ->
+`store.applyFieldUpdate()` (updates grid + detail in memory, stamps `System.ChangedDate`, and
+recomputes `_lastModified` on the feature/bug — the item itself, or its parent when a task changed)
+-> `showNotification()` ->
 `closeValuePicker()`. No re-fetch: the PATCH response already confirms the new value, so the app
 never re-reads it back from Azure DevOps.
 
@@ -672,7 +693,7 @@ modes:
 | Add a field to the detail modal | `#workItemDetailApp` markup + its computed |
 | Add a new "change X" modal | a new entry in `PICKER_KINDS` (`build` + `apply`) - no new markup |
 | Add a new modal | markup root in `<body>`, store slice, `mountApp`, `MODAL_STACK` entry |
-| Change a filter rule | `itemPasses()` / `store.tree` |
+| Change a filter rule | `itemPasses()` / `parentPassesLastModified()` / `store.tree` |
 | Change markdown preview (tables, mermaid) | `renderMarkdownToHtml()` / `renderMermaidIn()` in `Markdown Preview` |
 | Change the Markdown layout | `exportPatchToMarkdown()` |
 | Change theming | CSS custom properties under `[data-theme]`, `THEMES`, `LOGO_URLS` |

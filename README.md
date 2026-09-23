@@ -10,9 +10,9 @@ Azure DevOps Release Overview Application
 
 ### Read-Only funkce (základní režim)
 - 📊 **Hierarchický přehled** - Zobrazení work items podle produktu → release → major verze → patch verze
-- 🔵 **Stav child tasků** - Barevné tečky vlevo od statusu Bugu/Feature podle stavu podřízených úkolů (nejvýše 6, poměrně podle počtu ve statusu, minimálně 1 tečka na status; hover ukáže všechny názvy, assignee a statusy, klik otevře detail tasku). U názvu jedno unikátní barevné písmeno prefixu (D, X, I, A, U, T, C, K, O) pro každý typ tasku, který má aspoň jeden přiřazený a ještě ne Closed child task (unassigned tasky písmeno nezobrazí; tooltip: Open DEV tasks (2))
+- 🔵 **Stav child tasků** - Barevné tečky vlevo od statusu Bugu/Feature podle stavu podřízených úkolů (nejvýše 6, poměrně podle počtu ve statusu, minimálně 1 tečka na status; hover ukáže všechny názvy, assignee a statusy, klik otevře detail tasku). U názvu relativní čas poslední změny (max z data změny Feature/Bugu a jeho tasků; než se tasky na pozadí dotáhnou, je to jen datum parenta) a jedno unikátní barevné písmeno prefixu (D, X, I, A, U, T, C, K, O) pro každý typ tasku, který má aspoň jeden přiřazený a ještě ne Closed child task (unassigned tasky písmeno nezobrazí; tooltip: Open DEV tasks (2))
 - 📈 **Progress bary** - Vizuální indikátory průběhu podle statusů (Closed, Resolved, Active, New, Evaluation)
-- 🔍 **Filtrování** - Filtrování work items podle assignee a statusu
+- 🔍 **Filtrování** - Filtrování work items podle last modified (Any, 1h, 4h, 8h, 16h, 24h, 48h, 1w — max z Feature/Bugu a jeho tasků), statusu a assignee
 - 🔎 **Fulltextové hledání** - Hledání v gridu podle ID a názvu work itemů
 - 👁️ **Detail work itemu** - Zobrazení detailních informací včetně popisu a komentářů; tlačítko Refresh znovu načte daný work item i jeho child tasky z Azure DevOps (bez reloadu celé stránky)
 - 📋 **Kopírování** - Zkopírování názvu nebo odkazu na work item do schránky
