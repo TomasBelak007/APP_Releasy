@@ -158,6 +158,10 @@ Install deps once if needed: `pip install -r requirements.txt` (from this folder
 | Section headings (New Features / Bug Fixes / Summary) | Calibri | 13pt | `#1F3864` | yes | 16pt / 6pt |
 | Item paragraphs | Calibri | 11pt | `#222222` | no | 0 / 8pt |
 
+Line spacing is **single (1.0)** on every paragraph, including the notice box — not Word’s
+default 1.15. Set it in `scripts/build_release_email.py` (`set_single_spacing` + Normal style);
+do not rely on the template default.
+
 Left-aligned throughout (not centered). Letter page, portrait, margins top/bottom 1080 twips,
 left/right 1260 twips. No header/footer, no page numbers, no tables, no images, no
 cover/copyright line. The document title stays **Xeelo – Release Notes** even when XeeloAdmin

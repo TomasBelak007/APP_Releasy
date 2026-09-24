@@ -34,6 +34,7 @@ only the section headings and the Version:/Release date: labels are bold).
 import sys
 import json
 from docx import Document
+from docx.enum.text import WD_LINE_SPACING
 from docx.shared import Pt, Twips, RGBColor
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
@@ -62,6 +63,13 @@ TCPR_ORDER = (
 )
 
 
+def set_single_spacing(paragraph):
+    """Word default is 1.15; force single (1.0) on every paragraph."""
+    pf = paragraph.paragraph_format
+    pf.line_spacing = 1.0
+    pf.line_spacing_rule = WD_LINE_SPACING.SINGLE
+
+
 def set_run_font(run, size_pt, color_hex, bold=False):
     run.font.name = FONT
     rPr = run._element.get_or_add_rPr()
@@ -79,6 +87,7 @@ def set_run_font(run, size_pt, color_hex, bold=False):
 def add_plain_paragraph(doc, text, size_pt, color_hex, bold=False,
                          before_pt=0, after_pt=8):
     p = doc.add_paragraph()
+    set_single_spacing(p)
     p.paragraph_format.space_before = Pt(before_pt)
     p.paragraph_format.space_after = Pt(after_pt)
     r = p.add_run(text)
@@ -89,6 +98,7 @@ def add_plain_paragraph(doc, text, size_pt, color_hex, bold=False,
 def add_label_value_paragraph(doc, label, value, size_pt=11,
                                color_hex=BODY_COLOR, before_pt=0, after_pt=4):
     p = doc.add_paragraph()
+    set_single_spacing(p)
     p.paragraph_format.space_before = Pt(before_pt)
     p.paragraph_format.space_after = Pt(after_pt)
     r1 = p.add_run(label)
@@ -213,6 +223,7 @@ def add_notice_box(doc, title, paragraphs):
 
     if title:
         p = cell.add_paragraph()
+        set_single_spacing(p)
         p.paragraph_format.space_before = Pt(0)
         p.paragraph_format.space_after = Pt(4)
         r = p.add_run(title)
@@ -222,6 +233,7 @@ def add_notice_box(doc, title, paragraphs):
         if not text:
             continue
         p = cell.add_paragraph()
+        set_single_spacing(p)
         p.paragraph_format.space_before = Pt(0)
         p.paragraph_format.space_after = Pt(0 if i == len(paragraphs) - 1 else 6)
         r = p.add_run(text)
@@ -229,6 +241,7 @@ def add_notice_box(doc, title, paragraphs):
 
     # Breathing room after the box (tables themselves have no space_after).
     spacer = doc.add_paragraph()
+    set_single_spacing(spacer)
     spacer.paragraph_format.space_before = Pt(0)
     spacer.paragraph_format.space_after = Pt(4)
     return table
@@ -249,6 +262,10 @@ def set_page(doc):
 def build(content, output_path):
     doc = Document()
     set_page(doc)
+    normal = doc.styles["Normal"]
+    normal.font.name = FONT
+    normal.paragraph_format.line_spacing = 1.0
+    normal.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
 
     title = content.get("document_title") or "Xeelo – Release Notes"
     add_plain_paragraph(doc, title, 18, TITLE_COLOR,

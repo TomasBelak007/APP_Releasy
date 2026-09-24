@@ -585,6 +585,9 @@
             color: var(--text-primary);
             transition: color 0.3s ease;
         }
+        .last-reload-spinner {
+            color: var(--color-low);
+        }
         
         /* ===== Permission Badge ===== */
         .permission-badge {
@@ -1372,7 +1375,7 @@
             z-index: 1;
         }
         
-        /* Created badge in work item title */
+        /* Last-modified badge in the work item title (max of the parent and its tasks) */
         .work-item-created-badge {
             flex-shrink: 0;
             margin-left: 6px;
@@ -2319,6 +2322,27 @@
         }
         .filter-bulk-on { background-color: var(--color-closed); }
         .filter-bulk-off { background-color: var(--color-critical); }
+
+        .last-modified-btn {
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-width: 42px;
+            height: 32px;
+            padding: 0 10px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .last-modified-btn:hover {
+            border-color: var(--color-low);
+            color: var(--color-low);
+        }
+        .last-modified-btn.active {
+            background-color: var(--color-low);
+            border-color: var(--color-low);
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -2371,7 +2395,7 @@
         <div id="toolbarApp" class="controls-panel" v-cloak>
             <div class="button-container">
                 <div class="button-group">
-                    <button class="btn btn-primary" @click="reload">Reload</button>
+                    <button class="btn btn-primary" @click="reload" :disabled="store.isBackgroundReloading">Reload</button>
                     <button class="btn btn-secondary" :class="{ disabled: !store.hiddenCount }"
                             :disabled="!store.hiddenCount" @click="store.openUnhideModal()">
                         {{ store.hiddenCount ? 'Unhide (' + store.hiddenCount + ')' : 'Unhide' }}
@@ -2410,7 +2434,8 @@
                     <button class="change-pat-btn" @click="openPATModal()" title="Change Personal Access Token">
                         <i class="fa-solid fa-key"></i>
                     </button>
-                    <span style="font-style: italic;">
+                    <i v-if="store.isBackgroundReloading" class="fa-solid fa-spinner fa-spin last-reload-spinner" title="Reloading"></i>
+                    <span>
                         <template v-if="lastReloadText">Last reload: <span class="time-value">{{ lastReloadText }} ago</span></template>
                         <template v-else>Loading data for the first time...</template>
                     </span>
@@ -2488,6 +2513,41 @@
                 </div>
                 <div class="modal-body" style="max-height: 600px; overflow-y: auto;">
                     <div style="margin-bottom: 25px;">
+                        <h5 style="color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-clock" style="color: #6c757d;"></i> Last modified
+                        </h5>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px;">
+                            <button v-for="option in lastModifiedOptions" :key="option.id || 'any'" type="button"
+                                    class="last-modified-btn" :class="{ active: lastModified === option.id }"
+                                    @click="lastModified = option.id">{{ option.label }}</button>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 25px;">
+                        <h5 style="color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; justify-content: space-between;">
+                            <span style="display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-flag" style="color: #ffc107;"></i> Status
+                            </span>
+                            <span style="display: flex; gap: 6px;">
+                                <button @click="selectAllStatuses(true)" title="Select All" class="filter-bulk-btn filter-bulk-on">
+                                    <i class="fa-solid fa-check-double" style="font-size: 0.85em;"></i>
+                                </button>
+                                <button @click="selectAllStatuses(false)" title="Deselect All" class="filter-bulk-btn filter-bulk-off">
+                                    <i class="fa-solid fa-xmark" style="font-size: 1em;"></i>
+                                </button>
+                            </span>
+                        </h5>
+                        <div style="max-height: 200px; overflow-y: auto; padding: 8px; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px;">
+                            <div v-for="state in availableStatuses" :key="state" class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" :id="'status-' + state" :value="state" v-model="visibleStatuses">
+                                <label class="form-check-label" :for="'status-' + state" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                                    <span class="badge bg-secondary state-badge" :data-state="state" style="min-width: 90px; text-align: center;">{{ state }}</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
                         <h5 style="color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; justify-content: space-between;">
                             <span style="display: flex; align-items: center; gap: 8px;">
                                 <i class="fa-solid fa-user" style="color: #0d6efd;"></i> Assignee
@@ -2508,30 +2568,6 @@
                                     <i class="fa-solid" :class="name === 'Unassigned' ? 'fa-user-slash' : 'fa-user'"
                                        :style="{ color: name === 'Unassigned' ? '#6c757d' : '#0d6efd' }"></i>
                                     {{ name }}
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <h5 style="color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; justify-content: space-between;">
-                            <span style="display: flex; align-items: center; gap: 8px;">
-                                <i class="fa-solid fa-flag" style="color: #ffc107;"></i> Status
-                            </span>
-                            <span style="display: flex; gap: 6px;">
-                                <button @click="selectAllStatuses(true)" title="Select All" class="filter-bulk-btn filter-bulk-on">
-                                    <i class="fa-solid fa-check-double" style="font-size: 0.85em;"></i>
-                                </button>
-                                <button @click="selectAllStatuses(false)" title="Deselect All" class="filter-bulk-btn filter-bulk-off">
-                                    <i class="fa-solid fa-xmark" style="font-size: 1em;"></i>
-                                </button>
-                            </span>
-                        </h5>
-                        <div style="max-height: 200px; overflow-y: auto; padding: 8px; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px;">
-                            <div v-for="state in availableStatuses" :key="state" class="form-check mb-2">
-                                <input class="form-check-input" type="checkbox" :id="'status-' + state" :value="state" v-model="visibleStatuses">
-                                <label class="form-check-label" :for="'status-' + state" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                                    <span class="badge bg-secondary state-badge" :data-state="state" style="min-width: 90px; text-align: center;">{{ state }}</span>
                                 </label>
                             </div>
                         </div>
@@ -3256,8 +3292,8 @@
                 </span>
                 <span class="work-item-title">
                     <span class="work-item-title-text" :title="title">{{ title }}</span>
-                    <span v-if="!isChild && createdInfo.text" class="meta-badge work-item-created-badge"
-                          :class="createdInfo.class" :title="'Created: ' + createdDate">{{ createdInfo.text }}</span>
+                    <span v-if="!isChild && modifiedInfo.text" class="meta-badge work-item-created-badge"
+                          :class="modifiedInfo.class" :title="'Modified: ' + modifiedTitle">{{ modifiedInfo.text }}</span>
                     <span v-for="badge in openTaskPrefixBadges" :key="badge.prefix"
                           class="task-prefix-open-badge"
                           :style="{ backgroundColor: badge.color }"
@@ -3407,7 +3443,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-08T07:15:00.000Z'
+            updatedAt: '2026-09-23T10:10:49.000Z'
         };
 
         // ===== API Configuration =====
@@ -3422,12 +3458,25 @@
             'System.AssignedTo',
             'System.State',
             'System.CreatedDate',
+            'System.ChangedDate',
             'Custom.PlatformRelease',
             'Custom.Epictitle',
             'Microsoft.VSTS.Common.Priority',
             'Microsoft.VSTS.Common.Severity',
             'Custom.Shirtsize'
         ].join(',');
+
+        // Single-select windows for the Last modified filter. Nested on purpose (1h is inside 4h),
+        // so the modal offers one active button, not checkboxes. `1w` is seven days.
+        const LAST_MODIFIED_WINDOWS = [
+            { id: '1h', label: '1h', ms: 60 * 60 * 1000 },
+            { id: '4h', label: '4h', ms: 4 * 60 * 60 * 1000 },
+            { id: '8h', label: '8h', ms: 8 * 60 * 60 * 1000 },
+            { id: '16h', label: '16h', ms: 16 * 60 * 60 * 1000 },
+            { id: '24h', label: '24h', ms: 24 * 60 * 60 * 1000 },
+            { id: '48h', label: '48h', ms: 48 * 60 * 60 * 1000 },
+            { id: '1w', label: '1w', ms: 7 * 24 * 60 * 60 * 1000 }
+        ];
 
         // ===== Cursor Status Feed Configuration =====
         // Floating Cursor/Grok icon. The Atom feed has no component tags, so relevance is a
@@ -3556,14 +3605,14 @@
             { 
                 product: 'Xeelo', 
                 versions: [
-                    { version: 'Labe-07', patches: ['999', '020', '019', '018', '017', '016', '015', '014', '013'] },
+                    { version: 'Labe-07', patches: ['999', '020', '019', '018', '017', '016'] },
                     { version: 'Odra-01', patches: ['999'] }
                 ]
             },
             { 
                 product: 'XeeloAdmin', 
                 versions: [
-                    { version: 'Odra-01', patches: ['999', '005', '004', '003'] }
+                    { version: 'Odra-01', patches: ['999', '010', '009', '008', '007', '006', '005'] }
                 ]
             },
             { 
@@ -4057,13 +4106,73 @@
             for (const byMajor of Object.values(releases)) {
                 for (const byPatch of Object.values(byMajor)) {
                     for (const [patch, items] of Object.entries(byPatch)) {
-                        items.forEach(attachSearchText);
+                        items.forEach(item => {
+                            attachSearchText(item);
+                            rollupLastModified(item);
+                        });
                         byPatch[patch] = sortWorkItems(items);
                     }
                 }
             }
 
             return releases;
+        }
+
+        // ===== Last modified =====
+        function changedTimeMs(item) {
+            const raw = item && item.fields && item.fields['System.ChangedDate'];
+            const t = raw ? new Date(raw).getTime() : NaN;
+            return Number.isFinite(t) ? t : 0;
+        }
+
+        // Max ChangedDate of a feature/bug and the child tasks already in the cache. Missing
+        // childTasks means "not fetched yet", so the max is just the parent's own date until
+        // mergeChildTasksBatch() / addChildTask() runs this again.
+        function rollupLastModified(parent) {
+            if (!parent) return;
+            let max = changedTimeMs(parent);
+            const tasks = store.childTasks[String(parent.id)];
+            if (Array.isArray(tasks)) {
+                for (const task of tasks) max = Math.max(max, changedTimeMs(task));
+            }
+            parent._lastModified = max;
+        }
+
+        function rollupLastModifiedById(parentId) {
+            const id = Number(parentId);
+            if (!id) return;
+            for (const { releases } of store.releaseResults) {
+                for (const byMajor of Object.values(releases)) {
+                    for (const byPatch of Object.values(byMajor)) {
+                        for (const items of Object.values(byPatch)) {
+                            for (const item of items) {
+                                if (item.id !== id) continue;
+                                rollupLastModified(item);
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // A local edit bumps the edited item's ChangedDate and recomputes the feature/bug
+        // _lastModified (the item itself, or its parent when the edit was a task). Refresh sync
+        // passes touchChangedDate: false so the server's ChangedDate is kept.
+        function refreshWorkItemModified(workItemId, { touchChangedDate = true } = {}) {
+            const id = Number(workItemId);
+            if (!id) return;
+            if (touchChangedDate) {
+                const changedAt = new Date().toISOString();
+                store.forEachWorkItem(item => {
+                    if (item.id === id) item.fields['System.ChangedDate'] = changedAt;
+                });
+                if (Number(store.detail.id) === id) store.detail.fields['System.ChangedDate'] = changedAt;
+            }
+            rollupLastModifiedById(id);
+            for (const [parentId, tasks] of Object.entries(store.childTasks)) {
+                if ((tasks || []).some(task => Number(task.id) === id)) rollupLastModifiedById(parentId);
+            }
         }
 
         // ===== Last Reload Time Management =====
@@ -4156,7 +4265,8 @@
         }
         
         // Slim child-task fetch for the grid (dots + Task Mode rows) and the detail modal cards:
-        // parent id + relations, then each child's id / title / state / type / assignedTo.
+        // parent id + relations, then each child's id / title / state / type / assignedTo /
+        // changedDate. ChangedDate feeds the parent's _lastModified rollup.
         // Always returns a key for every requested parent (empty array = no tasks), so the UI
         // can tell "not loaded yet" from "loaded, none". AssignedTo stays the ADO identity object.
         async function fetchChildTasksForWorkItems(workItemIds) {
@@ -4190,7 +4300,7 @@
 
                 const children = await fetchWorkItemsInBatches(
                     [...childIds],
-                    'fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo',
+                    'fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,System.ChangedDate',
                     'Child tasks'
                 );
                 const byId = new Map();
@@ -4403,8 +4513,8 @@
             
             await checkTokenPermissions(pat);
             // A new PAT can mean a different user/access level entirely, so the whole cache is
-            // invalidated - other tabs go back to loading lazily on next visit, same as Reload.
-            resetAndReloadActiveProduct();
+            // invalidated and every product is loaded again.
+            resetAndReloadAllProducts();
         };
 
         // ===== Azure DevOps API Integration =====
@@ -4524,25 +4634,40 @@
             }
         }
 
+        // ===== Product load =====
         // Fetches exactly one product's work items and replaces just that product's entry in
         // store.releaseResults - other products already in the store are left untouched. This is
         // the only place that talks to Azure DevOps for the main hierarchy; every other loading
-        // helper below (ensureProductLoaded, reloadActiveProduct, ...) is a thin wrapper around it.
-        async function loadProductData(product) {
+        // helper below is a thin wrapper around it. Concurrent callers share one in-flight
+        // promise per product.
+        const productLoadJobs = new Map();
+
+        function loadProductData(product) {
+            const existing = productLoadJobs.get(product);
+            if (existing) return existing;
+            const job = loadProductDataJob(product);
+            productLoadJobs.set(product, job);
+            job.finally(() => {
+                if (productLoadJobs.get(product) === job) productLoadJobs.delete(product);
+            });
+            return job;
+        }
+
+        async function loadProductDataJob(product) {
             const releaseConfig = releaseNames.find(r => r.product === product);
-            if (!releaseConfig) return;
-
-            let pat = await getPAT();
-            if (!pat) return;
-
-            // Kontrola práv tokenu (pouze při prvním načtení)
-            if (!window.tokenPermissionsChecked) {
-                await checkTokenPermissions(pat);
-                window.tokenPermissionsChecked = true;
-            }
+            if (!releaseConfig) return false;
 
             store.loadingProducts.push(product);
             try {
+                let pat = await getPAT();
+                if (!pat) return false;
+
+                // Kontrola práv tokenu (pouze při prvním načtení)
+                if (!window.tokenPermissionsChecked) {
+                    await checkTokenPermissions(pat);
+                    window.tokenPermissionsChecked = true;
+                }
+
                 const tshirtFieldSelect = `,\n                        [Custom.Shirtsize]`;
                 const wiqlQuery = `SELECT
                         [System.Id],
@@ -4587,44 +4712,106 @@
             } catch (error) {
                 Logger.error(`Error loading data for ${product}:`, error);
                 showNotification(`Failed to load ${product}: ${error.message || error}`, 'error');
+                return false;
             } finally {
                 store.loadingProducts = store.loadingProducts.filter(p => p !== product);
             }
+            return true;
         }
 
-        // Lazy: fetches `product` only if it is not already cached and not already in flight.
+        // Starts a fetch for each product that is not already in flight. Returns one
+        // { product, ok } per product that this call actually started.
+        function loadProducts(products) {
+            const pending = products.filter(product => !productLoadJobs.has(product));
+            return Promise.all(pending.map(async (product) => ({
+                product,
+                ok: await loadProductData(product)
+            })));
+        }
+
+        // Joins an in-flight fetch instead of starting a second one.
         async function ensureProductLoaded(product) {
             if (store.releaseResults.some(r => r.product === product)) return;
-            if (store.loadingProducts.includes(product)) return;
             await loadProductData(product);
         }
 
-        // Makes sure the tab the user is looking at has its work items. Child tasks for the
-        // dots (and Task Mode) are filled in the background by scheduleTaskDotFetch(). Runs on
-        // the very first load and again every time activeProduct changes.
+        // Loads the tab the user is looking at and starts a background fetch for every product
+        // that is not in the store yet, so switching tabs does not wait on a full-page loader.
         async function activateProduct(product) {
+            const rest = prefetchUnloadedProducts();
             await ensureProductLoaded(product);
             stopJenkinsStatusPoll();
             syncJenkinsStatusPoll();
+            await rest;
         }
 
-        // Force-refreshes just the active tab. Used after a write that we know made the active
-        // tab's cached data stale (a new item was created, or a patch version changed) - other
-        // tabs are untouched since nothing about them changed.
-        async function reloadActiveProduct() {
-            await loadProductData(store.activeProduct);
+        function prefetchUnloadedProducts() {
+            const pending = releaseNames
+                .map(r => r.product)
+                .filter(product => !store.releaseResults.some(r => r.product === product));
+            return loadProducts(pending);
         }
 
-        // Full reset: drops every product's cached data and tasks, then reloads just the active
-        // tab. Other tabs go back to being fetched lazily the next time they are visited.
-        async function resetAndReloadActiveProduct() {
+        function workItemIdsForProduct(product) {
+            const ids = [];
+            for (const entry of store.releaseResults) {
+                if (entry.product !== product) continue;
+                const byMajor = entry.releases[entry.release] || {};
+                for (const byPatch of Object.values(byMajor)) {
+                    for (const items of Object.values(byPatch)) {
+                        for (const item of items) ids.push(item.id);
+                    }
+                }
+            }
+            return ids;
+        }
+
+        // Drops cached child tasks so the background fetch fills them again. Bumps the generation
+        // first so a request already in flight cannot merge the snapshot we just discarded.
+        function invalidateChildTasks(ids) {
+            const drop = new Set(ids.map(id => String(id)));
+            const next = { ...store.childTasks };
+            let changed = false;
+            for (const key of drop) {
+                if (!Object.prototype.hasOwnProperty.call(next, key)) continue;
+                delete next[key];
+                changed = true;
+            }
+            if (changed) store.childTasks = next;
+            if (drop.size === 0) return;
+            store.taskDotFetchGen += 1;
+            store.loadingTaskDotIds = store.loadingTaskDotIds.filter(id => !drop.has(String(id)));
+            scheduleTaskDotFetch();
+        }
+
+        // Toolbar Reload and the 5-minute timer. Every product is refreshed. Products already on
+        // screen stay visible; each entry is swapped when its own fetch lands. Child-task caches
+        // for the products that refreshed are dropped once, then fetched again.
+        async function refreshAllProducts() {
+            const pending = releaseNames
+                .map(r => r.product)
+                .filter(product => !productLoadJobs.has(product));
+            if (pending.length === 0) return;
+            const previousByProduct = new Map(pending.map(product => [product, workItemIdsForProduct(product)]));
+            const results = await loadProducts(pending);
+            const stale = [];
+            for (const { product, ok } of results) {
+                if (ok) stale.push(...(previousByProduct.get(product) || []));
+            }
+            if (stale.length) invalidateChildTasks(stale);
+        }
+
+        // Full reset: drops every product's cached data and tasks, then loads every product again.
+        // Used when the PAT changes, because the new token may see a different set of items.
+        async function resetAndReloadAllProducts() {
             store.releaseResults = [];
             store.childTasks = {};
             store.jenkinsStatus = {};
             store.loadingTaskDotIds = [];
             store.taskDotFetchGen += 1;
             stopJenkinsStatusPoll();
-            await reloadActiveProduct();
+            await refreshAllProducts();
+            syncJenkinsStatusPoll();
         }
 
         // ===== Jenkins Build Status =====
@@ -6432,6 +6619,7 @@
                 'System.AssignedTo',
                 'System.State',
                 'System.CreatedDate',
+                'System.ChangedDate',
                 'Custom.Epictitle',
                 'Microsoft.VSTS.Common.Priority',
                 'Microsoft.VSTS.Common.Severity',
@@ -6439,9 +6627,9 @@
             ];
             for (const field of syncFields) {
                 if (fields[field] !== undefined) {
-                    store.applyFieldUpdate(id, `/fields/${field}`, fields[field]);
+                    store.applyFieldUpdate(id, `/fields/${field}`, fields[field], { touchChangedDate: false });
                 } else if (field === 'Custom.Shirtsize') {
-                    store.applyFieldUpdate(id, `/fields/${field}`, '');
+                    store.applyFieldUpdate(id, `/fields/${field}`, '', { touchChangedDate: false });
                 }
             }
         }
@@ -7332,8 +7520,9 @@
             expanded: readExpandedSections(),
             hidden: readHiddenVersions(),
             filters: (() => {
-                const f = readJSON('workItemFilters', { hiddenAssignees: [], hiddenStatuses: [] });
+                const f = readJSON('workItemFilters', { hiddenAssignees: [], hiddenStatuses: [], lastModified: null });
                 f.hiddenStatuses = (f.hiddenStatuses || []).filter(s => s !== 'Removed');
+                if (!LAST_MODIFIED_WINDOWS.some(w => w.id === f.lastModified)) f.lastModified = null;
                 return f;
             })(),
             filterModalOpen: false,
@@ -7480,20 +7669,22 @@
             openFilterModal() {
                 this.filterModalOpen = true;
             },
-            setFilters(visibleAssignees, visibleStatuses) {
+            setFilters(visibleAssignees, visibleStatuses, lastModified) {
                 this.filters.hiddenAssignees = this.availableAssignees.filter(a => !visibleAssignees.includes(a));
                 this.filters.hiddenStatuses = this.availableStatuses.filter(s => !visibleStatuses.includes(s));
+                this.filters.lastModified = LAST_MODIFIED_WINDOWS.some(w => w.id === lastModified) ? lastModified : null;
             },
             clearFilters() {
                 this.filters.hiddenAssignees = [];
                 this.filters.hiddenStatuses = [];
+                this.filters.lastModified = null;
             },
 
             // --- writes coming back from Azure DevOps ---
             // The single place a successful write lands in app state. The grid, the detail modal
             // and every derived count re-render from it, which is what replaced the per-modal
             // updateUI callbacks that used to patch badges by querySelector.
-            applyFieldUpdate(workItemId, fieldPath, value) {
+            applyFieldUpdate(workItemId, fieldPath, value, { touchChangedDate = true } = {}) {
                 const field = String(fieldPath).replace(/^\/fields\//, '');
                 const id = Number(workItemId);
                 let sortTouched = false;
@@ -7505,6 +7696,7 @@
                 });
                 if (Number(this.detail.id) === id) this.detail.fields[field] = value;
                 if (sortTouched) this.resortPatchContaining(id);
+                refreshWorkItemModified(id, { touchChangedDate: touchChangedDate && field !== 'System.ChangedDate' });
             },
             // Patch version changes move the item to a different major/patch bucket, unlike
             // every other field - applyFieldUpdate() alone is not enough because the hierarchy
@@ -7536,21 +7728,25 @@
                 if (!item) return;
 
                 item.fields['Custom.PlatformRelease'] = newPatchVersion;
+                item.fields['System.ChangedDate'] = new Date().toISOString();
                 attachSearchText(item);
-                if (Number(this.detail.id) === id) this.detail.fields['Custom.PlatformRelease'] = newPatchVersion;
+                if (Number(this.detail.id) === id) {
+                    this.detail.fields['Custom.PlatformRelease'] = newPatchVersion;
+                    this.detail.fields['System.ChangedDate'] = item.fields['System.ChangedDate'];
+                }
 
                 this.insertWorkItem(item);
             },
             // Shared by moveWorkItemPatch() and addWorkItem(): places `item` into whichever
             // loaded product's entry matches its Custom.PlatformRelease, creating major/patch
-            // buckets as needed. A no-op (item dropped) if that product has not been fetched yet
-            // - lazy loading picks it up correctly the first time that tab is visited.
+            // buckets as needed. A no-op (item dropped) if that product is not in the store yet.
             insertWorkItem(item) {
                 const version = parseReleaseVersion(item.fields['Custom.PlatformRelease']);
                 if (!version) return;
                 const dest = this.releaseResults.find(r => r.release === version.name);
                 if (!dest) return;
                 attachSearchText(item);
+                rollupLastModified(item);
                 const list = (((dest.releases[version.name] ??= {})[version.major] ??= {})[version.patch] ??= []);
                 if (!list.some(existing => existing.id === item.id)) list.push(item);
                 dest.releases[version.name][version.major][version.patch] = sortWorkItems(list);
@@ -7570,6 +7766,7 @@
                 const key = String(parentId);
                 attachSearchText(task);
                 this.childTasks = { ...this.childTasks, [key]: [...(this.childTasks[key] || []), task] };
+                rollupLastModifiedById(parentId);
             },
             resortPatchContaining(workItemId) {
                 const id = Number(workItemId);
@@ -7600,19 +7797,20 @@
         // ===== Derived state =====
         // Assigned as computed refs; reactive() unwraps them on property access, so templates and
         // plain JS both read them as store.x.
-        // Tabs come from configuration, not from what has been fetched - so every tab is
-        // clickable (and can trigger its own lazy load) from the very first render.
+        // Tabs come from configuration, not from what has been fetched, so every tab is
+        // clickable from the first render. activateProduct fills any product that is still missing.
         store.products = computed(() => releaseNames.map(r => r.product));
 
-        // Data for a product is fetched lazily (see activateProduct()); this reflects whether
-        // the currently visible tab still needs to show the loader. Hidden while the PAT modal
-        // is open, and when no token is stored, so the loader cannot cover the PAT form.
+        // Full-page loader only before the first product arrives. Switching tabs never covers
+        // the app: a product that is still loading shows the corner spinner instead.
         store.isActiveProductLoading = computed(() =>
             !store.pat.open &&
-            store.pat.configured && (
-                !store.releaseResults.some(r => r.product === store.activeProduct) ||
-                store.loadingProducts.includes(store.activeProduct)
-            ));
+            store.pat.configured &&
+            store.releaseResults.length === 0);
+
+        store.isBackgroundReloading = computed(() =>
+            store.releaseResults.length > 0 &&
+            store.loadingProducts.length > 0);
 
         // Scoped to the active product only: other products may have been visited (and cached)
         // earlier in the session, but "Expand All" should only ever affect what is on screen.
@@ -7656,7 +7854,7 @@
         });
 
         store.activeFilterCount = computed(() =>
-            store.filters.hiddenAssignees.length + store.filters.hiddenStatuses.length);
+            store.filters.hiddenAssignees.length + store.filters.hiddenStatuses.length + (store.filters.lastModified ? 1 : 0));
 
         // Filter options come from configuration (assignees / statusOptions), not from the
         // loaded work items - so a filter option is offered even if nobody currently matches it.
@@ -7676,6 +7874,17 @@
         });
 
         store.searchTerms = computed(() => store.search.split(/\s+/).filter(Boolean));
+
+        function parentPassesLastModified(item) {
+            store.clockTick;
+            const windowId = store.filters.lastModified;
+            if (!windowId) return true;
+            const window = LAST_MODIFIED_WINDOWS.find(w => w.id === windowId);
+            if (!window) return true;
+            const at = Number(item._lastModified) || 0;
+            if (!at) return false;
+            return (Date.now() - at) <= window.ms;
+        }
 
         function itemPasses(item) {
             if (store.filters.hiddenAssignees.includes(assigneeOf(item))) return false;
@@ -7721,6 +7930,7 @@
                         const items = [];
                         const childRowsByParent = {};
                         for (const item of allItems) {
+                            if (!parentPassesLastModified(item)) continue;
                             const childRows = visibleChildTasksFor(item.id);
                             if (!itemPasses(item) && childRows.length === 0) continue;
                             items.push(item);
@@ -7794,6 +8004,7 @@
                 next[parentId].forEach(attachSearchText);
             }
             store.childTasks = next;
+            for (const parentId of Object.keys(fetched)) rollupLastModifiedById(parentId);
         }
 
         function releaseTaskDotLoading(ids) {
@@ -7877,6 +8088,17 @@
 
         // Drives every relative timestamp in the UI ("last reload", "updated x ago")
         setInterval(() => { store.clockTick = Date.now(); }, 60000);
+
+        // Same path as the Reload button: refresh every product in the background.
+        // Skipped while the PAT modal is open or before a token is stored, so the timer never
+        // raises the token prompt. The full-page loader is only used when nothing is on screen yet.
+        const AUTO_RELOAD_MS = 5 * 60 * 1000;
+        function autoReloadActiveProduct() {
+            if (!store.pat.configured || store.pat.open) return;
+            if (store.releaseResults.length === 0) return;
+            refreshAllProducts();
+        }
+        setInterval(autoReloadActiveProduct, AUTO_RELOAD_MS);
 
         // ===== Components =====
         const MD_TOOLBAR_BUTTONS = [
@@ -8094,8 +8316,20 @@
                 type() { return this.fields['System.WorkItemType']; },
                 state() { return this.fields['System.State']; },
                 assignedTo() { return assigneeOf(this.item); },
-                createdDate() { return this.fields['System.CreatedDate'] || ''; },
-                createdInfo() { return formatRelativeDate(this.createdDate); },
+                modifiedInfo() {
+                    this.store.clockTick;
+                    const ms = Number(this.item._lastModified) || 0;
+                    return formatRelativeDate(ms ? new Date(ms).toISOString() : '');
+                },
+                modifiedTitle() {
+                    const ms = Number(this.item._lastModified) || 0;
+                    if (!ms) return '';
+                    try {
+                        return new Date(ms).toLocaleString();
+                    } catch {
+                        return '';
+                    }
+                },
                 isReleaseFeature() {
                     return this.type === 'Feature' && (this.fields['System.Title'] || '').startsWith('Release');
                 },
@@ -8416,7 +8650,7 @@
             methods: {
                 openPATModal,
                 toggleTaskMode,
-                reload() { resetAndReloadActiveProduct(); },
+                reload() { refreshAllProducts(); },
                 clearSearch() {
                     this.query = '';
                     store.search = '';
@@ -8444,13 +8678,16 @@
         // ===== Filter modal =====
         mountApp({
             data() {
-                return { visibleAssignees: [], visibleStatuses: [] };
+                return { visibleAssignees: [], visibleStatuses: [], lastModified: '' };
             },
             computed: {
                 store: () => store,
                 open() { return store.filterModalOpen; },
                 availableAssignees() { return store.availableAssignees; },
-                availableStatuses() { return store.availableStatuses; }
+                availableStatuses() { return store.availableStatuses; },
+                lastModifiedOptions() {
+                    return [{ id: '', label: 'Any' }, ...LAST_MODIFIED_WINDOWS.map(w => ({ id: w.id, label: w.label }))];
+                }
             },
             watch: {
                 open(isOpen) {
@@ -8458,6 +8695,7 @@
                     // Seed the draft from the committed filters every time the modal opens
                     this.visibleAssignees = this.availableAssignees.filter(a => !store.filters.hiddenAssignees.includes(a));
                     this.visibleStatuses = this.availableStatuses.filter(s => !store.filters.hiddenStatuses.includes(s));
+                    this.lastModified = store.filters.lastModified || '';
                 }
             },
             methods: {
@@ -8468,7 +8706,7 @@
                     this.visibleStatuses = all ? [...this.availableStatuses] : [];
                 },
                 apply() {
-                    store.setFilters(this.visibleAssignees, this.visibleStatuses);
+                    store.setFilters(this.visibleAssignees, this.visibleStatuses, this.lastModified || null);
                     this.close();
                 },
                 removeFilter() {

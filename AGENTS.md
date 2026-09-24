@@ -1,7 +1,7 @@
 # Releasy - agent instructions
 
 Read [`ARCHITECTURE.md`](ARCHITECTURE.md) before changing `index.html`. It maps the whole file
-(sections, store, components, call chains, API surface), so you do not have to scan ~7200 lines.
+(sections, store, components, call chains, API surface), so you do not have to scan ~8900 lines.
 
 ## Project shape
 

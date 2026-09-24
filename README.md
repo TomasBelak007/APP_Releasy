@@ -10,9 +10,9 @@ Azure DevOps Release Overview Application
 
 ### Read-Only funkce (základní režim)
 - 📊 **Hierarchický přehled** - Zobrazení work items podle produktu → release → major verze → patch verze
-- 🔵 **Stav child tasků** - Barevné tečky vlevo od statusu Bugu/Feature podle stavu podřízených úkolů (nejvýše 6, poměrně podle počtu ve statusu, minimálně 1 tečka na status; hover ukáže všechny názvy, assignee a statusy, klik otevře detail tasku). U názvu jedno unikátní barevné písmeno prefixu (D, X, I, A, U, T, C, K, O) pro každý typ tasku, který má aspoň jeden přiřazený a ještě ne Closed child task (unassigned tasky písmeno nezobrazí; tooltip: Open DEV tasks (2))
+- 🔵 **Stav child tasků** - Barevné tečky vlevo od statusu Bugu/Feature podle stavu podřízených úkolů (nejvýše 6, poměrně podle počtu ve statusu, minimálně 1 tečka na status; hover ukáže všechny názvy, assignee a statusy, klik otevře detail tasku). U názvu relativní čas poslední změny (max z data změny Feature/Bugu a jeho tasků; než se tasky na pozadí dotáhnou, je to jen datum parenta) a jedno unikátní barevné písmeno prefixu (D, X, I, A, U, T, C, K, O) pro každý typ tasku, který má aspoň jeden přiřazený a ještě ne Closed child task (unassigned tasky písmeno nezobrazí; tooltip: Open DEV tasks (2))
 - 📈 **Progress bary** - Vizuální indikátory průběhu podle statusů (Closed, Resolved, Active, New, Evaluation)
-- 🔍 **Filtrování** - Filtrování work items podle assignee a statusu
+- 🔍 **Filtrování** - Filtrování work items podle last modified (Any, 1h, 4h, 8h, 16h, 24h, 48h, 1w — max z Feature/Bugu a jeho tasků), statusu a assignee
 - 🔎 **Fulltextové hledání** - Hledání v gridu podle ID a názvu work itemů
 - 👁️ **Detail work itemu** - Zobrazení detailních informací včetně popisu a komentářů; tlačítko Refresh znovu načte daný work item i jeho child tasky z Azure DevOps (bez reloadu celé stránky)
 - 📋 **Kopírování** - Zkopírování názvu nebo odkazu na work item do schránky
@@ -24,7 +24,7 @@ Azure DevOps Release Overview Application
   stránku; stav se na pozadí obnovuje každých 5 minut
 - 📄 **Export do Markdown** - Export patch verzí do Markdown dokumentu
 - 🎨 **Témata** - Světlý režim, tmavý režim a automatický režim podle nastavení systému
-- 🔄 **Reload dat** - Aktualizace dat z Azure DevOps včetně informace o posledním načtení
+- 🔄 **Reload dat** - Načte všechny produkty znovu na pozadí, a totéž samo každých 5 minut. Grid i záložky zůstanou zobrazené a po dokončení se vymění data ve store, takže přepnutí záložky nezakryje aplikaci načítací obrazovkou. Průběh ukazuje spinner vedle textu Last reload vpravo nahoře
 - 👁️ **Skrývání verzí** - Možnost skrýt major nebo patch verze pro lepší přehled
 - 📂 **Expand All / Collapse All** - Expand All rozbalí major i patch verze aktuálního produktu, takže jsou vidět Bugs a Features; Collapse All nechá major verze rozbalené a sbalí jen patche, takže zůstanou vidět jejich hlavičky. Stav rozbalení se pamatá per produkt v localStorage.
 
