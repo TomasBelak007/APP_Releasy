@@ -2041,13 +2041,51 @@
             height: auto;
         }
         .work-item-detail-comments .work-item-detail-comments-empty,
-        .work-item-detail-comments .work-item-detail-comments-loading {
+        .work-item-detail-comments .work-item-detail-comments-loading,
+        .work-item-detail-attachments-empty {
             margin: 0;
             padding: 14px;
             color: var(--text-secondary);
             border: 1px dashed var(--border-color);
             border-radius: 8px;
             background: var(--bg-secondary);
+        }
+        .work-item-detail-attachments {
+            list-style: none;
+            margin: 8px 0 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .work-item-detail-attachment {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--bg-secondary);
+        }
+        [data-theme="dark"] .work-item-detail-attachment {
+            background: var(--bg-primary);
+        }
+        .work-item-detail-attachment-name {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .work-item-detail-attachment-meta {
+            color: var(--text-secondary);
+            font-size: 0.85em;
+            white-space: nowrap;
+        }
+        .work-item-detail-attachment .btn {
+            flex-shrink: 0;
         }
         .work-item-detail-task-card {
             border: 1px solid var(--border-color);
@@ -2735,6 +2773,26 @@
                     <markdown-editor v-else ref="editor" editor-id="workItemDetailDescriptionMd" toolbar-id="workItemDetailMarkdownToolbar"
                                  :markdown="d.descriptionHtml" :editable="store.canWrite"
                                  @rendered="onDescriptionRendered"></markdown-editor>
+                </div>
+                <div id="workItemDetailAttachments" style="margin-top: 20px;">
+                    <label class="form-label" style="color: var(--text-primary); font-weight: 600;">
+                        <i class="fa-solid fa-paperclip"></i> Attachments
+                        <span v-if="attachments.length" style="color: var(--text-secondary); font-weight: 500;">({{ attachments.length }})</span>
+                    </label>
+                    <p v-if="!attachments.length" class="work-item-detail-attachments-empty">No attachments.</p>
+                    <ul v-else class="work-item-detail-attachments">
+                        <li v-for="file in attachments" :key="file.url" class="work-item-detail-attachment">
+                            <i class="fa-solid fa-file" aria-hidden="true"></i>
+                            <span class="work-item-detail-attachment-name" :title="file.name">{{ file.name }}</span>
+                            <span v-if="file.sizeLabel" class="work-item-detail-attachment-meta">{{ file.sizeLabel }}</span>
+                            <time v-if="file.whenLabel" class="work-item-detail-attachment-meta" :datetime="file.when" :title="file.when">{{ file.whenLabel }}</time>
+                            <button type="button" class="btn btn-sm btn-secondary" :disabled="!!d.attachmentDownloading"
+                                    @click="downloadAttachment(file)" title="Download this attachment">
+                                <i class="fa-solid" :class="d.attachmentDownloading === file.url ? 'fa-spinner fa-spin' : 'fa-download'" aria-hidden="true"></i>
+                                {{ d.attachmentDownloading === file.url ? 'Downloading…' : 'Download' }}
+                            </button>
+                        </li>
+                    </ul>
                 </div>
                 <div id="workItemDetailCommentsContainer">
                     <label class="form-label work-item-detail-comments-label" style="color: var(--text-primary); font-weight: 600;">
@@ -3449,7 +3507,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-29T10:11:21.000Z'
+            updatedAt: '2026-09-29T13:34:25.000Z'
         };
 
         // ===== API Configuration =====
@@ -6667,6 +6725,7 @@
             d.commentsError = '';
             d.commentsLoading = true;
             d.commentSubmitting = false;
+            d.attachmentDownloading = '';
             d.newComment.descriptionFormat = 'Markdown';
             d.newComment.descriptionHtml = '';
             d.newComment.descriptionHtmlCache = null;
@@ -6793,6 +6852,76 @@
                 if (d.id === workItemId) d.commentsError = `Comments could not be loaded: ${e.message || e}`;
             } finally {
                 if (d.id === workItemId) d.commentsLoading = false;
+            }
+        }
+        
+        // AttachedFile relations already arrive with the detail payload ($expand=Relations).
+        // Size is attributes.resourceSize in bytes; missing or zero stays blank.
+        function formatAttachmentSize(bytes) {
+            const n = Number(bytes);
+            if (!Number.isFinite(n) || n <= 0) return '';
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let value = n;
+            let unit = 0;
+            while (value >= 1024 && unit < units.length - 1) {
+                value /= 1024;
+                unit++;
+            }
+            const digits = unit === 0 || value >= 10 ? 0 : 1;
+            return `${value.toFixed(digits)} ${units[unit]}`;
+        }
+        
+        function workItemAttachmentsFromRelations(relations) {
+            return (relations || [])
+                .filter(r => r.rel === 'AttachedFile' && r.url)
+                .map(r => {
+                    const attrs = r.attributes || {};
+                    const when = attrs.resourceCreatedDate || attrs.authorizedDate || '';
+                    return {
+                        url: r.url,
+                        name: attrs.name || 'attachment',
+                        sizeLabel: formatAttachmentSize(attrs.resourceSize),
+                        when,
+                        whenLabel: formatRelativeDate(when).text || when
+                    };
+                })
+                .sort((a, b) => {
+                    const ta = a.when ? new Date(a.when).getTime() : 0;
+                    const tb = b.when ? new Date(b.when).getTime() : 0;
+                    return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+                });
+        }
+        
+        // Azure DevOps attachment URLs require the PAT. A navigation link would not send it, so
+        // the file is fetched the same way description images are, then saved via a blob: URL.
+        async function downloadWorkItemAttachment(url, fileName) {
+            const d = store.detail;
+            if (!url || d.attachmentDownloading) return;
+            d.attachmentDownloading = url;
+            let objectUrl = '';
+            try {
+                const pat = await getPAT();
+                if (!pat) return;
+                const response = await fetch(url, {
+                    headers: { 'Authorization': 'Basic ' + btoa(':' + pat) }
+                });
+                if (!response.ok) {
+                    throw new Error(`${response.status} ${response.statusText}`);
+                }
+                const blob = await response.blob();
+                objectUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = objectUrl;
+                link.download = fileName || 'attachment';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+            } catch (err) {
+                Logger.error('Attachment download failed', err);
+                showNotification(err.message || 'Failed to download attachment', 'error');
+            } finally {
+                if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+                if (d.attachmentDownloading === url) d.attachmentDownloading = '';
             }
         }
         
@@ -7628,6 +7757,10 @@
                 commentsLoading: false,
                 commentsError: '',
                 commentSubmitting: false,
+                // URL of the AttachedFile currently being fetched for download, or '' when idle.
+                // A plain <a href> cannot send the PAT, so downloadWorkItemAttachment() fetches
+                // the file itself; this flag disables the buttons and spins the active one.
+                attachmentDownloading: '',
                 // Reuses switchFormDescriptionFormat()'s exact field names (descriptionFormat/
                 // descriptionHtml/descriptionHtmlCache/descriptionMarkdownCache) purely so the same
                 // shared toggle helper works unmodified against this nested object too - see the
@@ -8537,7 +8670,8 @@
                 patchLabel() { return this.fields['Custom.PlatformRelease'] || 'Not set'; },
                 createdDate() { return this.fields['System.CreatedDate'] || ''; },
                 changedDate() { return this.fields['System.ChangedDate'] || ''; },
-                editableClass() { return this.store.canWrite ? 'clickable' : 'read-only'; }
+                editableClass() { return this.store.canWrite ? 'clickable' : 'read-only'; },
+                attachments() { return workItemAttachmentsFromRelations(this.d.relations); }
             },
             watch: {
                 // Reopening cannot rely on the html prop changing: an unsaved edit leaves the
@@ -8606,6 +8740,7 @@
                     if (ok) this.$nextTick(() => this.$refs.editor?.render());
                 },
                 close() { closeWorkItemDetailModal(); },
+                downloadAttachment(file) { downloadWorkItemAttachment(file.url, file.name); },
                 shortDate(value) { return formatRelativeDate(value).text || value; },
                 editState() {
                     if (!this.store.canWrite) return;
