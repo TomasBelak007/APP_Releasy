@@ -52,9 +52,10 @@ matching Labe-07.013 (#10077-#10082). Regular `create-task.mjs` Tasks still do n
 
 ### Comments
 
-Bug/Feature only - never a Task. Every script that touches an existing item's comments
-(`add-comment.mjs`, and `get-ticket.mjs` when reading them back) checks `System.WorkItemType`
-first and refuses on a Task.
+Comments go on a Bug or a Feature. A Task can take a comment only when its title prefix is
+`ISSUE` (`ISSUE - …`, one of the live `titlePrefixesTask`). `add-comment.mjs` refuses every
+other Task prefix. `get-ticket.mjs` still reads comments back for any type and sets
+`commentsAllowed` from the same rule.
 
 `POST /wit/workitems/{id}/comments?format=markdown|html&api-version=7.1-preview.4`, body
 `{ "text": "..." }`. Comment text is always **Czech**. `format` is per-request, not per-field like `multilineFieldsFormat` - each

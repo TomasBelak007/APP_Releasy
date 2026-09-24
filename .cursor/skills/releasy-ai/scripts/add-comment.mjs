@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Posts a new comment on an existing work item. Looks the item's type up first and refuses if
-// it's a Task - comments only ever go on a Bug or Feature.
+// Posts a new comment on a Bug, a Feature, or a Task whose title prefix is ISSUE.
+// Other Task prefixes are refused.
 //
 // Usage:
 //   node add-comment.mjs <id-or-url> --format markdown|html (--text "..." | --file path)
 
 import { loadReleasyConfig } from './releasy-config.mjs';
-import { loadPat, apiBase, devOpsFetch, getWorkItemType, releasyWorkItemUrl, parseWorkItemId, parseArgs, fail } from './lib.mjs';
+import { loadPat, apiBase, devOpsFetch, getWorkItem, commentsAllowedFor, releasyWorkItemUrl, parseWorkItemId, parseArgs, fail } from './lib.mjs';
 import fs from 'node:fs';
 
 async function main() {
@@ -17,9 +17,12 @@ async function main() {
   const cfg = loadReleasyConfig();
   const pat = loadPat();
 
-  const type = await getWorkItemType(cfg, id, pat);
-  if (type === 'Task') {
-    fail(`Work item #${id} is a Task - comments only go on a Bug or Feature, never a Task.`);
+  const data = await getWorkItem(cfg, id, pat);
+  const type = data.fields?.['System.WorkItemType'];
+  const title = data.fields?.['System.Title'] || '';
+  if (!type) fail(`Work item #${id} was not found (or has no fields) in ${cfg.organization}/${cfg.project}.`);
+  if (type === 'Task' && !commentsAllowedFor(cfg, type, title)) {
+    fail(`Work item #${id} is a Task without the ISSUE prefix - comments on a Task are only allowed when the title starts with "ISSUE - ".`);
   }
 
   const format = String(flags.format || 'markdown').toLowerCase();
