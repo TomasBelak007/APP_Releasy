@@ -15,6 +15,7 @@ import {
   fetchAllComments,
   mapComment,
   releasyWorkItemUrl,
+  commentsAllowedFor,
   parseWorkItemId,
   parseArgs,
   printJson,
@@ -75,7 +76,7 @@ async function main() {
       assignedTo: t.fields['System.AssignedTo']?.uniqueName || null
     })),
     comments: comments.map(mapComment),
-    commentsAllowed: type === 'Bug' || type === 'Feature'
+    commentsAllowed: commentsAllowedFor(cfg, type, fields['System.Title'])
   };
 
   printJson(result);
