@@ -128,8 +128,24 @@ export async function getWorkItemsBatch(cfg, ids, pat, { expandRelations = false
   return results.flat();
 }
 
+/** Title prefix of a `"<prefix> - <text>"` work item, or "" when the separator is missing. */
+export function titlePrefix(title) {
+  const value = String(title || '');
+  const sep = ' - ';
+  const at = value.indexOf(sep);
+  return at === -1 ? '' : value.slice(0, at);
+}
+
+/** Bug and Feature always. A Task only when its title prefix is ISSUE (live `titlePrefixesTask`). */
+export function commentsAllowedFor(cfg, type, title) {
+  if (type === 'Bug' || type === 'Feature') return true;
+  if (type !== 'Task') return false;
+  const prefix = titlePrefix(title);
+  return prefix === 'ISSUE' && (cfg.titlePrefixesTask || []).includes(prefix);
+}
+
 /** Just enough of a GET to answer "what type is this item" - used before every write to an
- * existing item so scripts can enforce per-type rules (Task can't take comments, etc). */
+ * existing item so scripts can enforce per-type rules (a Task cannot take Priority, etc). */
 export async function getWorkItemType(cfg, id, pat) {
   const data = await getWorkItem(cfg, id, pat);
   const type = data.fields?.['System.WorkItemType'];

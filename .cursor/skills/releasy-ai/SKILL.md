@@ -192,10 +192,10 @@ HTML<->Markdown conversion here (browser-only Releasy-UI feature, see reference.
 
 ## 5. Adding a comment
 
-**Bug or Feature only - never a Task.** `add-comment.mjs` itself checks the item's type and
-refuses on a Task, but say so upfront rather than let the user hit that error.
+Comments go on a Bug or a Feature. On a Task, only when the title prefix is `ISSUE`
+(`ISSUE - …`). `add-comment.mjs` refuses every other Task prefix.
 
-1. Load the ticket if not already loaded, confirm it's a Bug or Feature.
+1. Load the ticket if not already loaded. A non-ISSUE Task cannot take a comment.
 2. Draft the comment text in **Czech** - Markdown by default unless HTML is requested.
 3. Confirm with the user, then run:
    `node scripts/add-comment.mjs <id> --format markdown --text "..."`
