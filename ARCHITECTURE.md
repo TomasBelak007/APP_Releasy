@@ -376,7 +376,10 @@ cached for other tabs.
 **Detail modal** - `openWorkItemDetailModal(id, returnToParentId)` resets `store.detail`, pushes
 `?workitem=<id>`, starts `loadWorkItemDetailComments()` (parallel), awaits the work item with
 `$expand=Relations`, then starts `loadWorkItemDetailTasks()`. The fetched item is applied through
-`applyWorkItemDetailPayload()` (title split, description field/format, format lock). That helper
+`applyWorkItemDetailPayload()` (title split, description field/format, format lock). File
+attachments are not a separate request: the detail component lists `AttachedFile` entries from
+`d.relations` (name, size, date, newest first) and `downloadWorkItemAttachment()` fetches each
+URL with the PAT, because a plain link would not send it. `loadWorkItemDetailTasks()`
 reuses `store.childTasks[id]` when the grid's lazy fetch already has the parent; otherwise it
 calls `fetchChildTasksForWorkItems([id])` and merges the result into `childTasks` so the dots
 pick it up too. Every callback re-checks
@@ -570,7 +573,7 @@ these helpers. Create, comments and attachments still build the full URL and cal
 | Comments | `GET /wit/workItems/{id}/comments?api-version=7.1-preview.4&$expand=renderedText` (paged, see `fetchWorkItemCommentsAll`) - `$expand` still fetches each comment's server-rendered HTML alongside its raw `text`; `mapCommentForDisplay()` renders Markdown comments locally via `renderMarkdownToHtml(comment.text)` (GFM/TSV tables + mermaid placeholders; `renderedText` is only a fallback if `text` is empty) and uses `text` for HTML ones. After Vue injects the HTML, the comments watcher also calls `renderMermaidIn()` so diagrams become SVGs. Existing comments are still read-only (never editable/deletable); `POST /wit/workItems/{id}/comments?format=markdown\|html&api-version=7.1-preview.4` (`submitNewWorkItemComment()`) adds a brand-new one from the detail modal's composer, format chosen per-comment via the same query param (not a field-level op like descriptions) |
 | Field update | `PATCH /wit/workitems/{id}?api-version=7.1`, `application/json-patch+json` |
 | Create | `POST /wit/workitems/${type}?api-version=7.1` (must be 7.1+ - the `/multilineFieldsFormat/<field>` op used for Markdown descriptions on create is silently ignored on older versions) |
-| Attachments | `POST /wit/attachments?fileName=...&api-version=6.0` on paste/upload; images in descriptions and comments are re-fetched authenticated and swapped for blob URLs (`replaceImagesWithAuthenticatedBlobs`). Displayed `<img>`s in the HTML editor, Markdown preview, and comment bodies are capped to the panel (`max-width: 100%`, `height: auto`, including over inline pixel sizes) so a full-resolution screenshot stays fully visible |
+| Attachments | `POST /wit/attachments?fileName=...&api-version=6.0` on paste/upload; images in descriptions and comments are re-fetched authenticated and swapped for blob URLs (`replaceImagesWithAuthenticatedBlobs`). Displayed `<img>`s in the HTML editor, Markdown preview, and comment bodies are capped to the panel (`max-width: 100%`, `height: auto`, including over inline pixel sizes) so a full-resolution screenshot stays fully visible. The detail modal lists work-item file attachments from `AttachedFile` relations already returned by the detail GET and downloads each with an authenticated `GET` of `relation.url` (`downloadWorkItemAttachment()`) |
 | Token check | `GET https://dev.azure.com/{org}/_apis/connectionData` |
 
 Three calls do **not** go to Azure DevOps: two to `provisioning.integray.app`, one to
