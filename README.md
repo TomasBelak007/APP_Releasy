@@ -15,7 +15,7 @@ Azure DevOps Release Overview Application
 - 🔍 **Filtrování** - Filtrování work items podle last modified (Any, 1h, 4h, 8h, 16h, 24h, 48h, 1w — max z Feature/Bugu a jeho tasků), statusu a assignee
 - 🔎 **Fulltextové hledání** - Hledání v gridu podle ID a názvu work itemů
 - 👁️ **Detail work itemu** - Zobrazení detailních informací včetně popisu a komentářů; tlačítko Refresh znovu načte daný work item i jeho child tasky z Azure DevOps (bez reloadu celé stránky)
-- 📋 **Kopírování** - Zkopírování názvu nebo odkazu na work item do schránky
+- 📋 **Kopírování** - Zkopírování názvu nebo odkazu na work item do schránky. Odkaz se kopíruje jako hypertext „ID - typ - název“ (Feature, Bug nebo Task), takže vložení do Teams ukáže popsaný odkaz, ne holou URL
 - 🔀 **Build Changes** - Přehled změn v buildu pro patch verze s namapovanou pipeline. Vedle tlačítka je ikona stavu posledního Jenkins buildu (tyrkysová = běží, zelená = prošel, červená = spadl, šedá = žádný build). Stav se na zobrazených patchích obnovuje na pozadí každou minutu
 - 🟢 **Cursor/Grok status** - Plovoucí ikona vpravo nahoře (vedle nápovědy) hlídá oficiální stavovou
   stránku Cursoru a barvou signalizuje, zda právě probíhá incident týkající se modelu Grok nebo

@@ -402,7 +402,9 @@ Feature/Bug; then `splitTitleIntoPrefixAndSuffix(d.title, d.titlePrefixOptions, 
 left blank rather than guessed) and rewrites `d.title` down to just the free-text part. Everywhere
 that needs the item's actual title (the `System.Title` PATCH, `copyWorkItemFromDetail()`'s
 prefill, the picker headings for state/assignee/priority/severity/t-shirt/patch) reads
-`detailFullTitle()`, which rejoins `titlePrefix` + `title`.
+`detailFullTitle()`, which rejoins `titlePrefix` + `title`. `copyWorkItemLink()` uses the same
+title: it copies `?workitem=<id>` as a hyperlink labelled `ID - Feature|Bug|Task - title`
+(`text/html` is an `<a>`, `text/plain` is that label) so Teams pastes the label instead of a bare URL.
 
 **Description format** - Azure DevOps lets each large text field (`System.Description`,
 `Microsoft.VSTS.TCM.ReproSteps`, ...) independently be `HTML` (default) or `Markdown`, and the

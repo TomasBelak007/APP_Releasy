@@ -2647,7 +2647,7 @@
                         <button id="copyWorkItemTitleBtn" class="btn" style="height: 38px; width: 38px; padding: 0; border: 1px solid var(--border-color); background: var(--bg-secondary); flex-shrink: 0; display: flex; align-items: center; justify-content: center;" @click="copyTitle" title="Copy work item title to clipboard">
                             <i class="fa-solid fa-copy"></i>
                         </button>
-                        <button class="btn" style="height: 38px; width: 38px; padding: 0; border: 1px solid var(--border-color); background: var(--bg-secondary); flex-shrink: 0; display: flex; align-items: center; justify-content: center;" @click="copyLink" title="Copy link to this work item">
+                        <button class="btn" style="height: 38px; width: 38px; padding: 0; border: 1px solid var(--border-color); background: var(--bg-secondary); flex-shrink: 0; display: flex; align-items: center; justify-content: center;" @click="copyLink" title="Copy link as ID - type - title">
                             <i class="fa-solid fa-link"></i>
                         </button>
                     </div>
@@ -3443,7 +3443,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-23T10:10:49.000Z'
+            updatedAt: '2026-09-27T09:53:05.000Z'
         };
 
         // ===== API Configuration =====
@@ -7041,22 +7041,44 @@
             return `${currentUrl}?workitem=${workItemId}`;
         }
         
-        // Copy work item link to clipboard
+        // Copy the work item link as a hyperlink labelled "ID - Type - title"
+        // (e.g. "1234 - Feature - calendar week"). text/html is the anchor Teams pastes;
+        // text/plain is the same label. A bare URL in text/plain makes Teams drop the
+        // label and unfurl the link instead.
         window.copyWorkItemLink = function() {
-            const workItemId = store.detail.id;
-            if (!workItemId) {
-                showNotification('Work item ID not available', 'error');
+            const d = store.detail;
+            const workItemId = d.id;
+            const workItemType = d.fields['System.WorkItemType'];
+            const title = detailFullTitle();
+            if (!workItemId || !workItemType || !title) {
+                showNotification('Work item information not available', 'error');
                 return;
             }
-            
+
             const url = getWorkItemUrl(workItemId);
-            
-            navigator.clipboard.writeText(url).then(() => {
-                showNotification('Link copied to clipboard!', 'success');
-            }).catch(err => {
+            const label = `${workItemId} - ${workItemType} - ${title}`;
+            const html = `<a href="${escapeHtmlText(url)}">${escapeHtmlText(label)}</a>`;
+            const done = () => showNotification('Link copied to clipboard', 'success');
+            const fail = (err) => {
                 Logger.error('Failed to copy link:', err);
                 showNotification('Failed to copy link to clipboard', 'error');
-            });
+            };
+            const writePlain = () => navigator.clipboard.writeText(`${label}\n${url}`);
+
+            try {
+                navigator.clipboard.write([
+                    new ClipboardItem({
+                        'text/html': new Blob([html], { type: 'text/html' }),
+                        'text/plain': new Blob([label], { type: 'text/plain' })
+                    })
+                ]).then(done).catch(err => {
+                    Logger.warn('Rich clipboard copy failed, falling back to plain text:', err);
+                    writePlain().then(done).catch(fail);
+                });
+            } catch (err) {
+                Logger.warn('Rich clipboard copy failed, falling back to plain text:', err);
+                writePlain().then(done).catch(fail);
+            }
         };
         
         // Parse URL parameter and open work item detail modal
