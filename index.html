@@ -2847,6 +2847,10 @@
                     <i class="fa-solid fa-rotate"></i> Refresh
                 </button>
                 <button class="btn btn-secondary" @click="close()">Close</button>
+                <button v-if="store.canWrite && isIssueTask" class="btn btn-primary" :disabled="d.loading"
+                        @click="convertIssueToBug()" title="Change this ISSUE task into a Bug, keeping the same ID">
+                    <i class="fa-solid fa-bug"></i> Convert to Bug
+                </button>
                 <button v-if="store.canWrite" class="btn btn-primary" @click="copyWorkItemFromDetail()"><i class="fa-solid fa-clone"></i> Create copy</button>
                 <button v-if="store.canWrite" class="btn btn-primary" @click="save"><i class="fa-solid fa-save"></i> Update</button>
                 <button class="btn btn-primary" @click="openInDevOps(d.id)"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open in DevOps</button>
@@ -3507,7 +3511,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-29T13:34:25.000Z'
+            updatedAt: '2026-09-29T14:09:00.000Z'
         };
 
         // ===== API Configuration =====
@@ -5138,6 +5142,14 @@
             }
             return { prefix: fallbackPrefix, suffix: title };
         }
+
+        // Saved title, not the unsaved prefix select: the Convert to Bug button stays tied to
+        // the item Azure DevOps actually has.
+        function isSavedIssueTask(fields) {
+            if ((fields?.['System.WorkItemType'] || '') !== 'Task') return false;
+            const { prefix } = splitTitleIntoPrefixAndSuffix(fields['System.Title'] || '', titlePrefixesTask, '');
+            return prefix === 'ISSUE';
+        }
         
         function getCreateContextFromPlatformRelease(platformRelease, tags) {
             const version = parseReleaseVersion(platformRelease);
@@ -5896,6 +5908,123 @@
                 tshirtSize: getTshirtSizeFromFields(fields)
             });
             showNotification('Create work item form prefilled from work item', 'success');
+        };
+
+        // ISSUE task → Bug on the same id. Patch, product and title prefix come from the parent
+        // Feature/Bug; the parent link moves to that product's epic so the item shows in the
+        // patch grid instead of staying a child task. d.returnTo is left alone: Close still
+        // reopens the Feature the ISSUE was opened from.
+        window.convertIssueTaskToBug = async function() {
+            if (!store.canWrite) {
+                showNotification('Converting is only available in read-write mode', 'error');
+                return false;
+            }
+
+            const d = store.detail;
+            const fields = d.fields;
+            const workItemId = d.id;
+            if (!workItemId || !isSavedIssueTask(fields)) {
+                showNotification('Only an ISSUE task can be converted to a Bug', 'error');
+                return false;
+            }
+
+            const suffix = d.title.trim();
+            if (!suffix) {
+                showNotification('Title cannot be empty', 'error');
+                return false;
+            }
+
+            const parentId = getHierarchyParentId(d.relations);
+            if (!parentId) {
+                showNotification('Cannot convert: parent work item link not found', 'error');
+                return false;
+            }
+
+            const parentRelationIndex = (d.relations || []).findIndex(r => r.rel === 'System.LinkTypes.Hierarchy-Reverse');
+            if (parentRelationIndex < 0) {
+                showNotification('Cannot convert: parent work item link not found', 'error');
+                return false;
+            }
+
+            if (!window.confirm('Convert this ISSUE into a Bug?\n\nThe work item keeps its ID. It leaves the current parent and shows up in that parent\'s patch as a Bug.')) {
+                return false;
+            }
+
+            d.loading = true;
+            try {
+                const parent = await devOpsGet(`/wit/workitems/${parentId}?api-version=7.1`);
+                if (d.id !== workItemId) return false;
+                const parentFields = parent.fields || {};
+                const platformRelease = parentFields['Custom.PlatformRelease'] || '';
+                const product = resolveProductForWorkItem(parentFields, platformRelease);
+                const prefixes = (product && titlePrefixes[product]) || [];
+                const version = parseReleaseVersion(platformRelease);
+                const releaseConfig = version && releaseNames.find(r => r.release === version.name);
+                if (!platformRelease || !version || !product || !prefixes.length) {
+                    showNotification('Cannot convert: parent patch version not found', 'error');
+                    return false;
+                }
+                const epicID = releaseConfig?.epicID;
+                if (!epicID) {
+                    showNotification(ERROR_MESSAGES.NO_EPIC_ID(version.name), 'error');
+                    return false;
+                }
+
+                const parentPrefix = splitTitleIntoPrefixAndSuffix(parentFields['System.Title'] || '', prefixes, '').prefix;
+                const bugPrefix = prefixes.includes(parentPrefix) ? parentPrefix : prefixes[0];
+                const title = `${bugPrefix} - ${suffix}`;
+
+                const pat = await requirePAT();
+                const isMarkdown = d.descriptionFormat === 'Markdown';
+                let description = isMarkdown ? readDetailDescriptionMarkdown() : readDetailDescriptionHtml();
+                description = isMarkdown
+                    ? await processImagesForDevOpsMarkdown(description, pat)
+                    : await processImagesForDevOps(description, pat);
+                if (d.id !== workItemId) return false;
+
+                const priority = fields['Microsoft.VSTS.Common.Priority'] || 3;
+                const severity = fields['Microsoft.VSTS.Common.Severity'] || RATING_LEVELS[2].label;
+                const operations = [
+                    { op: 'remove', path: `/relations/${parentRelationIndex}` },
+                    {
+                        op: 'add',
+                        path: '/relations/-',
+                        value: {
+                            rel: 'System.LinkTypes.Hierarchy-Reverse',
+                            url: `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems/${epicID}`
+                        }
+                    },
+                    { op: 'add', path: '/fields/System.WorkItemType', value: 'Bug' },
+                    { op: 'add', path: '/fields/System.Title', value: title },
+                    { op: 'add', path: '/fields/Custom.PlatformRelease', value: platformRelease },
+                    { op: 'add', path: '/fields/System.Tags', value: product },
+                    { op: 'add', path: '/fields/Microsoft.VSTS.Common.Priority', value: Number(priority) || 3 },
+                    { op: 'add', path: '/fields/Microsoft.VSTS.Common.Severity', value: severity },
+                    { op: 'replace', path: '/fields/System.Description', value: '' }
+                ];
+                if (description) {
+                    operations.push({ op: 'add', path: '/fields/Microsoft.VSTS.TCM.ReproSteps', value: description });
+                    if (isMarkdown) {
+                        operations.push({ op: 'add', path: '/multilineFieldsFormat/Microsoft.VSTS.TCM.ReproSteps', value: 'Markdown' });
+                    }
+                }
+
+                const updated = await devOpsPatch(`/wit/workitems/${workItemId}?api-version=7.1`, operations);
+                if (d.id !== workItemId) return false;
+
+                store.removeChildTask(parentId, workItemId);
+                store.addWorkItem(updated);
+            } catch (error) {
+                Logger.error('Error converting ISSUE to Bug:', error);
+                showNotification(`Error converting to Bug: ${error.message}`, 'error');
+                return false;
+            } finally {
+                if (d.id === workItemId) d.loading = false;
+            }
+
+            const refreshed = await refreshWorkItemDetail({ notify: false });
+            if (refreshed) showNotification('Converted to Bug', 'success');
+            return refreshed;
         };
         
         window.createWorkItem = async function() {
@@ -6756,7 +6885,7 @@
         // network (the open path may reuse store.childTasks) and replace that parent's cache so
         // deleted tasks disappear from the cards and the grid dots. Unsaved description edits
         // are discarded; a draft in the new-comment composer is left alone.
-        window.refreshWorkItemDetail = async function() {
+        window.refreshWorkItemDetail = async function({ notify = true } = {}) {
             const d = store.detail;
             const workItemId = d.id;
             if (!workItemId || d.loading) return false;
@@ -6778,7 +6907,7 @@
                 const type = applyWorkItemDetailPayload(workItemId, data);
                 syncGridFromRefreshedWorkItem(workItemId, data.fields || {});
                 await loadWorkItemDetailTasks(workItemId, type, pat, { force: true });
-                showNotification('Work item refreshed', 'success');
+                if (notify) showNotification('Work item refreshed', 'success');
                 return true;
             } catch (err) {
                 Logger.error(err);
@@ -7929,6 +8058,16 @@
                 this.childTasks = { ...this.childTasks, [key]: [...(this.childTasks[key] || []), task] };
                 rollupLastModifiedById(parentId);
             },
+            // A converted ISSUE leaves the parent's dots and task cards immediately. Reassign
+            // the map the same way addChildTask() does so Vue notices the shorter list.
+            removeChildTask(parentId, taskId) {
+                const key = String(parentId);
+                const list = this.childTasks[key];
+                if (!list) return;
+                const id = Number(taskId);
+                this.childTasks = { ...this.childTasks, [key]: list.filter(task => Number(task.id) !== id) };
+                rollupLastModifiedById(parentId);
+            },
             resortPatchContaining(workItemId) {
                 const id = Number(workItemId);
                 for (const { releases } of this.releaseResults) {
@@ -8671,7 +8810,8 @@
                 createdDate() { return this.fields['System.CreatedDate'] || ''; },
                 changedDate() { return this.fields['System.ChangedDate'] || ''; },
                 editableClass() { return this.store.canWrite ? 'clickable' : 'read-only'; },
-                attachments() { return workItemAttachmentsFromRelations(this.d.relations); }
+                attachments() { return workItemAttachmentsFromRelations(this.d.relations); },
+                isIssueTask() { return isSavedIssueTask(this.fields); }
             },
             watch: {
                 // Reopening cannot rely on the html prop changing: an unsaved edit leaves the
@@ -8710,6 +8850,10 @@
                 },
                 openCreateTaskFromWorkItemDetailModal,
                 copyWorkItemFromDetail,
+                async convertIssueToBug() {
+                    const ok = await convertIssueTaskToBug();
+                    if (ok) this.$nextTick(() => this.$refs.editor?.render());
+                },
                 openInDevOps,
                 // Html -> Markdown can never revert once the field is locked (see
                 // descriptionFormatLocked); switchFormDescriptionFormat() does the actual
