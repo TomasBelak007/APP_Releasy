@@ -34,6 +34,10 @@ Všechny read-only funkce plus:
   zda se má zapsat jako HTML (výchozí grafický editor) nebo jako Markdown
 - 📝 **Vytváření child tasks** - Vytváření podřízených úkolů; stejný přepínač formátu popisu jako u
   Features/Bugs
+- 🐛 **Konverze ISSUE na Bug** - V detailu tasku s prefixem ISSUE tlačítko Convert to Bug změní
+  typ na Bug a ponechá stejné ID. Převezme patch a produktového rodiče (epic), název dostane
+  prefix produktu a popis se přesune do Repro Steps. Zavření detailu vrátí původní Feature, už
+  bez tohoto tasku
 - ✏️ **Úprava work items** - Editace názvu a popisu work itemů; popis podporuje jak formát HTML
   (výchozí grafický editor), tak Markdown - aplikace automaticky pozná, v jakém formátu je popis
   daného work itemu uložený v Azure DevOps, a nabídne odpovídající editor. U popisu ve formátu HTML

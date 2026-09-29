@@ -189,7 +189,7 @@ child-task fetch, which is **not** gated on Task Mode.
 
 Store methods: `isExpanded`, `toggleExpanded`, `expandAll`, `collapseAll`, `toggleHidden`,
 `unhide`, `openUnhideModal`, `openFilterModal`, `setFilters`, `clearFilters`, `applyFieldUpdate`,
-`moveWorkItemPatch`, `insertWorkItem`, `addWorkItem`, `addChildTask`, `resortPatchContaining`,
+`moveWorkItemPatch`, `insertWorkItem`, `addWorkItem`, `addChildTask`, `removeChildTask`, `resortPatchContaining`,
 `forEachWorkItem`.
 
 `expanded` is **per product**: `{ Xeelo: { releases, majors, patches }, XeeloAdmin: { ... }, ... }`.
@@ -386,6 +386,20 @@ pick it up too. Every callback re-checks
 `d.id === workItemId` before writing, so a fast second open cannot be overwritten by a slow first
 response. `closeWorkItemDetailModal(forceFullClose)` re-opens `returnTo` unless forced.
 
+**Convert ISSUE to Bug** - the footer button is shown only in read-write mode when the saved item
+is a Task whose title prefix is `ISSUE` (`isSavedIssueTask()`, the saved `System.Title`, not the
+unsaved prefix select). `convertIssueTaskToBug()` confirms, reads the parent Feature/Bug, and
+sends one JSON Patch: drop that parent's `Hierarchy-Reverse` relation, add the product epic
+(same link `createWorkItem()` uses), set `System.WorkItemType` to Bug, retitle with the parent's
+product prefix (or the product's first prefix), copy `Custom.PlatformRelease` and `System.Tags`
+from the parent, default priority `3` and severity `3 - Medium` when the task has none, move the
+editor description into `Microsoft.VSTS.TCM.ReproSteps` (Markdown format included) and clear
+`System.Description`. On success `removeChildTask()` drops it from the parent's dots and
+`addWorkItem()` inserts it into that patch. The modal stays on the same id;
+`refreshWorkItemDetail({ notify: false })` reloads it as a Bug and does not clear `d.returnTo`,
+so Close still reopens the Feature it was opened from, which then refetches its tasks without
+the converted ISSUE.
+
 **Detail refresh** - the footer's Refresh button calls `refreshWorkItemDetail()` (not
 `openWorkItemDetailModal()`): it keeps `d.id` / `d.returnTo` / the new-comment draft, does not
 push history, and re-fetches the item (`$expand=Relations`), comments, and child tasks. Child
@@ -572,6 +586,7 @@ these helpers. Create, comments and attachments still build the full URL and cal
 | Child tasks (dots, Task Mode, detail cards) | `GET /wit/workitems?ids=...&$expand=relations&api-version=6.0` for parents (no `fields` — Azure DevOps returns `ConflictingParametersException` if `$expand` is combined with `fields`), then `GET /wit/workitems?ids=...&fields=System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo&api-version=6.0` for children (`fetchChildTasksForWorkItems`) |
 | Comments | `GET /wit/workItems/{id}/comments?api-version=7.1-preview.4&$expand=renderedText` (paged, see `fetchWorkItemCommentsAll`) - `$expand` still fetches each comment's server-rendered HTML alongside its raw `text`; `mapCommentForDisplay()` renders Markdown comments locally via `renderMarkdownToHtml(comment.text)` (GFM/TSV tables + mermaid placeholders; `renderedText` is only a fallback if `text` is empty) and uses `text` for HTML ones. After Vue injects the HTML, the comments watcher also calls `renderMermaidIn()` so diagrams become SVGs. Existing comments are still read-only (never editable/deletable); `POST /wit/workItems/{id}/comments?format=markdown\|html&api-version=7.1-preview.4` (`submitNewWorkItemComment()`) adds a brand-new one from the detail modal's composer, format chosen per-comment via the same query param (not a field-level op like descriptions) |
 | Field update | `PATCH /wit/workitems/{id}?api-version=7.1`, `application/json-patch+json` |
+| Convert ISSUE to Bug | Same PATCH from `convertIssueTaskToBug()`: `remove` the parent `Hierarchy-Reverse` relation, `add` the product epic as parent, `add` `System.WorkItemType=Bug` plus title, `Custom.PlatformRelease`, `System.Tags`, priority, severity and `Microsoft.VSTS.TCM.ReproSteps`; `replace` `System.Description` with empty |
 | Create | `POST /wit/workitems/${type}?api-version=7.1` (must be 7.1+ - the `/multilineFieldsFormat/<field>` op used for Markdown descriptions on create is silently ignored on older versions) |
 | Attachments | `POST /wit/attachments?fileName=...&api-version=6.0` on paste/upload; images in descriptions and comments are re-fetched authenticated and swapped for blob URLs (`replaceImagesWithAuthenticatedBlobs`). Displayed `<img>`s in the HTML editor, Markdown preview, and comment bodies are capped to the panel (`max-width: 100%`, `height: auto`, including over inline pixel sizes) so a full-resolution screenshot stays fully visible. The detail modal lists work-item file attachments from `AttachedFile` relations already returned by the detail GET and downloads each with an authenticated `GET` of `relation.url` (`downloadWorkItemAttachment()`) |
 | Token check | `GET https://dev.azure.com/{org}/_apis/connectionData` |
