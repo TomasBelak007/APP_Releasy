@@ -40,7 +40,7 @@ Všechny read-only funkce plus:
   lze přepínačem převést na Markdown - obsah se skutečně převede do Markdown syntaxe (přes knihovnu
   Turndown), aby se v editoru nezobrazoval syrový HTML kód. Opačný směr (Markdown → HTML) není
   možný, Azure DevOps to nedovoluje - přepínač na HTML je proto po uložení/detekci Markdownu
-  zablokovaný
+  zablokovaný. Obrázky v popisu i v komentářích se zmenší na šířku panelu, aby byly vidět celé
 - 💬 **Nový komentář** - Přidání nového komentáře k work itemu z detailu; formát lze přepnout mezi
   Markdown (výchozí) a HTML stejným přepínačem a editorem jako u popisu. Existující komentáře
   zůstávají needitovatelné a nelze je smazat

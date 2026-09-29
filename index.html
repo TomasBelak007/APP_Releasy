@@ -347,6 +347,7 @@
             overflow-y: auto;
             flex: 1;
             min-height: 0;
+            min-width: 0;
         }
         .version-group {
             margin-bottom: 20px;
@@ -748,6 +749,15 @@
         }
         .form-control[contenteditable="true"] li {
             margin: 0.15em 0;
+        }
+        /* Screenshots from Azure DevOps carry intrinsic or inline pixel sizes. Cap them to the
+           description / comment panel so a full-resolution image stays fully visible. !important
+           beats width/height set as inline styles; height: auto keeps the aspect ratio. */
+        .form-control img,
+        .md-preview img,
+        .work-item-detail-comment-body img {
+            max-width: 100% !important;
+            height: auto !important;
         }
         .form-control::placeholder {
             color: var(--text-secondary);
@@ -1983,10 +1993,6 @@
             line-height: 1.45;
             word-break: break-word;
             padding: 14px 16px 16px;
-        }
-        .work-item-detail-comments .work-item-detail-comment-body img {
-            max-width: 100%;
-            height: auto;
         }
         /* Markdown preview: GFM / pasted TSV tables and Mermaid diagrams */
         .md-preview,
@@ -3443,7 +3449,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-27T09:53:05.000Z'
+            updatedAt: '2026-09-29T10:11:21.000Z'
         };
 
         // ===== API Configuration =====
