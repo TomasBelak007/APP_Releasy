@@ -16,6 +16,7 @@ import {
   mapComment,
   releasyWorkItemUrl,
   commentsAllowedFor,
+  mapAttachments,
   parseWorkItemId,
   parseArgs,
   printJson,
@@ -76,7 +77,8 @@ async function main() {
       assignedTo: t.fields['System.AssignedTo']?.uniqueName || null
     })),
     comments: comments.map(mapComment),
-    commentsAllowed: commentsAllowedFor(cfg, type, fields['System.Title'])
+    commentsAllowed: commentsAllowedFor(cfg, type, fields['System.Title']),
+    attachments: mapAttachments(relations)
   };
 
   printJson(result);
