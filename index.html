@@ -2775,10 +2775,18 @@
                                  @rendered="onDescriptionRendered"></markdown-editor>
                 </div>
                 <div id="workItemDetailAttachments" style="margin-top: 20px;">
-                    <label class="form-label" style="color: var(--text-primary); font-weight: 600;">
-                        <i class="fa-solid fa-paperclip"></i> Attachments
-                        <span v-if="attachments.length" style="color: var(--text-secondary); font-weight: 500;">({{ attachments.length }})</span>
-                    </label>
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <label class="form-label" style="color: var(--text-primary); font-weight: 600; margin-bottom: 0;">
+                            <i class="fa-solid fa-paperclip"></i> Attachments
+                            <span v-if="attachments.length" style="color: var(--text-secondary); font-weight: 500;">({{ attachments.length }})</span>
+                        </label>
+                        <button v-if="store.canWrite" type="button" class="btn btn-sm btn-secondary"
+                                :disabled="!!d.attachmentBusy" @click="$refs.attachmentInput.click()" title="Add an attachment">
+                            <i class="fa-solid" :class="d.attachmentBusy === 'upload' ? 'fa-spinner fa-spin' : 'fa-plus'" aria-hidden="true"></i>
+                            {{ d.attachmentBusy === 'upload' ? 'Uploading…' : 'Add' }}
+                        </button>
+                        <input v-if="store.canWrite" ref="attachmentInput" type="file" hidden @change="onAttachmentPicked">
+                    </div>
                     <p v-if="!attachments.length" class="work-item-detail-attachments-empty">No attachments.</p>
                     <ul v-else class="work-item-detail-attachments">
                         <li v-for="file in attachments" :key="file.url" class="work-item-detail-attachment">
@@ -2786,10 +2794,15 @@
                             <span class="work-item-detail-attachment-name" :title="file.name">{{ file.name }}</span>
                             <span v-if="file.sizeLabel" class="work-item-detail-attachment-meta">{{ file.sizeLabel }}</span>
                             <time v-if="file.whenLabel" class="work-item-detail-attachment-meta" :datetime="file.when" :title="file.when">{{ file.whenLabel }}</time>
-                            <button type="button" class="btn btn-sm btn-secondary" :disabled="!!d.attachmentDownloading"
+                            <button type="button" class="btn btn-sm btn-secondary" :disabled="!!d.attachmentDownloading || !!d.attachmentBusy"
                                     @click="downloadAttachment(file)" title="Download this attachment">
                                 <i class="fa-solid" :class="d.attachmentDownloading === file.url ? 'fa-spinner fa-spin' : 'fa-download'" aria-hidden="true"></i>
                                 {{ d.attachmentDownloading === file.url ? 'Downloading…' : 'Download' }}
+                            </button>
+                            <button v-if="store.canWrite" type="button" class="btn btn-sm btn-secondary"
+                                    :disabled="!!d.attachmentBusy" @click="deleteAttachment(file)" title="Delete this attachment">
+                                <i class="fa-solid" :class="d.attachmentBusy === file.url ? 'fa-spinner fa-spin' : 'fa-trash'" aria-hidden="true"></i>
+                                {{ d.attachmentBusy === file.url ? 'Deleting…' : 'Delete' }}
                             </button>
                         </li>
                     </ul>
@@ -7053,6 +7066,81 @@
                 if (d.attachmentDownloading === url) d.attachmentDownloading = '';
             }
         }
+
+        async function reloadWorkItemRelations(workItemId) {
+            const data = await devOpsGet(`/wit/workitems/${workItemId}?$expand=Relations&api-version=7.1`);
+            if (store.detail.id === workItemId) store.detail.relations = data.relations || [];
+            return data.relations || [];
+        }
+
+        // Uploads the chosen file, then links it as AttachedFile. The upload endpoint is the same
+        // one uploadImageAttachment() uses; this path also PATCHes the work item relation.
+        async function addWorkItemAttachment(file) {
+            const d = store.detail;
+            const workItemId = d.id;
+            if (!store.canWrite || !workItemId || !file || d.attachmentBusy) return;
+            d.attachmentBusy = 'upload';
+            try {
+                const pat = await getPAT();
+                if (!pat) return;
+                const uploadUrl = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/attachments?fileName=${encodeURIComponent(file.name)}&api-version=7.1`;
+                const uploadResponse = await fetch(uploadUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Basic ' + btoa(':' + pat),
+                        'Content-Type': 'application/octet-stream'
+                    },
+                    body: file
+                });
+                if (!uploadResponse.ok) {
+                    throw new Error(`${uploadResponse.status} ${uploadResponse.statusText}`);
+                }
+                const uploaded = await uploadResponse.json();
+                if (!uploaded.url) throw new Error('Attachment upload did not return a url');
+                await devOpsPatch(`/wit/workitems/${workItemId}?api-version=7.1`, [{
+                    op: 'add',
+                    path: '/relations/-',
+                    value: {
+                        rel: 'AttachedFile',
+                        url: uploaded.url,
+                        attributes: { comment: file.name }
+                    }
+                }]);
+                await reloadWorkItemRelations(workItemId);
+                showNotification(`Attached ${file.name}`, 'success');
+            } catch (err) {
+                Logger.error('Attachment upload failed', err);
+                showNotification(err.message || 'Failed to add attachment', 'error');
+            } finally {
+                if (d.attachmentBusy === 'upload') d.attachmentBusy = '';
+            }
+        }
+
+        // Removes one AttachedFile. The index is read from a fresh full relations array, because
+        // a stale index would delete a different relation.
+        async function deleteWorkItemAttachment(file) {
+            const d = store.detail;
+            const workItemId = d.id;
+            if (!store.canWrite || !workItemId || !file?.url || d.attachmentBusy) return;
+            if (!window.confirm(`Delete attachment “${file.name}”?`)) return;
+            d.attachmentBusy = file.url;
+            try {
+                const relations = await reloadWorkItemRelations(workItemId);
+                const index = relations.findIndex(r => r.rel === 'AttachedFile' && r.url === file.url);
+                if (index < 0) throw new Error('Attachment is no longer on this work item');
+                await devOpsPatch(`/wit/workitems/${workItemId}?api-version=7.1`, [{
+                    op: 'remove',
+                    path: `/relations/${index}`
+                }]);
+                await reloadWorkItemRelations(workItemId);
+                showNotification(`Deleted ${file.name}`, 'success');
+            } catch (err) {
+                Logger.error('Attachment delete failed', err);
+                showNotification(err.message || 'Failed to delete attachment', 'error');
+            } finally {
+                if (d.attachmentBusy === file.url) d.attachmentBusy = '';
+            }
+        }
         
         // Posts a brand-new comment from the "Add a comment" composer (see #workItemDetailApp's
         // template) - existing comments stay read-only, this only ever adds. Mirrors
@@ -7890,6 +7978,9 @@
                 // A plain <a href> cannot send the PAT, so downloadWorkItemAttachment() fetches
                 // the file itself; this flag disables the buttons and spins the active one.
                 attachmentDownloading: '',
+                // 'upload' while a new file is being posted, or the attachment URL while that
+                // row is being deleted. Disables Add/Delete so two relation patches cannot race.
+                attachmentBusy: '',
                 // Reuses switchFormDescriptionFormat()'s exact field names (descriptionFormat/
                 // descriptionHtml/descriptionHtmlCache/descriptionMarkdownCache) purely so the same
                 // shared toggle helper works unmodified against this nested object too - see the
@@ -8885,6 +8976,13 @@
                 },
                 close() { closeWorkItemDetailModal(); },
                 downloadAttachment(file) { downloadWorkItemAttachment(file.url, file.name); },
+                onAttachmentPicked(event) {
+                    const input = event.target;
+                    const file = input.files && input.files[0];
+                    input.value = '';
+                    if (file) addWorkItemAttachment(file);
+                },
+                deleteAttachment(file) { deleteWorkItemAttachment(file); },
                 shortDate(value) { return formatRelativeDate(value).text || value; },
                 editState() {
                     if (!this.store.canWrite) return;

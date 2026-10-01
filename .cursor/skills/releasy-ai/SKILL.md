@@ -201,6 +201,20 @@ Comments go on a Bug or a Feature. On a Task, only when the title prefix is `ISS
    `node scripts/add-comment.mjs <id> --format markdown --text "..."`
    (use `--file path` instead of `--text` for long comments)
 
+## 5b. Attachments
+
+File attachments are allowed on a Bug, a Feature, and every Task prefix (including `TEST`).
+This is separate from comment images.
+
+1. Load the ticket if not already loaded. `get-ticket.mjs` lists current files in `attachments`
+   (`name`, `url`, `size`).
+2. Confirm with the user, then add:
+   `node scripts/add-attachment.mjs <id> --file path`
+3. To remove one file, confirm, then:
+   `node scripts/remove-attachment.mjs <id> --name fileName`
+   The script deletes the `AttachedFile` at its index in the full `relations` array. Two files
+   with the same name are refused.
+
 ## 6. Just looking something up
 
 `node scripts/get-ticket.mjs <id-or-url>` is read-only - no confirmation needed. Use it whenever

@@ -65,10 +65,13 @@ export async function devOpsFetch(url, { method = 'GET', pat, body, contentType 
   if (method !== 'GET' && method !== 'DELETE') {
     headers['Content-Type'] = contentType || 'application/json';
   }
+  const rawBody = body === undefined || typeof body === 'string' || Buffer.isBuffer(body) || body instanceof Uint8Array
+    ? body
+    : JSON.stringify(body);
   const res = await fetch(url, {
     method,
     headers,
-    body: body === undefined ? undefined : (typeof body === 'string' ? body : JSON.stringify(body))
+    body: rawBody
   });
   const text = await res.text();
   let data = null;
@@ -80,6 +83,33 @@ export async function devOpsFetch(url, { method = 'GET', pat, body, contentType 
     throw new Error(`Azure DevOps API error ${res.status} ${res.statusText}${detail ? `: ${detail}` : ''}`);
   }
   return data;
+}
+
+/** AttachedFile relations from a work item payload ($expand=relations). */
+export function mapAttachments(relations) {
+  return (relations || [])
+    .filter((r) => r.rel === 'AttachedFile' && r.url)
+    .map((r) => {
+      const attrs = r.attributes || {};
+      return {
+        name: attrs.name || 'attachment',
+        url: r.url,
+        size: Number(attrs.resourceSize) || 0
+      };
+    });
+}
+
+/** Uploads a local file and returns the attachment record (`url` is what a work item relation points at). */
+export async function uploadAttachmentFile(cfg, filePath, pat) {
+  const fileName = path.basename(filePath);
+  const bytes = fs.readFileSync(filePath);
+  const url = `${apiBase(cfg)}/wit/attachments?fileName=${encodeURIComponent(fileName)}&api-version=7.1`;
+  return devOpsFetch(url, {
+    method: 'POST',
+    pat,
+    body: bytes,
+    contentType: 'application/octet-stream'
+  });
 }
 
 export async function patchWorkItem(cfg, id, operations, pat) {
