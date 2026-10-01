@@ -14,7 +14,7 @@ Azure DevOps Release Overview Application
 - 📈 **Progress bary** - Vizuální indikátory průběhu podle statusů (Closed, Resolved, Active, New, Evaluation)
 - 🔍 **Filtrování** - Filtrování work items podle last modified (Any, 1h, 4h, 8h, 16h, 24h, 48h, 1w — max z Feature/Bugu a jeho tasků), statusu a assignee
 - 🔎 **Fulltextové hledání** - Hledání v gridu podle ID a názvu work itemů
-- 👁️ **Detail work itemu** - Zobrazení detailních informací včetně popisu a komentářů; tlačítko Refresh znovu načte daný work item i jeho child tasky z Azure DevOps (bez reloadu celé stránky)
+- 👁️ **Detail work itemu** - Zobrazení detailních informací včetně popisu, souborových příloh (název, velikost, datum a stažení) a komentářů; tlačítko Refresh znovu načte daný work item i jeho child tasky z Azure DevOps (bez reloadu celé stránky)
 - 📋 **Kopírování** - Zkopírování názvu nebo odkazu na work item do schránky. Odkaz se kopíruje jako hypertext „ID - typ - název“ (Feature, Bug nebo Task), takže vložení do Teams ukáže popsaný odkaz, ne holou URL
 - 🔀 **Build Changes** - Přehled změn v buildu pro patch verze s namapovanou pipeline. Vedle tlačítka je ikona stavu posledního Jenkins buildu (tyrkysová = běží, zelená = prošel, červená = spadl, šedá = žádný build). Stav se na zobrazených patchích obnovuje na pozadí každou minutu
 - 🟢 **Cursor/Grok status** - Plovoucí ikona vpravo nahoře (vedle nápovědy) hlídá oficiální stavovou
@@ -34,6 +34,10 @@ Všechny read-only funkce plus:
   zda se má zapsat jako HTML (výchozí grafický editor) nebo jako Markdown
 - 📝 **Vytváření child tasks** - Vytváření podřízených úkolů; stejný přepínač formátu popisu jako u
   Features/Bugs
+- 🐛 **Konverze ISSUE na Bug** - V detailu tasku s prefixem ISSUE tlačítko Convert to Bug změní
+  typ na Bug a ponechá stejné ID. Převezme patch a produktového rodiče (epic), název dostane
+  prefix produktu a popis se přesune do Repro Steps. Zavření detailu vrátí původní Feature, už
+  bez tohoto tasku
 - ✏️ **Úprava work items** - Editace názvu a popisu work itemů; popis podporuje jak formát HTML
   (výchozí grafický editor), tak Markdown - aplikace automaticky pozná, v jakém formátu je popis
   daného work itemu uložený v Azure DevOps, a nabídne odpovídající editor. U popisu ve formátu HTML

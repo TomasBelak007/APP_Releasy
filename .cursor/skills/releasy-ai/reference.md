@@ -65,6 +65,33 @@ Reading comments back: `GET /wit/workitems/{id}/comments?api-version=7.1-preview
 (paginated via `continuationToken`). `$expand=renderedText` is what makes a Markdown comment's
 server-rendered HTML available - a Markdown comment's own `text` is raw Markdown source, not HTML.
 
+## Attachments
+
+File attachments are `AttachedFile` relations. They are allowed on a Bug, a Feature, and every
+Task prefix, including `TEST`. Comment posting stays restricted to Bug, Feature, and `ISSUE` Tasks.
+
+Upload the bytes first, then link the returned URL:
+
+```
+POST /wit/attachments?fileName={name}&api-version=7.1
+Content-Type: application/octet-stream
+```
+
+```json
+{ "op": "add", "path": "/relations/-", "value": { "rel": "AttachedFile", "url": "<upload url>" } }
+```
+
+Removal uses the index in the **full** `relations` array from `$expand=relations`, not the index
+inside the filtered attachment list:
+
+```json
+{ "op": "remove", "path": "/relations/<index>" }
+```
+
+`get-ticket.mjs` returns `attachments[]` with `name`, `url`, and `size` (bytes).
+`add-attachment.mjs <id> --file path` uploads and links. `remove-attachment.mjs <id> --name fileName`
+removes one match and refuses when the name is missing or duplicated.
+
 ## Relation types
 
 | Relation | Meaning | Used by |
@@ -251,8 +278,10 @@ patch `999` and refuses to create a second container for the same
   [--release ... --major ... --patch ...] [--assignee ... | --unassign]
   [--description ... | --description-file ...]` - any subset; only the given fields change.
 - `add-comment.mjs <id-or-url> --format markdown|html (--text "..." | --file path)`.
+- `add-attachment.mjs <id-or-url> --file path` - upload a file and link it as `AttachedFile`.
+- `remove-attachment.mjs <id-or-url> --name fileName` - remove that attachment by relation index.
 - `get-ticket.mjs <id-or-url>` - read-only, prints fields/state/relations-derived parent or child
-  Tasks/comments/`commentsAllowed` as one JSON object.
+  Tasks/comments/`commentsAllowed`/`attachments` as one JSON object.
 - `list-tickets.mjs --product <name> [--release ... ] [--major ... ] [--patch ... | --backlog]
   [--state s1,s2 | --open] [--no-tasks] [--descriptions]` - read-only, see below.
 - `releasy-config.mjs` - no arguments, prints the live config as JSON.

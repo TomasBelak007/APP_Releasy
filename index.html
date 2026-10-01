@@ -2041,13 +2041,51 @@
             height: auto;
         }
         .work-item-detail-comments .work-item-detail-comments-empty,
-        .work-item-detail-comments .work-item-detail-comments-loading {
+        .work-item-detail-comments .work-item-detail-comments-loading,
+        .work-item-detail-attachments-empty {
             margin: 0;
             padding: 14px;
             color: var(--text-secondary);
             border: 1px dashed var(--border-color);
             border-radius: 8px;
             background: var(--bg-secondary);
+        }
+        .work-item-detail-attachments {
+            list-style: none;
+            margin: 8px 0 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .work-item-detail-attachment {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--bg-secondary);
+        }
+        [data-theme="dark"] .work-item-detail-attachment {
+            background: var(--bg-primary);
+        }
+        .work-item-detail-attachment-name {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .work-item-detail-attachment-meta {
+            color: var(--text-secondary);
+            font-size: 0.85em;
+            white-space: nowrap;
+        }
+        .work-item-detail-attachment .btn {
+            flex-shrink: 0;
         }
         .work-item-detail-task-card {
             border: 1px solid var(--border-color);
@@ -2736,6 +2774,39 @@
                                  :markdown="d.descriptionHtml" :editable="store.canWrite"
                                  @rendered="onDescriptionRendered"></markdown-editor>
                 </div>
+                <div id="workItemDetailAttachments" style="margin-top: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <label class="form-label" style="color: var(--text-primary); font-weight: 600; margin-bottom: 0;">
+                            <i class="fa-solid fa-paperclip"></i> Attachments
+                            <span v-if="attachments.length" style="color: var(--text-secondary); font-weight: 500;">({{ attachments.length }})</span>
+                        </label>
+                        <button v-if="store.canWrite" type="button" class="btn btn-sm btn-secondary"
+                                :disabled="!!d.attachmentBusy" @click="$refs.attachmentInput.click()" title="Add an attachment">
+                            <i class="fa-solid" :class="d.attachmentBusy === 'upload' ? 'fa-spinner fa-spin' : 'fa-plus'" aria-hidden="true"></i>
+                            {{ d.attachmentBusy === 'upload' ? 'Uploading…' : 'Add' }}
+                        </button>
+                        <input v-if="store.canWrite" ref="attachmentInput" type="file" hidden @change="onAttachmentPicked">
+                    </div>
+                    <p v-if="!attachments.length" class="work-item-detail-attachments-empty">No attachments.</p>
+                    <ul v-else class="work-item-detail-attachments">
+                        <li v-for="file in attachments" :key="file.url" class="work-item-detail-attachment">
+                            <i class="fa-solid fa-file" aria-hidden="true"></i>
+                            <span class="work-item-detail-attachment-name" :title="file.name">{{ file.name }}</span>
+                            <span v-if="file.sizeLabel" class="work-item-detail-attachment-meta">{{ file.sizeLabel }}</span>
+                            <time v-if="file.whenLabel" class="work-item-detail-attachment-meta" :datetime="file.when" :title="file.when">{{ file.whenLabel }}</time>
+                            <button type="button" class="btn btn-sm btn-secondary" :disabled="!!d.attachmentDownloading || !!d.attachmentBusy"
+                                    @click="downloadAttachment(file)" title="Download this attachment">
+                                <i class="fa-solid" :class="d.attachmentDownloading === file.url ? 'fa-spinner fa-spin' : 'fa-download'" aria-hidden="true"></i>
+                                {{ d.attachmentDownloading === file.url ? 'Downloading…' : 'Download' }}
+                            </button>
+                            <button v-if="store.canWrite" type="button" class="btn btn-sm btn-secondary"
+                                    :disabled="!!d.attachmentBusy" @click="deleteAttachment(file)" title="Delete this attachment">
+                                <i class="fa-solid" :class="d.attachmentBusy === file.url ? 'fa-spinner fa-spin' : 'fa-trash'" aria-hidden="true"></i>
+                                {{ d.attachmentBusy === file.url ? 'Deleting…' : 'Delete' }}
+                            </button>
+                        </li>
+                    </ul>
+                </div>
                 <div id="workItemDetailCommentsContainer">
                     <label class="form-label work-item-detail-comments-label" style="color: var(--text-primary); font-weight: 600;">
                         <i class="fa-solid fa-comments"></i> Comments
@@ -2789,6 +2860,10 @@
                     <i class="fa-solid fa-rotate"></i> Refresh
                 </button>
                 <button class="btn btn-secondary" @click="close()">Close</button>
+                <button v-if="store.canWrite && isIssueTask" class="btn btn-primary" :disabled="d.loading"
+                        @click="convertIssueToBug()" title="Change this ISSUE task into a Bug, keeping the same ID">
+                    <i class="fa-solid fa-bug"></i> Convert to Bug
+                </button>
                 <button v-if="store.canWrite" class="btn btn-primary" @click="copyWorkItemFromDetail()"><i class="fa-solid fa-clone"></i> Create copy</button>
                 <button v-if="store.canWrite" class="btn btn-primary" @click="save"><i class="fa-solid fa-save"></i> Update</button>
                 <button class="btn btn-primary" @click="openInDevOps(d.id)"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open in DevOps</button>
@@ -3449,7 +3524,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-09-29T10:11:21.000Z'
+            updatedAt: '2026-09-29T14:09:00.000Z'
         };
 
         // ===== API Configuration =====
@@ -5080,6 +5155,14 @@
             }
             return { prefix: fallbackPrefix, suffix: title };
         }
+
+        // Saved title, not the unsaved prefix select: the Convert to Bug button stays tied to
+        // the item Azure DevOps actually has.
+        function isSavedIssueTask(fields) {
+            if ((fields?.['System.WorkItemType'] || '') !== 'Task') return false;
+            const { prefix } = splitTitleIntoPrefixAndSuffix(fields['System.Title'] || '', titlePrefixesTask, '');
+            return prefix === 'ISSUE';
+        }
         
         function getCreateContextFromPlatformRelease(platformRelease, tags) {
             const version = parseReleaseVersion(platformRelease);
@@ -5838,6 +5921,123 @@
                 tshirtSize: getTshirtSizeFromFields(fields)
             });
             showNotification('Create work item form prefilled from work item', 'success');
+        };
+
+        // ISSUE task → Bug on the same id. Patch, product and title prefix come from the parent
+        // Feature/Bug; the parent link moves to that product's epic so the item shows in the
+        // patch grid instead of staying a child task. d.returnTo is left alone: Close still
+        // reopens the Feature the ISSUE was opened from.
+        window.convertIssueTaskToBug = async function() {
+            if (!store.canWrite) {
+                showNotification('Converting is only available in read-write mode', 'error');
+                return false;
+            }
+
+            const d = store.detail;
+            const fields = d.fields;
+            const workItemId = d.id;
+            if (!workItemId || !isSavedIssueTask(fields)) {
+                showNotification('Only an ISSUE task can be converted to a Bug', 'error');
+                return false;
+            }
+
+            const suffix = d.title.trim();
+            if (!suffix) {
+                showNotification('Title cannot be empty', 'error');
+                return false;
+            }
+
+            const parentId = getHierarchyParentId(d.relations);
+            if (!parentId) {
+                showNotification('Cannot convert: parent work item link not found', 'error');
+                return false;
+            }
+
+            const parentRelationIndex = (d.relations || []).findIndex(r => r.rel === 'System.LinkTypes.Hierarchy-Reverse');
+            if (parentRelationIndex < 0) {
+                showNotification('Cannot convert: parent work item link not found', 'error');
+                return false;
+            }
+
+            if (!window.confirm('Convert this ISSUE into a Bug?\n\nThe work item keeps its ID. It leaves the current parent and shows up in that parent\'s patch as a Bug.')) {
+                return false;
+            }
+
+            d.loading = true;
+            try {
+                const parent = await devOpsGet(`/wit/workitems/${parentId}?api-version=7.1`);
+                if (d.id !== workItemId) return false;
+                const parentFields = parent.fields || {};
+                const platformRelease = parentFields['Custom.PlatformRelease'] || '';
+                const product = resolveProductForWorkItem(parentFields, platformRelease);
+                const prefixes = (product && titlePrefixes[product]) || [];
+                const version = parseReleaseVersion(platformRelease);
+                const releaseConfig = version && releaseNames.find(r => r.release === version.name);
+                if (!platformRelease || !version || !product || !prefixes.length) {
+                    showNotification('Cannot convert: parent patch version not found', 'error');
+                    return false;
+                }
+                const epicID = releaseConfig?.epicID;
+                if (!epicID) {
+                    showNotification(ERROR_MESSAGES.NO_EPIC_ID(version.name), 'error');
+                    return false;
+                }
+
+                const parentPrefix = splitTitleIntoPrefixAndSuffix(parentFields['System.Title'] || '', prefixes, '').prefix;
+                const bugPrefix = prefixes.includes(parentPrefix) ? parentPrefix : prefixes[0];
+                const title = `${bugPrefix} - ${suffix}`;
+
+                const pat = await requirePAT();
+                const isMarkdown = d.descriptionFormat === 'Markdown';
+                let description = isMarkdown ? readDetailDescriptionMarkdown() : readDetailDescriptionHtml();
+                description = isMarkdown
+                    ? await processImagesForDevOpsMarkdown(description, pat)
+                    : await processImagesForDevOps(description, pat);
+                if (d.id !== workItemId) return false;
+
+                const priority = fields['Microsoft.VSTS.Common.Priority'] || 3;
+                const severity = fields['Microsoft.VSTS.Common.Severity'] || RATING_LEVELS[2].label;
+                const operations = [
+                    { op: 'remove', path: `/relations/${parentRelationIndex}` },
+                    {
+                        op: 'add',
+                        path: '/relations/-',
+                        value: {
+                            rel: 'System.LinkTypes.Hierarchy-Reverse',
+                            url: `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems/${epicID}`
+                        }
+                    },
+                    { op: 'add', path: '/fields/System.WorkItemType', value: 'Bug' },
+                    { op: 'add', path: '/fields/System.Title', value: title },
+                    { op: 'add', path: '/fields/Custom.PlatformRelease', value: platformRelease },
+                    { op: 'add', path: '/fields/System.Tags', value: product },
+                    { op: 'add', path: '/fields/Microsoft.VSTS.Common.Priority', value: Number(priority) || 3 },
+                    { op: 'add', path: '/fields/Microsoft.VSTS.Common.Severity', value: severity },
+                    { op: 'replace', path: '/fields/System.Description', value: '' }
+                ];
+                if (description) {
+                    operations.push({ op: 'add', path: '/fields/Microsoft.VSTS.TCM.ReproSteps', value: description });
+                    if (isMarkdown) {
+                        operations.push({ op: 'add', path: '/multilineFieldsFormat/Microsoft.VSTS.TCM.ReproSteps', value: 'Markdown' });
+                    }
+                }
+
+                const updated = await devOpsPatch(`/wit/workitems/${workItemId}?api-version=7.1`, operations);
+                if (d.id !== workItemId) return false;
+
+                store.removeChildTask(parentId, workItemId);
+                store.addWorkItem(updated);
+            } catch (error) {
+                Logger.error('Error converting ISSUE to Bug:', error);
+                showNotification(`Error converting to Bug: ${error.message}`, 'error');
+                return false;
+            } finally {
+                if (d.id === workItemId) d.loading = false;
+            }
+
+            const refreshed = await refreshWorkItemDetail({ notify: false });
+            if (refreshed) showNotification('Converted to Bug', 'success');
+            return refreshed;
         };
         
         window.createWorkItem = async function() {
@@ -6667,6 +6867,7 @@
             d.commentsError = '';
             d.commentsLoading = true;
             d.commentSubmitting = false;
+            d.attachmentDownloading = '';
             d.newComment.descriptionFormat = 'Markdown';
             d.newComment.descriptionHtml = '';
             d.newComment.descriptionHtmlCache = null;
@@ -6697,7 +6898,7 @@
         // network (the open path may reuse store.childTasks) and replace that parent's cache so
         // deleted tasks disappear from the cards and the grid dots. Unsaved description edits
         // are discarded; a draft in the new-comment composer is left alone.
-        window.refreshWorkItemDetail = async function() {
+        window.refreshWorkItemDetail = async function({ notify = true } = {}) {
             const d = store.detail;
             const workItemId = d.id;
             if (!workItemId || d.loading) return false;
@@ -6719,7 +6920,7 @@
                 const type = applyWorkItemDetailPayload(workItemId, data);
                 syncGridFromRefreshedWorkItem(workItemId, data.fields || {});
                 await loadWorkItemDetailTasks(workItemId, type, pat, { force: true });
-                showNotification('Work item refreshed', 'success');
+                if (notify) showNotification('Work item refreshed', 'success');
                 return true;
             } catch (err) {
                 Logger.error(err);
@@ -6793,6 +6994,151 @@
                 if (d.id === workItemId) d.commentsError = `Comments could not be loaded: ${e.message || e}`;
             } finally {
                 if (d.id === workItemId) d.commentsLoading = false;
+            }
+        }
+        
+        // AttachedFile relations already arrive with the detail payload ($expand=Relations).
+        // Size is attributes.resourceSize in bytes; missing or zero stays blank.
+        function formatAttachmentSize(bytes) {
+            const n = Number(bytes);
+            if (!Number.isFinite(n) || n <= 0) return '';
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let value = n;
+            let unit = 0;
+            while (value >= 1024 && unit < units.length - 1) {
+                value /= 1024;
+                unit++;
+            }
+            const digits = unit === 0 || value >= 10 ? 0 : 1;
+            return `${value.toFixed(digits)} ${units[unit]}`;
+        }
+        
+        function workItemAttachmentsFromRelations(relations) {
+            return (relations || [])
+                .filter(r => r.rel === 'AttachedFile' && r.url)
+                .map(r => {
+                    const attrs = r.attributes || {};
+                    const when = attrs.resourceCreatedDate || attrs.authorizedDate || '';
+                    return {
+                        url: r.url,
+                        name: attrs.name || 'attachment',
+                        sizeLabel: formatAttachmentSize(attrs.resourceSize),
+                        when,
+                        whenLabel: formatRelativeDate(when).text || when
+                    };
+                })
+                .sort((a, b) => {
+                    const ta = a.when ? new Date(a.when).getTime() : 0;
+                    const tb = b.when ? new Date(b.when).getTime() : 0;
+                    return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+                });
+        }
+        
+        // Azure DevOps attachment URLs require the PAT. A navigation link would not send it, so
+        // the file is fetched the same way description images are, then saved via a blob: URL.
+        async function downloadWorkItemAttachment(url, fileName) {
+            const d = store.detail;
+            if (!url || d.attachmentDownloading) return;
+            d.attachmentDownloading = url;
+            let objectUrl = '';
+            try {
+                const pat = await getPAT();
+                if (!pat) return;
+                const response = await fetch(url, {
+                    headers: { 'Authorization': 'Basic ' + btoa(':' + pat) }
+                });
+                if (!response.ok) {
+                    throw new Error(`${response.status} ${response.statusText}`);
+                }
+                const blob = await response.blob();
+                objectUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = objectUrl;
+                link.download = fileName || 'attachment';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+            } catch (err) {
+                Logger.error('Attachment download failed', err);
+                showNotification(err.message || 'Failed to download attachment', 'error');
+            } finally {
+                if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+                if (d.attachmentDownloading === url) d.attachmentDownloading = '';
+            }
+        }
+
+        async function reloadWorkItemRelations(workItemId) {
+            const data = await devOpsGet(`/wit/workitems/${workItemId}?$expand=Relations&api-version=7.1`);
+            if (store.detail.id === workItemId) store.detail.relations = data.relations || [];
+            return data.relations || [];
+        }
+
+        // Uploads the chosen file, then links it as AttachedFile. The upload endpoint is the same
+        // one uploadImageAttachment() uses; this path also PATCHes the work item relation.
+        async function addWorkItemAttachment(file) {
+            const d = store.detail;
+            const workItemId = d.id;
+            if (!store.canWrite || !workItemId || !file || d.attachmentBusy) return;
+            d.attachmentBusy = 'upload';
+            try {
+                const pat = await getPAT();
+                if (!pat) return;
+                const uploadUrl = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/attachments?fileName=${encodeURIComponent(file.name)}&api-version=7.1`;
+                const uploadResponse = await fetch(uploadUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Basic ' + btoa(':' + pat),
+                        'Content-Type': 'application/octet-stream'
+                    },
+                    body: file
+                });
+                if (!uploadResponse.ok) {
+                    throw new Error(`${uploadResponse.status} ${uploadResponse.statusText}`);
+                }
+                const uploaded = await uploadResponse.json();
+                if (!uploaded.url) throw new Error('Attachment upload did not return a url');
+                await devOpsPatch(`/wit/workitems/${workItemId}?api-version=7.1`, [{
+                    op: 'add',
+                    path: '/relations/-',
+                    value: {
+                        rel: 'AttachedFile',
+                        url: uploaded.url,
+                        attributes: { comment: file.name }
+                    }
+                }]);
+                await reloadWorkItemRelations(workItemId);
+                showNotification(`Attached ${file.name}`, 'success');
+            } catch (err) {
+                Logger.error('Attachment upload failed', err);
+                showNotification(err.message || 'Failed to add attachment', 'error');
+            } finally {
+                if (d.attachmentBusy === 'upload') d.attachmentBusy = '';
+            }
+        }
+
+        // Removes one AttachedFile. The index is read from a fresh full relations array, because
+        // a stale index would delete a different relation.
+        async function deleteWorkItemAttachment(file) {
+            const d = store.detail;
+            const workItemId = d.id;
+            if (!store.canWrite || !workItemId || !file?.url || d.attachmentBusy) return;
+            if (!window.confirm(`Delete attachment “${file.name}”?`)) return;
+            d.attachmentBusy = file.url;
+            try {
+                const relations = await reloadWorkItemRelations(workItemId);
+                const index = relations.findIndex(r => r.rel === 'AttachedFile' && r.url === file.url);
+                if (index < 0) throw new Error('Attachment is no longer on this work item');
+                await devOpsPatch(`/wit/workitems/${workItemId}?api-version=7.1`, [{
+                    op: 'remove',
+                    path: `/relations/${index}`
+                }]);
+                await reloadWorkItemRelations(workItemId);
+                showNotification(`Deleted ${file.name}`, 'success');
+            } catch (err) {
+                Logger.error('Attachment delete failed', err);
+                showNotification(err.message || 'Failed to delete attachment', 'error');
+            } finally {
+                if (d.attachmentBusy === file.url) d.attachmentBusy = '';
             }
         }
         
@@ -7628,6 +7974,13 @@
                 commentsLoading: false,
                 commentsError: '',
                 commentSubmitting: false,
+                // URL of the AttachedFile currently being fetched for download, or '' when idle.
+                // A plain <a href> cannot send the PAT, so downloadWorkItemAttachment() fetches
+                // the file itself; this flag disables the buttons and spins the active one.
+                attachmentDownloading: '',
+                // 'upload' while a new file is being posted, or the attachment URL while that
+                // row is being deleted. Disables Add/Delete so two relation patches cannot race.
+                attachmentBusy: '',
                 // Reuses switchFormDescriptionFormat()'s exact field names (descriptionFormat/
                 // descriptionHtml/descriptionHtmlCache/descriptionMarkdownCache) purely so the same
                 // shared toggle helper works unmodified against this nested object too - see the
@@ -7794,6 +8147,16 @@
                 const key = String(parentId);
                 attachSearchText(task);
                 this.childTasks = { ...this.childTasks, [key]: [...(this.childTasks[key] || []), task] };
+                rollupLastModifiedById(parentId);
+            },
+            // A converted ISSUE leaves the parent's dots and task cards immediately. Reassign
+            // the map the same way addChildTask() does so Vue notices the shorter list.
+            removeChildTask(parentId, taskId) {
+                const key = String(parentId);
+                const list = this.childTasks[key];
+                if (!list) return;
+                const id = Number(taskId);
+                this.childTasks = { ...this.childTasks, [key]: list.filter(task => Number(task.id) !== id) };
                 rollupLastModifiedById(parentId);
             },
             resortPatchContaining(workItemId) {
@@ -8537,7 +8900,9 @@
                 patchLabel() { return this.fields['Custom.PlatformRelease'] || 'Not set'; },
                 createdDate() { return this.fields['System.CreatedDate'] || ''; },
                 changedDate() { return this.fields['System.ChangedDate'] || ''; },
-                editableClass() { return this.store.canWrite ? 'clickable' : 'read-only'; }
+                editableClass() { return this.store.canWrite ? 'clickable' : 'read-only'; },
+                attachments() { return workItemAttachmentsFromRelations(this.d.relations); },
+                isIssueTask() { return isSavedIssueTask(this.fields); }
             },
             watch: {
                 // Reopening cannot rely on the html prop changing: an unsaved edit leaves the
@@ -8576,6 +8941,10 @@
                 },
                 openCreateTaskFromWorkItemDetailModal,
                 copyWorkItemFromDetail,
+                async convertIssueToBug() {
+                    const ok = await convertIssueTaskToBug();
+                    if (ok) this.$nextTick(() => this.$refs.editor?.render());
+                },
                 openInDevOps,
                 // Html -> Markdown can never revert once the field is locked (see
                 // descriptionFormatLocked); switchFormDescriptionFormat() does the actual
@@ -8606,6 +8975,14 @@
                     if (ok) this.$nextTick(() => this.$refs.editor?.render());
                 },
                 close() { closeWorkItemDetailModal(); },
+                downloadAttachment(file) { downloadWorkItemAttachment(file.url, file.name); },
+                onAttachmentPicked(event) {
+                    const input = event.target;
+                    const file = input.files && input.files[0];
+                    input.value = '';
+                    if (file) addWorkItemAttachment(file);
+                },
+                deleteAttachment(file) { deleteWorkItemAttachment(file); },
                 shortDate(value) { return formatRelativeDate(value).text || value; },
                 editState() {
                     if (!this.store.canWrite) return;
