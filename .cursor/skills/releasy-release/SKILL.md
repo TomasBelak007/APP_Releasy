@@ -43,7 +43,7 @@ If the user already named a ticket, `node ../releasy-ai/scripts/get-ticket.mjs <
 
 ## 2. Assignees
 
-This is the exception to releasy-ai's Unassigned-unless-named rule. Keep these unless the user
+This is the exception to releasy-ai's prompt-author assignee rule. Keep these unless the user
 overrides. Validate every email against live `assignees`.
 
 | Role | Default |

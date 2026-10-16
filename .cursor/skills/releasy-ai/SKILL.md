@@ -16,14 +16,21 @@ Scripts in `scripts/` do the actual API calls; this file is the workflow that de
 in them. Full field mappings, the JSON plan schema, and relation types are in
 [reference.md](reference.md) - read it before drafting a plan or a script call you're unsure about.
 
-**Never skip the confirmation step.** Every path below ends with printing a plan/summary and
-waiting for the user to confirm before any script that writes to Azure DevOps is run. Read-only
-calls (`get-ticket.mjs`, `releasy-config.mjs`) don't need confirmation.
+**Create tickets and tasks immediately.** Drafting a new Bug, Feature, or Task (sections 1 and 2)
+does not wait for a yes/no. Once the plan is complete, run the create script in the same turn and
+report the created IDs. Still ask when a required choice is missing (which active release series,
+which patch vs backlog, Priority, Severity or T-shirt, who the requester is when creating a
+Bug, Feature, or DEV task, and the Xeelo Admin question on a Xeelo TEST task) — those are
+inputs, not a create confirmation.
+
+**Confirm every other write.** Status changes, field edits, comments, and attachments still print
+a summary and wait for an explicit yes before the script runs. Read-only calls (`get-ticket.mjs`,
+`releasy-config.mjs`, `list-tickets.mjs`) don't need confirmation.
 
 ## Language
 
-Always, including the draft shown in the confirmation summary. Do not mix languages unless the
-user explicitly overrides this for a specific field.
+Always, including the text written into Azure DevOps and any summary printed before a confirmed
+write. Do not mix languages unless the user explicitly overrides this for a specific field.
 
 - **Titles** (Bug, Feature, and Task — the free-text after the prefix): **English**. If the
   requester wrote in Czech or Slovak, translate the title; keep the live prefix as-is
@@ -61,20 +68,25 @@ current fields, child Tasks, and comments before doing anything else with it.
 5. Always ask: Priority (1-4), and Severity (Bug) or T-shirt size (Feature) - never silently
    default. If the user has no preference, fall back to Releasy's own defaults: Priority/Severity
    `3 - Medium`, T-shirt `M`.
-6. Assignee: **Unassigned** unless the user named someone when asking to create the ticket.
-   Do not ask. If they named someone, validate against the live `assignees` list.
+6. Assignee: the person who wrote the prompt. Match them to one entry in the live `assignees`
+   list (name or email already known from this chat). If you cannot match exactly one person,
+   ask them to identify themselves and wait — do not create the ticket unassigned and do not
+   guess. If they explicitly name a different assignee for this ticket, use that person instead
+   and validate them against `assignees`.
 7. Description format defaults to Markdown unless the user asks for HTML.
 8. If the ticket needs Tasks created right away, nest them under the item in the plan - see
    reference.md's Task fields and **Child task content (DEV vs TEST)** below. Split DEV work
    (SQL vs back-end + front-end) only as the requester asked — do not invent extra DEV tasks.
-   Same assignee rule as the parent: omit `assigneeEmail` unless the user named someone for
-   that Task. Do not copy the parent's assignee.
+   Assignee: a **DEV** task uses the same person as the parent ticket in step 6 (the prompt
+   author, or the person they named for that DEV task). Every other prefix (`TEST`, `UX/UI`,
+   `DOCU`, …) is **Unassigned**. Do not ask, and do not copy the parent or the DEV assignee,
+   unless the requester explicitly says who that task belongs to.
    A Task added *later* (e.g. a TEST task once the DEV tasks are done) does not belong here -
    use step 2 below instead.
-9. Build the JSON plan (schema in reference.md), print a human-readable summary - type, product,
-   title, release/patch or "Backlog", priority/severity or t-shirt, assignee (Unassigned
-   unless named), nested tasks, any related links - and **stop for explicit confirmation**.
-10. On confirmation, write the plan to a temp file and run:
+9. Build the JSON plan (schema in reference.md) and print a human-readable summary - type, product,
+   title, release/patch or "Backlog", priority/severity or t-shirt, assignee, nested tasks
+   (with each task's assignee), any related links. Do not stop for confirmation.
+10. In the same turn, write the plan to a temp file and run:
     `node scripts/create-ticket.mjs <planfile>`
     Report back the created IDs and their DevOps URLs.
 
@@ -89,14 +101,19 @@ done - or any other Task added to a ticket after the fact. No plan file needed.
 1. Confirm the parent (via `get-ticket.mjs` if not already loaded) is a Bug or Feature, not a
    Task - a Task cannot itself have child Tasks.
 2. Gather just the Task's own fields - prefix (validate against `titlePrefixesTask`), English
-   title, Czech description. **Unassigned** unless the user named someone when asking to create it
-   (then validate against the live `assignees` list). Do not copy the parent's assignee and
-   do not ask. No product/release/epic/priority questions; those only apply to the parent.
+   title, Czech description. Assignee depends on the prefix. A **DEV** task goes to the person
+   who wrote the prompt: match them to one live `assignees` entry, and if you cannot, ask them
+   to identify themselves before creating it. If they name someone else for this DEV task, use
+   that person. Every other prefix is **Unassigned** unless they explicitly say who it belongs
+   to — do not copy the parent's assignee and do not ask. No product/release/epic/priority
+   questions; those only apply to the parent.
    Draft the description using **Child task content (DEV vs TEST)** below. If this is a TEST
    task and the parent is Xeelo, ask the Xeelo Admin question there first.
-3. Print the summary and confirm, then run:
+3. Print the summary, then in the same turn run (no yes/no):
    `node scripts/create-task.mjs <parentId> --prefix DEV --title "..." [--description "..."] [--assignee email]`
-   Omit `--assignee` unless the user named someone.
+   Pass `--assignee` for a DEV task (the prompt author, or the person they named). Omit
+   `--assignee` for every other prefix unless they named someone. Report the created Task ID
+   and its DevOps URL.
 
 ## Child task content (DEV vs TEST)
 
@@ -251,7 +268,7 @@ checklist Tasks, no product/DEV prefix) is also a different skill:
 [releasy-release](../releasy-release/SKILL.md). It calls `scripts/create-release.mjs` in this
 folder. Do not try to create that shape with `create-ticket.mjs` / `create-task.mjs` — they
 require prefixes and will reject it. Assignee defaults there stay as originally:
-Feature + tasks 01-05 → Tomáš Kocyan, task 06 → Tomas Belak — not the Unassigned-unless-named
+Feature + tasks 01-05 → Tomáš Kocyan, task 06 → Tomas Belak — not the prompt-author assignee
 rule above.
 
 ## Maintenance

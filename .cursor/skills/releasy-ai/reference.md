@@ -28,7 +28,7 @@ dedicated PAT for this skill, separate from the repo's own `dev.env` (see `AGENT
 | Description format | `/multilineFieldsFormat/<field>` | Only added when the description is Markdown; op `add`, value `"Markdown"`. Once a field is saved as Markdown in Azure DevOps it cannot revert to HTML - this skill never attempts that. |
 | Severity (Bug only) | `Microsoft.VSTS.Common.Severity` | Label string, e.g. `"2 - High"` (`resolveSeverityLabel()` in `releasy-config.mjs` accepts either the digit or the full label). |
 | T-shirt size (Feature only) | `Custom.Shirtsize` | One of `S`, `M`, `L`. Optional. |
-| Assignee | `System.AssignedTo` | Optional. Omit unless the user named someone when creating the ticket (then must be one of the live `assignees`). Unassigned is the default — do not ask. |
+| Assignee | `System.AssignedTo` | The person who wrote the prompt, matched to one live `assignees` entry. If they cannot be matched, ask them to identify themselves before creating — do not leave the ticket unassigned and do not guess. If they name a different person for this ticket, use that email instead. |
 | Parent Epic | relation | `System.LinkTypes.Hierarchy-Reverse` -> `.../wit/workitems/<epicID>`, `epicID` resolved from `releaseNames` by release name. |
 | Status | `System.State` | One of the live `statusOptions.Bug` / `statusOptions.Feature`. |
 
@@ -39,7 +39,7 @@ dedicated PAT for this skill, separate from the repo's own `dev.env` (see `AGENT
 | Title | `System.Title` | `"<prefix> - <text>"`, `prefix` must be one of `titlePrefixesTask`. Free-text after the prefix is always **English**. |
 | Description | `System.Description` | Always **Czech**. No ReproSteps variant. Draft per **Child task content (DEV vs TEST)** in SKILL.md: DEV may be technical and split SQL vs back-end+front-end as the requester asked; TEST is a front-end manual scenario for a medior tester (console/network ok, no DB, no back-end API testing) covering **only the change**, always structured as **Příprava** (data/settings, omit if none; for Xeelo ask whether a specific Xeelo Admin version is required and put it here if yes) → **Kroky** → the unrelated-findings disclaimer (new Bug/Feature on the correct product). |
 | Description format | `/multilineFieldsFormat/System.Description` | Same Markdown-only rule as above. |
-| Assignee | `System.AssignedTo` | Optional. Same rule as Bug/Feature: omit unless the user named someone for this Task. Do not copy the parent's assignee. |
+| Assignee | `System.AssignedTo` | **DEV:** same person as the parent Bug/Feature rule (the prompt author, or whoever they named for this DEV task). **Every other prefix:** omit (`Unassigned`) unless they explicitly name an assignee. Do not copy the parent or DEV assignee onto a non-DEV task. |
 | Parent | relation | `System.LinkTypes.Hierarchy-Reverse` -> `.../wit/workitems/<parentId>`. |
 | Status | `System.State` | One of the live `statusOptions.Task` (no `Evaluation`). |
 
@@ -166,8 +166,11 @@ Field notes:
 - `severity` is Bug-only, `tshirtSize` is Feature-only - `create-ticket.mjs` rejects the wrong one
   for the type.
 - `patch: "999"` is exactly what "add to backlog" means.
-- `assigneeEmail` (item or `tasks[]`): omit unless the user named someone when creating the
-  ticket. Omitted = Unassigned. Do not ask and do not copy a parent assignee onto a Task.
+- `assigneeEmail` on a Bug/Feature, and on a `tasks[]` item whose prefix is `DEV`: the prompt
+  author's email from live `assignees`. Ask them to identify themselves when it is unknown.
+  If they name someone else for that item, use that email.
+- `assigneeEmail` on any other `tasks[]` prefix: omit unless they explicitly name someone.
+  Omitted = Unassigned. Do not copy the parent or DEV assignee.
 - `tasks[]` items follow the Task field mapping above; no product/release/priority fields (Tasks
   don't have them).
 - `relatedRefIds`: array of other `refId`s in the same plan to `System.LinkTypes.Related`-link
@@ -183,7 +186,8 @@ node scripts/create-task.mjs <parentId-or-url> --prefix DEV --title "..." \
 ```
 
 Rejects the parent if it is a Task (a Task cannot itself have child Tasks). `--format` defaults to
-`markdown`. Omit `--assignee` unless the user named someone — the Task is then created unassigned.
+`markdown`. Pass `--assignee` for a `DEV` task (prompt author, or the person they named). Omit
+`--assignee` for every other prefix unless they named someone — that Task is then unassigned.
 
 ## `list-tickets.mjs` (querying Bugs/Features + their Tasks for a release or the backlog)
 
@@ -266,7 +270,7 @@ node scripts/create-release.mjs --product Xeelo --release Labe --major 07 --patc
 `--date` is stored in the title as `DD/MM/YYYY` (also accepts `YYYY-MM-DD` / `D.M.YYYY`).
 Defaults: `--owner` and `--steps-assignee` (tasks 01-05) `tomas.kocyan@intelstudios.com`;
 `--production-assignee` (task 06) `tomas@intelstudios.com`. This is the exception to the
-Unassigned-unless-named rule used by `create-ticket.mjs` / `create-task.mjs`. Refuses backlog
+prompt-author assignee rule used by `create-ticket.mjs` / `create-task.mjs`. Refuses backlog
 patch `999` and refuses to create a second container for the same
 `Custom.PlatformRelease`. Feature is Priority 4, no t-shirt, no description.
 
