@@ -215,18 +215,21 @@ Derived (`VUE LAYER > Derived state`):
 | `lastReloadText` | Relative label; depends on `clockTick` |
 | `availableAssignees`, `availableStatuses` | Filter options, from the `assignees` / `statusOptions` **configuration** - not from loaded items. `availableStatuses` omits `Removed` (the status picker still offers it via `statusOptions`) |
 | `searchTerms` | `search` split on whitespace |
-| `tree` | **The rendered hierarchy.** One pass over `releaseResults` for `activeProduct`: skips hidden majors/patches, drops a parent that fails `parentPassesLastModified()`, then filters via `itemPasses()`, keeps a parent whose child task matches, attaches `childRowsByParent` (Task Mode), prunes empty branches. Sort is already on the patch arrays. Depends on `clockTick` so a Last modified window ages out once a minute. |
+| `tree` | **The rendered hierarchy.** One pass over `releaseResults` for `activeProduct`: skips hidden majors/patches, drops a parent that fails `parentPassesLastModified()`, then filters via `itemPasses()`, keeps a parent whose child task matches **whether or not Task Mode is on**, attaches `childRowsByParent` only while Task Mode is on, prunes empty branches. Sort is already on the patch arrays. Depends on `clockTick` so a Last modified window ages out once a minute. |
 | `visibleResultCount` | Result counter in the toolbar (parents + `childRowsByParent`) |
 | `visibleParentIds` | Parent ids to fetch child tasks for, **scoped to expanded (and not hidden) majors/patches of `activeProduct`** |
 | `taskModeBusy` | `true` while Task Mode is on and a background child-task batch for a visible parent is still in flight (spinner on the Task Mode button) |
 
 `itemPasses(item)` = assignee filter + status filter + all search terms found in the cached
-`item._searchText` (fallback `buildWorkItemSearchText()`). `parentPassesLastModified(item)` is a
+`item._searchText` (fallback `buildWorkItemSearchText()`). A parent stays in the tree when it
+passes, or when `matchingChildTasks(parentId)` is non-empty: sorted, non-`Removed` child tasks
+from `store.childTasks` that themselves pass `itemPasses()`. That match does not depend on Task
+Mode. Task Mode only fills `childRowsByParent` with those matching tasks; when it is off the
+same parents stay and the child rows are empty. `parentPassesLastModified(item)` is a
 separate hard gate on the parent only: when `filters.lastModified` is set (`1h`, `4h`, `8h`,
 `16h`, `24h`, `48h`, `1w` = 7 days, from `LAST_MODIFIED_WINDOWS`), the parent is hidden unless
 `now - item._lastModified` is inside that window. Child task rows are not filtered by the window.
-`visibleChildTasksFor(parentId)` returns
-sorted, non-`Removed`, filtered child tasks (empty unless Task Mode). The Filter modal does not
+The Filter modal does not
 offer `Removed`, even though it remains in `statusOptions` for the status picker. Sections are
 Last modified (buttons, default Any), then Status, then Assignee. `filters.lastModified` is `null`
 or a window id and lives in the same `workItemFilters` object; it counts as one active filter.
@@ -367,7 +370,9 @@ and `addChildTask()` call `rollupLastModifiedById()` after the cache write so th
 `_lastModified` includes the new task dates.
 
 **Task Mode** - `toggleTaskMode()` only flips `store.taskMode`. No network call: rows are
-`visibleChildTasksFor()` over the same `childTasks` map the dots already use. Parents still in
+`matchingChildTasks()` over the same `childTasks` map the dots already use, rendered only while
+Task Mode is on. A parent whose own assignee/status/search does not match still stays in the
+grid when a child task does, with or without Task Mode. Parents still in
 flight appear as their batch lands; `taskModeBusy` is true while Task Mode is on and a visible
 parent is in `loadingTaskDotIds`. Switching tabs while Task Mode is on does not refetch - the
 `visibleParentIds` watcher lazy-loads any missing parents, without discarding tasks already
@@ -724,7 +729,7 @@ modes:
 | Add a field to the detail modal | `#workItemDetailApp` markup + its computed |
 | Add a new "change X" modal | a new entry in `PICKER_KINDS` (`build` + `apply`) - no new markup |
 | Add a new modal | markup root in `<body>`, store slice, `mountApp`, `MODAL_STACK` entry |
-| Change a filter rule | `itemPasses()` / `parentPassesLastModified()` / `store.tree` |
+| Change a filter rule | `itemPasses()` / `matchingChildTasks()` / `parentPassesLastModified()` / `store.tree` |
 | Change markdown preview (tables, mermaid) | `renderMarkdownToHtml()` / `renderMermaidIn()` in `Markdown Preview` |
 | Change the Markdown layout | `exportPatchToMarkdown()` |
 | Change theming | CSS custom properties under `[data-theme]`, `THEMES`, `LOGO_URLS` |

@@ -306,6 +306,7 @@
                                 <li>Active filters are indicated by an orange dot on the filter button</li>
                                 <li>Your filter settings are automatically saved and restored when you reload the page</li>
                                 <li>Filters work with the hierarchical structure - empty sections are automatically hidden</li>
+                                <li>A Bug or Feature stays visible when it matches, or when any of its child tasks matches the assignee, status, or search filter. This does not depend on Task Mode. Matching child tasks are listed under the parent only while Task Mode is on</li>
                             </ul>
                         </div>
                     </div>
@@ -357,7 +358,7 @@
                                     <li><strong>Then alphabetically:</strong> By title within the same status</li>
                                 </ul>
                             </li>
-                            <li><strong>Filtering:</strong> When Task Mode is active, filters use OR logic - a work item is shown if either the parent OR any child task matches the filter criteria</li>
+                            <li><strong>Filtering:</strong> Assignee, status, and search always consider child tasks. A Bug or Feature stays visible when the parent or any child task matches, whether or not Task Mode is on. Task Mode only shows or hides the matching task rows</li>
                             <li><strong>Deactivate:</strong> Click the <i class="fa-solid fa-clipboard-list" style="color: #8B4513;"></i> button again to hide all child tasks</li>
                         </ol>
                         

@@ -3524,7 +3524,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-10-09T20:02:23.000Z'
+            updatedAt: '2026-10-16T14:29:30.000Z'
         };
 
         // ===== API Configuration =====
@@ -3686,20 +3686,20 @@
             { 
                 product: 'Xeelo', 
                 versions: [
-                    { version: 'Labe-07', patches: ['999', '020', '019', '018', '017', '016'] },
+                    { version: 'Labe-07', patches: ['999', '020', '019', '018', '017'] },
                     { version: 'Odra-01', patches: ['999'] }
                 ]
             },
             { 
                 product: 'XeeloAdmin', 
                 versions: [
-                    { version: 'Odra-01', patches: ['999', '010', '009', '008', '007', '006', '005'] }
+                    { version: 'Odra-01', patches: ['999', '010', '009', '008', '007', '006'] }
                 ]
             },
             { 
                 product: 'Integray', 
                 versions: [
-                    { version: 'Schneeberg-03', patches: ['999', '020', '019', '018', '017'] },
+                    { version: 'Schneeberg-03', patches: ['999', '020', '019', '018'] },
                     { version: 'Madeira-01', patches: ['999'] }
                 ]
             },
@@ -8286,8 +8286,9 @@
             return terms.every(term => text.includes(term));
         }
 
-        function visibleChildTasksFor(parentId) {
-            if (!store.taskMode) return [];
+        // Assignee, status, and search matches among child tasks. Independent of Task Mode:
+        // a parent stays on the grid when any of these match, even if the task rows are hidden.
+        function matchingChildTasks(parentId) {
             const tasks = (store.childTasks[parentId] || [])
                 .filter(task => task.fields['System.State'] !== 'Removed');
             return sortChildTasks(tasks).filter(itemPasses);
@@ -8322,10 +8323,10 @@
                         const childRowsByParent = {};
                         for (const item of allItems) {
                             if (!parentPassesLastModified(item)) continue;
-                            const childRows = visibleChildTasksFor(item.id);
-                            if (!itemPasses(item) && childRows.length === 0) continue;
+                            const matchingChildren = matchingChildTasks(item.id);
+                            if (!itemPasses(item) && matchingChildren.length === 0) continue;
                             items.push(item);
-                            childRowsByParent[item.id] = childRows;
+                            childRowsByParent[item.id] = store.taskMode ? matchingChildren : [];
                         }
                         if (items.length === 0) continue;
 
