@@ -28,7 +28,7 @@ Keep this file in sync whenever the structure changes (see [Maintaining this doc
 Line numbers drift, so **navigate by section markers**, which are stable and greppable:
 `rg -n "// ===== " index.html`.
 
-Rough layout (line numbers as of app version 1.0.44, for orientation only):
+Rough layout (line numbers as of app version 1.0.45, for orientation only):
 
 | Range | Content |
 | --- | --- |
