@@ -205,7 +205,7 @@ Derived (`VUE LAYER > Derived state`):
 | Computed | Meaning |
 | --- | --- |
 | `products` | Product tabs, from `releaseNames` **configuration** - static, so all 5 tabs are always visible/clickable regardless of what has been fetched |
-| `isActiveProductLoading` | `true` only while `releaseResults` is still empty, a PAT is stored (`store.pat.configured`), and the PAT modal is not open. Drives the full-page grid spinner. Once any product has rows, switching tabs never covers the app |
+| `isActiveProductLoading` | `true` only while `releaseResults` is still empty, a PAT is stored (`store.pat.configured`), the PAT modal is not open, and `store.pat.invalid` is false. Drives the full-page grid spinner. Once any product has rows, switching tabs never covers the app. A rejected token sets `pat.invalid` and opens the modal, so the spinner cannot stay on top of the replace form |
 | `isBackgroundReloading` | `true` while `releaseResults` already has rows and `loadingProducts` is non-empty (any product). Drives the spinner next to Last reload; the grid and tabs stay up |
 | `allMajorIds` | All `release-major` ids **for `activeProduct` only** (for Expand All) |
 | `allPatchIds` | All `release-major.patch` ids **for `activeProduct` only**, skipping hidden majors/patches (so Expand All can open Bugs/Features) |
@@ -334,8 +334,18 @@ any product is cached. The functions:
   is invalidated). Creating an item still inserts it locally (`addWorkItem()`/`addChildTask()`)
   and a patch-version change still relocates it locally (`moveWorkItemPatch()`).
 
-A 401 clears `devops_pat` and `store.pat.configured`, then re-prompts once through
-`handleUnauthorized()`.
+A rejected PAT does not arrive as a clean 401. Azure DevOps answers the browser with **302** to the
+sign-in page; `fetch` follows it and then hangs or fails as a CORS error whose message does not
+contain `401`. That used to leave `releaseResults` empty with `pat.configured` still true, so the
+full-page loader (z-index 9999) stayed up and covered the key button. `azureFetch()` sends
+`X-TFS-FedAuthRedirect: Suppress` (so Azure returns **401** instead of redirecting) and
+`redirect: 'manual'` (a leftover 302 becomes an opaque redirect and is not followed). 401, 403, 203
+and an opaque redirect are an auth failure: `reauthenticate()` clears `devops_pat`, sets
+`store.pat.invalid` and `store.pat.configured = false`, and opens the PAT modal once even if every
+product fails together. The modal says the token is invalid or expired. Cancelling resolves the
+shared prompt with `null` so the loads stop instead of asking again. `savePAT()` checks the new
+token before closing (`checkTokenPermissions` with `skipReauth`); a reject leaves the same dialog
+open. A valid save stores it and calls `resetAndReloadAllProducts()`.
 
 **Search / filter / expand / hide** - state only, no network, no re-render call: the toolbar or
 modal writes into `store.search` / `store.filters` / `store.expanded` / `store.hidden`, and
@@ -562,15 +572,17 @@ fight the hover panel).
 into `store.help.html` and is injected with `v-html`; `showHelpSection()` then scopes its DOM work
 to `#helpModalBody`.
 
-**PAT** - `getPAT()` returns the decrypted token or opens the modal and **returns a promise that
-resolves when the user saves** (`patModalResolve`; `closePATModal()` resolves `null` so callers do
-not hang). `store.pat.configured` is the reactive mirror of whether `devops_pat` is in
-`localStorage` (set `true` in `savePAT()`, `false` in `handleUnauthorized()` when the token is
-cleared); `isActiveProductLoading` stays false while the PAT modal is open or no token is stored,
-so the full-screen loader cannot cover the form. `savePAT()` encrypts with AES-GCM (`encryptPAT`),
-stores the self-declared capability, then `checkTokenPermissions()` +
-`resetAndReloadAllProducts()` (a new PAT can mean different access entirely, so the whole cache
-is invalidated, same as Reload).
+**PAT** - `getPAT()` returns the decrypted token, or opens the modal and **returns a promise that
+resolves when the user saves** (`promptForPat` / `patModalResolve`; one shared promise, so parallel
+loads do not overwrite each other's resolver). `closePATModal()` resolves `null` so callers do not
+hang. `store.pat.configured` mirrors whether `devops_pat` is in `localStorage` (`true` in
+`savePAT()`, `false` in `invalidateStoredPat()` when Azure rejects the token).
+`store.pat.invalid` is the "token is invalid or expired" banner (`pat.error` is the same banner for a validation failure that is not a rejected token). `isActiveProductLoading` stays
+false while the modal is open, while `pat.invalid` is set, or while no token is stored, and
+`#patApp` is stacked above the full-page loader, so the form cannot be covered. `savePAT()`
+validates with `checkTokenPermissions()` before it encrypts (`encryptPAT`, AES-GCM) and stores the
+self-declared capability; only then does it close and call `resetAndReloadAllProducts()` (a new PAT
+can mean different access entirely, so the whole cache is invalidated, same as Reload).
 
 **Modals: ESC and scroll lock** - `MODAL_STACK` (end of file) lists every modal as
 `{ isOpen, close }`, **topmost first**. One `keydown` listener closes the first open entry; one
@@ -580,9 +592,10 @@ be registered here.
 ## Azure DevOps API surface
 
 `devOpsApiRequest()` (+ `devOpsGet` / `devOpsPost` / `devOpsPatch`) prefixes `API_BASE_URL` and adds
-`Authorization: Basic btoa(':' + pat)`. Field updates and the batched work-item GETs go through
-these helpers. Create, comments and attachments still build the full URL and call `fetch` directly
-(they already hold a PAT for image upload / specialised error text).
+`Authorization: Basic btoa(':' + pat)`. Every PAT-authenticated call, including create, comments
+and attachments, goes through `azureFetch()` (`X-TFS-FedAuthRedirect: Suppress`, and
+`redirect: 'manual'` except attachment/image GETs, which may redirect to blob storage). A rejected
+token opens the PAT modal; see [Load / reload](#flows-what-calls-what).
 
 | Purpose | Call |
 | --- | --- |
@@ -595,7 +608,7 @@ these helpers. Create, comments and attachments still build the full URL and cal
 | Convert ISSUE to Bug | Same PATCH from `convertIssueTaskToBug()`: `remove` the parent `Hierarchy-Reverse` relation, `add` the product epic as parent, `add` `System.WorkItemType=Bug` plus title, `Custom.PlatformRelease`, `System.Tags`, priority, severity and `Microsoft.VSTS.TCM.ReproSteps`; `replace` `System.Description` with empty |
 | Create | `POST /wit/workitems/${type}?api-version=7.1` (must be 7.1+ - the `/multilineFieldsFormat/<field>` op used for Markdown descriptions on create is silently ignored on older versions) |
 | Attachments | `POST /wit/attachments?fileName=...&api-version=6.0` on paste/upload; images in descriptions and comments are re-fetched authenticated and swapped for blob URLs (`replaceImagesWithAuthenticatedBlobs`). Displayed `<img>`s in the HTML editor, Markdown preview, and comment bodies are capped to the panel (`max-width: 100%`, `height: auto`, including over inline pixel sizes) so a full-resolution screenshot stays fully visible. The detail modal lists work-item file attachments from `AttachedFile` relations already returned by the detail GET and downloads each with an authenticated `GET` of `relation.url` (`downloadWorkItemAttachment()`) |
-| Token check | `GET https://dev.azure.com/{org}/_apis/connectionData` |
+| Token check | `GET https://dev.azure.com/{org}/_apis/connectionData` via `azureFetch()` (`X-TFS-FedAuthRedirect: Suppress`). 401 / 403 / 203 / opaque redirect rejects the PAT |
 
 Three calls do **not** go to Azure DevOps: two to `provisioning.integray.app`, one to
 `status.x.ai`:
@@ -659,6 +672,10 @@ modes:
 - **`tokenHasWriteCapability` is self-declared.** The user picks Read-Only / Read-Write in the PAT
   modal; `checkTokenPermissions()` only validates that the token can reach Azure DevOps and stores
   the user's email. Azure DevOps still rejects unauthorized writes.
+- **A rejected PAT is a 302, not a 401, unless `X-TFS-FedAuthRedirect: Suppress` is sent.** Do not
+  call Azure with a raw `fetch` that follows redirects. `azureFetch()` turns that into a 401 (or an
+  opaque redirect) and `reauthenticate()` opens the PAT modal. Without it the full-page loader
+  stays up and covers the key button.
 - **Severity is stored as a label** (`"3 - Medium"`), priority as a number. `extractNumber()`
   normalizes for display.
 - **Patch `999`** is the "next release" bucket and is highlighted differently in the patch picker.

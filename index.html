@@ -315,6 +315,10 @@
         #valuePickerApp .modal-overlay {
             z-index: 1200;
         }
+        /* Above the full-page loader (.loading is 9999) so an expired PAT stays reachable */
+        #patApp .modal-overlay {
+            z-index: 10050;
+        }
         .modal-content {
             background-color: var(--bg-panel);
             border-radius: 8px;
@@ -2906,7 +2910,18 @@
                 </div>
                 <div class="modal-body" style="padding: 30px;">
                     <form id="patForm" @submit.prevent="save">
-                        
+
+                        <div v-if="pat.invalid || pat.error" style="background-color: rgba(220, 53, 69, 0.12); border-left: 4px solid #dc3545; padding: 12px; border-radius: 4px; margin-bottom: 20px;">
+                            <p v-if="pat.invalid" style="color: var(--text-primary); font-size: 0.9em; margin: 0;">
+                                <i class="fa-solid fa-triangle-exclamation" style="color: #dc3545;"></i>
+                                <strong>Invalid token.</strong> Your Personal Access Token is invalid or has expired. Enter a new token to continue.
+                            </p>
+                            <p v-else style="color: var(--text-primary); font-size: 0.9em; margin: 0;">
+                                <i class="fa-solid fa-triangle-exclamation" style="color: #dc3545;"></i>
+                                {{ pat.error }}
+                            </p>
+                        </div>
+
                         <!-- PAT Info -->
                         <div style="background-color: rgba(13, 110, 253, 0.1); border-left: 4px solid #0d6efd; padding: 12px; border-radius: 4px; margin-bottom: 20px;">
                             <p style="color: var(--text-primary); font-size: 0.9em; margin: 0;">
@@ -2953,9 +2968,10 @@
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-secondary" @click="close">Cancel</button>
-                    <button class="btn btn-primary" @click="save">
-                        <i class="fa-solid fa-check"></i> Save Token
+                    <button class="btn btn-secondary" @click="close" :disabled="pat.checking">Cancel</button>
+                    <button class="btn btn-primary" @click="save" :disabled="pat.checking">
+                        <i class="fa-solid" :class="pat.checking ? 'fa-spinner fa-spin' : 'fa-check'"></i>
+                        {{ pat.checking ? 'Checking…' : 'Save Token' }}
                     </button>
                 </div>
             </div>
@@ -3524,7 +3540,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.44',
-            updatedAt: '2026-10-19T15:52:00.000Z'
+            updatedAt: '2026-10-19T16:17:53.000Z'
         };
 
         // ===== API Configuration =====
@@ -3746,8 +3762,54 @@
         };
 
         // ===== DevOps API Helper =====
+        // A rejected PAT is not a clean 401 in the browser. Azure DevOps answers with 302 to the
+        // sign-in page; fetch follows it and then hangs or dies as a CORS error, which does not
+        // contain "401". The full-page loader stays up (z-index 9999) and covers the key button.
+        // X-TFS-FedAuthRedirect: Suppress turns that redirect into a real 401. redirect: 'manual'
+        // is the backup so a 302 is never followed. Attachment downloads opt into followRedirect
+        // because a valid file URL may redirect to blob storage.
+        function unauthorizedError() {
+            const error = new Error('Personal Access Token is invalid or has expired.');
+            error.code = 'unauthorized';
+            return error;
+        }
+
+        function isUnauthorizedError(error) {
+            if (!error) return false;
+            if (error.code === 'unauthorized' || error.message === 'unauthorized') return true;
+            return typeof error.message === 'string' && /\b401\b|TF400813/.test(error.message);
+        }
+
+        function isUnauthorizedResponse(response) {
+            if (!response) return false;
+            if (response.type === 'opaqueredirect') return true;
+            return response.status === 401 || response.status === 403 || response.status === 203;
+        }
+
+        async function azureFetch(url, options = {}) {
+            const { skipReauth = false, followRedirect = false, headers: optionHeaders, ...rest } = options;
+            const response = await fetch(url, {
+                ...rest,
+                headers: {
+                    'X-TFS-FedAuthRedirect': 'Suppress',
+                    ...(optionHeaders || {})
+                },
+                redirect: followRedirect ? 'follow' : 'manual'
+            });
+            if (isUnauthorizedResponse(response)) {
+                if (!skipReauth) void reauthenticate();
+                throw unauthorizedError();
+            }
+            return response;
+        }
+
         async function devOpsApiRequest(endpoint, method = 'GET', body = null, options = {}) {
             const pat = await getPAT();
+            if (!pat) {
+                const error = new Error('Personal Access Token is required.');
+                error.code = 'PAT_REQUIRED';
+                throw error;
+            }
             const baseUrl = API_BASE_URL;
             
             // Default headers
@@ -3782,7 +3844,7 @@
             }
             
             try {
-                const response = await fetch(`${baseUrl}${endpoint}`, requestOptions);
+                const response = await azureFetch(`${baseUrl}${endpoint}`, requestOptions);
                 
                 if (!response.ok) {
                     const errorText = await response.text();
@@ -4557,44 +4619,111 @@
         }
 
         // ===== PAT Modal Management =====
+        // One in-flight prompt. Parallel product loads must not each install their own resolver —
+        // the second one used to overwrite the first, and that load waited forever under the spinner.
         let patModalResolve = null;
-        
+        let patPromptPromise = null;
+        let reauthPromise = null;
+        let patSaveAttempt = 0;
+
+        function settlePatPrompt(value) {
+            const resolve = patModalResolve;
+            patModalResolve = null;
+            patPromptPromise = null;
+            if (resolve) resolve(value);
+        }
+
+        function promptForPat() {
+            if (patPromptPromise) return patPromptPromise;
+            patPromptPromise = new Promise((resolve) => {
+                patModalResolve = resolve;
+                openPATModal();
+            });
+            return patPromptPromise;
+        }
+
+        function invalidateStoredPat() {
+            localStorage.removeItem('devops_pat');
+            store.pat.configured = false;
+            store.pat.invalid = true;
+            window.tokenPermissionsChecked = false;
+        }
+
+        // Drop the stored token and open the replace dialog. Concurrent callers share one promise.
+        // The promise is cleared before it resolves so a retry that is also rejected can prompt again.
+        function reauthenticate() {
+            if (reauthPromise) return reauthPromise;
+            invalidateStoredPat();
+            let settle;
+            const promise = new Promise((resolve) => { settle = resolve; });
+            reauthPromise = promise;
+            promptForPat().then((value) => {
+                reauthPromise = null;
+                settle(value);
+            });
+            return promise;
+        }
+
         window.openPATModal = async function() {
             const encrypted = localStorage.getItem('devops_pat');
             // The token is shown back to the user, so it has to be decrypted for the input
             store.pat.value = encrypted ? await decryptPAT(encrypted) : '';
             store.pat.capability = localStorage.getItem('tokenHasWriteCapability') === 'true' ? 'write' : 'read';
+            store.pat.checking = false;
+            store.pat.error = '';
             store.pat.open = true;
         };
-        
+
         window.closePATModal = function() {
+            patSaveAttempt += 1;
             store.pat.open = false;
             store.pat.value = '';
-            
-            // A caller may be blocked in getPAT() waiting for a token that is not coming
-            if (patModalResolve) {
-                patModalResolve(null);
-                patModalResolve = null;
-            }
+            store.pat.checking = false;
+            store.pat.error = '';
+            // Cancel after a rejected stored token keeps the warning for the next open.
+            // Cancel after a bad edit of a still-valid token does not.
+            if (store.pat.configured) store.pat.invalid = false;
+            settlePatPrompt(null);
         };
-        
+
         window.savePAT = async function() {
-            if (!validateForm('patForm')) return;
-            
+            if (!validateForm('patForm') || store.pat.checking) return;
+
             const pat = store.pat.value.trim();
             const hasWritePermission = store.pat.capability === 'write';
-            
-            localStorage.setItem('devops_pat', await encryptPAT(pat));
+            const attempt = ++patSaveAttempt;
+            store.pat.checking = true;
+            store.pat.error = '';
+            try {
+                // Validate before closing. A reject leaves this dialog open with the warning
+                // instead of dropping the user back onto the full-page loader.
+                await checkTokenPermissions(pat, { skipReauth: true });
+            } catch (error) {
+                if (patSaveAttempt !== attempt) return;
+                store.pat.checking = false;
+                if (isUnauthorizedError(error)) {
+                    store.pat.invalid = true;
+                    return;
+                }
+                Logger.error('Error validating token:', error);
+                store.pat.error = 'Could not validate the token. Check your connection and try again.';
+                return;
+            }
+            const encrypted = await encryptPAT(pat);
+            // Cancel during encryption must not store the token or reload.
+            if (patSaveAttempt !== attempt || !store.pat.open) return;
+
+            localStorage.setItem('devops_pat', encrypted);
             localStorage.setItem('tokenHasWriteCapability', hasWritePermission ? 'true' : 'false');
             store.pat.configured = true;
+            store.pat.invalid = false;
+            store.pat.checking = false;
+            window.tokenPermissionsChecked = true;
             updatePermissionBadge(hasWritePermission);
-            
-            const resolve = patModalResolve;
-            patModalResolve = null;
-            closePATModal();
-            if (resolve) resolve(pat);
-            
-            await checkTokenPermissions(pat);
+
+            store.pat.open = false;
+            store.pat.value = '';
+            settlePatPrompt(pat);
             // A new PAT can mean a different user/access level entirely, so the whole cache is
             // invalidated and every product is loaded again.
             resetAndReloadAllProducts();
@@ -4602,17 +4731,10 @@
 
         // ===== Azure DevOps API Integration =====
         async function getPAT(forcePrompt = false) {
-            let encryptedPat = !forcePrompt ? localStorage.getItem('devops_pat') : null;
-            if (!encryptedPat || forcePrompt) {
-                // Open modal and wait for user input
-                return new Promise((resolve) => {
-                    patModalResolve = resolve;
-                    openPATModal();
-                });
-            }
-            // Decrypt PAT before returning
-            const pat = await decryptPAT(encryptedPat);
-            return pat;
+            if (forcePrompt) return reauthenticate();
+            const encryptedPat = localStorage.getItem('devops_pat');
+            if (!encryptedPat) return promptForPat();
+            return decryptPAT(encryptedPat);
         }
 
         // ===== Token Permissions Check =====
@@ -4627,12 +4749,14 @@
             await checkTokenPermissions(pat);
         };
         
-        async function checkTokenPermissions(pat) {
+        async function checkTokenPermissions(pat, { skipReauth = false } = {}) {
             try {
-                // Test access to Azure DevOps
-                const connectionResponse = await fetch(
+                // Test access to Azure DevOps. skipReauth is for the Save button: a reject must
+                // keep this dialog open instead of starting a second prompt that clears the input.
+                const connectionResponse = await azureFetch(
                     `https://dev.azure.com/${config.organization}/_apis/connectionData`,
                     {
+                        skipReauth,
                         headers: {
                             'Authorization': `Basic ${btoa(`:${pat}`)}`,
                             'Accept': 'application/json'
@@ -4641,7 +4765,7 @@
                 );
                 
                 if (!connectionResponse.ok) {
-                    Logger.error('Invalid token or no access to Azure DevOps');
+                    Logger.error('Token check failed:', connectionResponse.status);
                     return;
                 }
                 
@@ -4676,6 +4800,9 @@
                 
             } catch (error) {
                 Logger.error('Error validating token:', error);
+                // A rejected token must reach savePAT / the product load. Swallowing it here
+                // used to store the bad PAT and leave the full-page loader up.
+                if (isUnauthorizedError(error)) throw error;
             }
         }
 
@@ -4707,13 +4834,16 @@
             try {
                 return await fn();
             } catch (err) {
-                if (err.message === 'unauthorized') {
-                    localStorage.removeItem('devops_pat');
-                    store.pat.configured = false;
-                    const pat = await getPAT(true);
-                    return fn(pat);
+                if (!isUnauthorizedError(err)) throw err;
+                const pat = await reauthenticate();
+                if (!pat) return null;
+                try {
+                    return await fn(pat);
+                } catch (retryErr) {
+                    if (!isUnauthorizedError(retryErr)) throw retryErr;
+                    await reauthenticate();
+                    return null;
                 }
-                throw err;
             }
         }
 
@@ -4776,13 +4906,15 @@
                                     )
                                 )
                         )`;
-                // WIQL fetch s retry na 401
+                // WIQL fetch s retry na 401. null means the user dismissed the PAT dialog.
                 const data = await handleUnauthorized((newPat) => fetchWIQL(wiqlQuery, newPat || pat));
+                if (!data) return false;
                 let releases = {};
                 if (data.workItems && data.workItems.length > 0) {
                     const ids = data.workItems.map(wi => wi.id);
                     // Work items fetch s retry na 401
                     const workItemsData = await handleUnauthorized(() => fetchWorkItems(ids));
+                    if (!workItemsData) return false;
                     releases = groupWorkItems(workItemsData.value);
                 }
                 store.releaseResults = [
@@ -4793,6 +4925,12 @@
                 saveLastReloadTime();
                 refreshJenkinsStatusForProduct(product);
             } catch (error) {
+                // Auth failure already opened the PAT dialog. A toast here would stack once per
+                // product under that dialog, and the loader must not stay up.
+                if (isUnauthorizedError(error) || error.code === 'PAT_REQUIRED') {
+                    Logger.error(`Stopped loading ${product}:`, error);
+                    return false;
+                }
                 Logger.error(`Error loading data for ${product}:`, error);
                 showNotification(`Failed to load ${product}: ${error.message || error}`, 'error');
                 return false;
@@ -5733,7 +5871,7 @@
         // see createWorkItem()/createChildTask()) is silently ignored by older API versions - the
         // item still gets created, it just stays HTML instead of Markdown.
         async function createWorkItemViaApi(type, operations, pat) {
-            const response = await fetch(
+            const response = await azureFetch(
                 `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workitems/$${type}?api-version=7.1`,
                 {
                     method: 'POST',
@@ -6642,7 +6780,7 @@
                 // comments' own `text` is already HTML either way), see loadWorkItemDetailComments().
                 url.searchParams.set('$expand', 'renderedText');
                 if (continuationToken) url.searchParams.set('continuationToken', continuationToken);
-                const res = await fetch(url.toString(), {
+                const res = await azureFetch(url.toString(), {
                     headers: { 'Authorization': 'Basic ' + btoa(':' + pat) }
                 });
                 if (!res.ok) {
@@ -6892,7 +7030,9 @@
                 loadWorkItemDetailTasks(workItemId, type, pat);
             } catch (err) {
                 Logger.error(err);
-                showNotification(err.message || 'Failed to load work item', 'error');
+                if (!isUnauthorizedError(err) && err.code !== 'PAT_REQUIRED') {
+                    showNotification(err.message || 'Failed to load work item', 'error');
+                }
             } finally {
                 if (d.id === workItemId) d.loading = false;
             }
@@ -7049,7 +7189,8 @@
             try {
                 const pat = await getPAT();
                 if (!pat) return;
-                const response = await fetch(url, {
+                const response = await azureFetch(url, {
+                    followRedirect: true,
                     headers: { 'Authorization': 'Basic ' + btoa(':' + pat) }
                 });
                 if (!response.ok) {
@@ -7089,7 +7230,7 @@
                 const pat = await getPAT();
                 if (!pat) return;
                 const uploadUrl = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/attachments?fileName=${encodeURIComponent(file.name)}&api-version=7.1`;
-                const uploadResponse = await fetch(uploadUrl, {
+                const uploadResponse = await azureFetch(uploadUrl, {
                     method: 'POST',
                     headers: {
                         'Authorization': 'Basic ' + btoa(':' + pat),
@@ -7188,7 +7329,7 @@
                     : await processImagesForDevOps(text, pat);
                 
                 const url = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/workItems/${workItemId}/comments?format=${isMarkdown ? 'markdown' : 'html'}&api-version=7.1-preview.4`;
-                const response = await fetch(url, {
+                const response = await azureFetch(url, {
                     method: 'POST',
                     headers: {
                         'Authorization': 'Basic ' + btoa(':' + pat),
@@ -7478,7 +7619,7 @@
             const fileName = `image_${timestamp}_${random}.${extension}`;
             
             const uploadUrl = `https://dev.azure.com/${config.organization}/${config.project}/_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}&api-version=6.0`;
-            const uploadResponse = await fetch(uploadUrl, {
+            const uploadResponse = await azureFetch(uploadUrl, {
                 method: 'POST',
                 headers: {
                     'Authorization': 'Basic ' + btoa(':' + pat),
@@ -7612,7 +7753,8 @@
                     // Store original DevOps URL in data attribute for later restoration
                     img.setAttribute('data-devops-url', originalUrl);
                     
-                    const resp = await fetch(originalUrl, {
+                    const resp = await azureFetch(originalUrl, {
+                        followRedirect: true,
                         headers: { 'Authorization': 'Basic ' + btoa(':' + pat) }
                     });
                     if (!resp.ok) {
@@ -7916,7 +8058,10 @@
                 open: false, busy: false, kind: 'status',
                 id: null, type: '', current: '', title: '', options: []
             },
-            pat: { open: false, value: '', capability: 'read', configured: !!localStorage.getItem('devops_pat') },
+            pat: {
+                open: false, value: '', capability: 'read', checking: false, invalid: false, error: '',
+                configured: !!localStorage.getItem('devops_pat')
+            },
             help: { open: false, loading: false, html: '' },
             created: { open: false, item: {}, url: '' },
             buildChanges: { open: false, loading: false, meta: '', changes: [] },
@@ -8199,8 +8344,11 @@
 
         // Full-page loader only before the first product arrives. Switching tabs never covers
         // the app: a product that is still loading shows the corner spinner instead.
+        // pat.invalid covers the gap before the dialog's open flag flips, and a cancel after a
+        // rejected token: the loader must not come back and cover the key.
         store.isActiveProductLoading = computed(() =>
             !store.pat.open &&
+            !store.pat.invalid &&
             store.pat.configured &&
             store.releaseResults.length === 0);
 
@@ -8433,7 +8581,9 @@
                 }
             } catch (error) {
                 Logger.error('Error loading child tasks:', error);
-                showNotification('Error loading task status indicators', 'error');
+                if (!isUnauthorizedError(error) && error.code !== 'PAT_REQUIRED') {
+                    showNotification('Error loading task status indicators', 'error');
+                }
                 releaseTaskDotLoading(parentIds);
             }
         }

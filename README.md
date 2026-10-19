@@ -105,6 +105,10 @@ Aplikace je čistě klientská (client-side) aplikace, která může být nasaze
 
 Klikněte na ikonu klíče (🔑) vedle permission badge pro otevření modalu a zadání nového tokenu.
 
+### Neplatný nebo expirovaný PAT
+
+Když Azure DevOps uložený token odmítne (vypršel, byl zrušen, nebo je špatně zadaný), aplikace sama otevře okno pro výměnu PAT a napíše, že token je neplatný. Celostránkový loading v tom případě nezůstane nad tímto oknem.
+
 ## Struktura projektu
 
 ```
