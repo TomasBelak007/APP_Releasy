@@ -93,7 +93,7 @@ it first.
 | `releaseNames` | The 5 products: `{ product, release, epicID }`. Drives both the WIQL loop and the parent Epic link when creating work items |
 | `buildChangesPipelineMap` | product -> Jenkins pipeline name; a product missing here has no Build Changes button and no Jenkins status icon |
 | `buildChangesBranchYearMap` | product -> year in `rel-<year>-<major>.<patch>`; missing products fall back to `2025`. Shared by Build Changes and Jenkins status via `jenkinsReleaseBranch()` |
-| `CURSOR_STATUS_FEED_URL`, `CURSOR_STATUS_POLL_INTERVAL_MS`, `CURSOR_STATUS_OTHER_MODEL_KEYWORDS`, `CURSOR_STATUS_ALERT_STATUSES`, `CURSOR_STATUS_LABELS` | Drive the floating Cursor/Grok status icon: public Atom feed URL, 5 min poll, other-model exclusion keywords, statuses that light the icon red, and the aria/empty-state labels |
+| `CURSOR_STATUS_FEED_URL`, `CURSOR_STATUS_POLL_INTERVAL_MS`, `CURSOR_STATUS_OTHER_MODEL_KEYWORDS`, `CURSOR_STATUS_ALERT_STATUSES`, `CURSOR_STATUS_LABELS` | Drive the floating Cursor/Grok status icon: public RSS feed URL, 5 min poll, other-model exclusion keywords, statuses that light the icon red, and the aria/empty-state labels |
 | `assignees` | Assignee list (`{ email, name }`) for the "Change Assigned To" picker, create forms, **and** `store.availableAssignees` (see below) |
 | `titlePrefixes`, `titlePrefixesTask` | Allowed title prefixes per product / for tasks |
 | `TASK_PREFIX_BADGES` | Unique letter + color for each `titlePrefixesTask` prefix pill (D/X/I/A/U/T/C/K/O) |
@@ -546,9 +546,10 @@ patches; expanding a major fetches any patch that does not have a status yet.
 **Cursor/Grok status** - global, no PAT. `refreshCursorStatus()` starts right after
 `#cursorStatusApp` is mounted and then every `CURSOR_STATUS_POLL_INTERVAL_MS` (5 min), with an
 in-flight guard so overlapping polls do not stack. It fetches `CURSOR_STATUS_FEED_URL` (CORS-open
-Atom). `parseCursorStatusFeed()` reads namespaced `<entry>` nodes via `getElementsByTagName` and
-maps each to `{ id, title, link, latestStatus, active }` - `active` is the first `<p><strong>` in
-`<content>` (updates are newest-first; `Resolved` means over). `isRelevantCursorIncident()` keeps
+RSS 2.0). `parseCursorStatusFeed()` reads `<item>` nodes via `getElementsByTagName` and
+maps each to `{ id, title, link, latestStatus, active }` - `latestStatus` is the
+`<h3>Status: …</h3>` in `<description>` (`Resolved` means over; the first `<strong>` under
+Updates is a timestamp). `isRelevantCursorIncident()` keeps
 an entry that mentions "Grok", or that mentions none of `CURSOR_STATUS_OTHER_MODEL_KEYWORDS`
 (short tokens like `o1`/`o3` use a word boundary). `computeCursorStatusState()` reduces the
 active+relevant subset via `CURSOR_STATUS_ALERT_STATUSES` to `green` / `red` / `orange`. A
@@ -597,7 +598,7 @@ these helpers. Create, comments and attachments still build the full URL and cal
 | Token check | `GET https://dev.azure.com/{org}/_apis/connectionData` |
 
 Three calls do **not** go to Azure DevOps: two to `provisioning.integray.app`, one to
-`status.cursor.com`:
+`status.x.ai`:
 
 - **Build Changes**: `GET .../jenkins/build-changes?pipeline=<buildChangesPipelineMap[product]>&branch=rel-<year>-<major>.<patch>`,
   and the response's `[0].changes` is what the modal lists. `year` comes from
@@ -607,9 +608,10 @@ Three calls do **not** go to Azure DevOps: two to `provisioning.integray.app`, o
   Changes). Response `[0]` is `{ pipeline, branch, building, result, build }`; a missing branch
   is **200** with `result: null, build: null` (not 400). Mapped in `mapJenkinsBuildState()`.
 - **Assets**: `guide.html` and both logos (`LOGO_URLS`).
-- **Cursor status**: `GET https://status.cursor.com/history.atom` (public, unauthenticated,
-  `access-control-allow-origin: *`) - the Atom incident-history feed powering the Cursor/Grok
-  status icon (see [Cursor/Grok status](#flows-what-calls-what)).
+- **Cursor status**: `GET https://status.x.ai/feed.xml` (public, unauthenticated,
+  `access-control-allow-origin: *`) - the RSS incident-history feed powering the Cursor/Grok
+  status icon (see [Cursor/Grok status](#flows-what-calls-what)). Cursor moved this feed off
+  `status.cursor.com/history.atom`.
 
 ## Invariants and conventions
 
