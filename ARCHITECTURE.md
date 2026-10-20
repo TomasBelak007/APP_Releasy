@@ -205,7 +205,7 @@ Derived (`VUE LAYER > Derived state`):
 | Computed | Meaning |
 | --- | --- |
 | `products` | Product tabs, from `releaseNames` **configuration** - static, so all 5 tabs are always visible/clickable regardless of what has been fetched |
-| `isActiveProductLoading` | `true` only while `releaseResults` is still empty, a PAT is stored (`store.pat.configured`), the PAT modal is not open, and `store.pat.invalid` is false. Drives the full-page grid spinner. Once any product has rows, switching tabs never covers the app. A rejected token sets `pat.invalid` and opens the modal, so the spinner cannot stay on top of the replace form |
+| `isActiveProductLoading` | `true` only while a first load is in flight (`loadingProducts` non-empty), `releaseResults` is still empty, a PAT is stored (`store.pat.configured`), the PAT modal is not open, and `store.pat.invalid` is false. Drives the full-page grid spinner. A finished failure leaves it off, so a 504 cannot pin the overlay over the key. Once any product has rows, switching tabs never covers the app. A rejected token sets `pat.invalid` and opens the modal |
 | `isBackgroundReloading` | `true` while `releaseResults` already has rows and `loadingProducts` is non-empty (any product). Drives the spinner next to Last reload; the grid and tabs stay up |
 | `allMajorIds` | All `release-major` ids **for `activeProduct` only** (for Expand All) |
 | `allPatchIds` | All `release-major.patch` ids **for `activeProduct` only**, skipping hidden majors/patches (so Expand All can open Bugs/Features) |
@@ -345,7 +345,10 @@ and an opaque redirect are an auth failure: `reauthenticate()` clears `devops_pa
 product fails together. The modal says the token is invalid or expired. Cancelling resolves the
 shared prompt with `null` so the loads stop instead of asking again. `savePAT()` checks the new
 token before closing (`checkTokenPermissions` with `skipReauth`); a reject leaves the same dialog
-open. A valid save stores it and calls `resetAndReloadAllProducts()`.
+open. A **504** on that first load is treated the same way: a bad stored PAT shows up as 504 in the
+browser, and it used to toast five times in the corner while the loader stayed on top of the key.
+`isActiveProductLoading` is also false once `loadingProducts` is empty, so a finished failure
+cannot leave the overlay up. A valid save stores it and calls `resetAndReloadAllProducts()`.
 
 **Search / filter / expand / hide** - state only, no network, no re-render call: the toolbar or
 modal writes into `store.search` / `store.filters` / `store.expanded` / `store.hidden`, and

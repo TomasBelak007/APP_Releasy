@@ -3540,7 +3540,7 @@
          */
         const APP_RELEASE = {
             version: '1.0.45',
-            updatedAt: '2026-10-19T18:59:43.000Z'
+            updatedAt: '2026-10-20T08:47:20.000Z'
         };
 
         // ===== API Configuration =====
@@ -3780,6 +3780,14 @@
             return typeof error.message === 'string' && /\b401\b|TF400813/.test(error.message);
         }
 
+        // A stored bad token sometimes comes back as 504, not 401. That still must open the PAT
+        // dialog. A 504 later, once rows are on screen, stays a normal load error.
+        function isStartupGatewayFailure(error) {
+            if (!error) return false;
+            if (error.status === 504) return true;
+            return typeof error.message === 'string' && /API Error \(504\)/.test(error.message);
+        }
+
         function isUnauthorizedResponse(response) {
             if (!response) return false;
             if (response.type === 'opaqueredirect') return true;
@@ -3857,7 +3865,9 @@
                         errorMessage += `: ${errorText}`;
                     }
                     
-                    throw new Error(errorMessage);
+                    const error = new Error(errorMessage);
+                    error.status = response.status;
+                    throw error;
                 }
                 
                 // Handle empty responses
@@ -4766,6 +4776,12 @@
                 
                 if (!connectionResponse.ok) {
                     Logger.error('Token check failed:', connectionResponse.status);
+                    // 504 here is what a rejected stored PAT looks like in the browser: five of
+                    // these used to toast in the corner and leave the full-page loader up.
+                    if (connectionResponse.status === 504) {
+                        if (!skipReauth) void reauthenticate();
+                        throw unauthorizedError();
+                    }
                     return;
                 }
                 
@@ -4927,7 +4943,9 @@
             } catch (error) {
                 // Auth failure already opened the PAT dialog. A toast here would stack once per
                 // product under that dialog, and the loader must not stay up.
-                if (isUnauthorizedError(error) || error.code === 'PAT_REQUIRED') {
+                const blockedStartup = store.releaseResults.length === 0 && isStartupGatewayFailure(error);
+                if (isUnauthorizedError(error) || error.code === 'PAT_REQUIRED' || blockedStartup) {
+                    if (blockedStartup) void reauthenticate();
                     Logger.error(`Stopped loading ${product}:`, error);
                     return false;
                 }
@@ -8342,15 +8360,17 @@
         // clickable from the first render. activateProduct fills any product that is still missing.
         store.products = computed(() => releaseNames.map(r => r.product));
 
-        // Full-page loader only before the first product arrives. Switching tabs never covers
-        // the app: a product that is still loading shows the corner spinner instead.
+        // Full-page loader only while the first load is actually in flight. A finished failure
+        // (empty results, including HTTP 504 from a bad stored PAT) must not keep the overlay up,
+        // or the key and the PAT dialog stay unreachable. Switching tabs never covers the app.
         // pat.invalid covers the gap before the dialog's open flag flips, and a cancel after a
         // rejected token: the loader must not come back and cover the key.
         store.isActiveProductLoading = computed(() =>
             !store.pat.open &&
             !store.pat.invalid &&
             store.pat.configured &&
-            store.releaseResults.length === 0);
+            store.releaseResults.length === 0 &&
+            store.loadingProducts.length > 0);
 
         store.isBackgroundReloading = computed(() =>
             store.releaseResults.length > 0 &&
